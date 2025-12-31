@@ -19,8 +19,8 @@ services:
 
   api:
     build:
-      context: ..
-      dockerfile: rest-api/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     container_name: wagateway-api
     environment:
       POSTGRES_HOST: postgres
@@ -30,11 +30,11 @@ services:
       POSTGRES_DB: wagateway
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       WHATSAPP_STORAGE_PATH: /app/whatsapp_sessions
-      RUST_LOG: whatsapp_rest_api=info,tower_http=info
+      RUST_LOG: wa_rs=info,tower_http=info
     volumes:
       - whatsapp_sessions:/app/whatsapp_sessions
     ports:
-      - "3000:3000"
+      - "3451:3451"
     depends_on:
       postgres:
         condition: service_healthy

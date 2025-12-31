@@ -1,5 +1,5 @@
 [package]
-name = "whatsapp-rest-api"
+name = "wa-rs"
 version = "0.1.0"
 edition = "2021"
 authors = ["taqin"]
@@ -8,14 +8,14 @@ description = "REST API gateway for WhatsApp-Rust client"
 repository = "https://github.com/fdciabdul/wa-rs"
 
 [dependencies]
-# WhatsApp client
-whatsapp-rust = { path = "../whatsapp-rust", default-features = true }
-wacore = { path = "../whatsapp-rust/wacore" }
-wacore-binary = { path = "../whatsapp-rust/wacore/binary" }
-waproto = { path = "../whatsapp-rust/waproto" }
-whatsapp-rust-sqlite-storage = { path = "../whatsapp-rust/storages/sqlite-storage" }
-whatsapp-rust-tokio-transport = { path = "../whatsapp-rust/transports/tokio-transport" }
-whatsapp-rust-ureq-http-client = { path = "../whatsapp-rust/http_clients/ureq-client" }
+
+whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", default-features = true }
+wacore = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+waproto = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust" }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }

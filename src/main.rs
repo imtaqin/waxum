@@ -29,7 +29,7 @@ use state::AppState;
         license(name = "MIT")
     ),
     servers(
-        (url = "http://localhost:3000", description = "Local development server")
+        (url = "http://localhost:3451", description = "Local development server")
     ),
     paths(
         // Sessions
@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "whatsapp_rest_api=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "wa_rs=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -239,7 +239,7 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     // Start server
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3451));
     tracing::info!("Server listening on http://{}", addr);
     tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
 
