@@ -1,6 +1,12 @@
-# WhatsApp REST API
+<p align="center">
+  <img src="assets/logo.jpg" alt="WA-RS Logo" width="200">
+</p>
 
-A multi-session REST API gateway for WhatsApp Web client built with Rust.
+<h1 align="center">WA-RS</h1>
+
+<p align="center">
+  A multi-session REST API gateway for WhatsApp Web client built with Rust.
+</p>
 
 ## Features
 
@@ -38,8 +44,8 @@ docker compose up -d
    ```
 
 4. **Access**
-   - API: http://localhost:3000
-   - Swagger UI: http://localhost:3000/swagger-ui
+   - API: http://localhost:3451
+   - Swagger UI: http://localhost:3451/swagger-ui
 
 ## Environment Variables
 
@@ -59,13 +65,13 @@ docker compose up -d
 
 All endpoints require JWT token:
 ```bash
-curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/sessions
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:3451/api/v1/sessions
 ```
 
 ### Create Session
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/sessions \
+curl -X POST http://localhost:3451/api/v1/sessions \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -81,7 +87,7 @@ curl -X POST http://localhost:3000/api/v1/sessions \
 ### Get QR Code
 
 ```bash
-curl http://localhost:3000/api/v1/sessions/my-session/qr \
+curl http://localhost:3451/api/v1/sessions/my-session/qr \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
