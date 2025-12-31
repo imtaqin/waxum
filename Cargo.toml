@@ -1,0 +1,69 @@
+[package]
+name = "whatsapp-rest-api"
+version = "0.1.0"
+edition = "2025"
+authors = ["taqin"]
+license = "MIT"
+description = "REST API gateway for WhatsApp-Rust client"
+repository = "https://github.com/fdciabdul/wa-rs"
+
+[dependencies]
+# WhatsApp client
+whatsapp-rust = { path = "../whatsapp-rust", default-features = true }
+wacore = { path = "../whatsapp-rust/wacore" }
+wacore-binary = { path = "../whatsapp-rust/wacore/binary" }
+waproto = { path = "../whatsapp-rust/waproto" }
+whatsapp-rust-sqlite-storage = { path = "../whatsapp-rust/storages/sqlite-storage" }
+whatsapp-rust-tokio-transport = { path = "../whatsapp-rust/transports/tokio-transport" }
+whatsapp-rust-ureq-http-client = { path = "../whatsapp-rust/http_clients/ureq-client" }
+
+# Web framework
+axum = { version = "0.8", features = ["macros", "multipart"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = { version = "0.5", features = ["util", "timeout"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+
+# Async runtime
+tokio = { version = "1.48", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# OpenAPI/Swagger
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+
+# Database (PostgreSQL)
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"] }
+deadpool-postgres = "0.14"
+
+# Utilities
+anyhow = "1.0"
+thiserror = "2.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dashmap = "6.1"
+once_cell = "1.19"
+parking_lot = "0.12"
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+
+# Crypto for webhook signatures
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# JWT authentication
+jsonwebtoken = "9"
+
+[profile.release]
+opt-level = "z"
+debug = false
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

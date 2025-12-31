@@ -1,0 +1,19 @@
+{
+  "sessions": {
+    "my-session-1": {
+      "info": {
+        "id": "my-session-1",
+        "name": "Business Account",
+        "phone_number": null,
+        "push_name": null,
+        "status": "disconnected",
+        "created_at": 1767141481,
+        "updated_at": 1767141710,
+        "last_connected_at": null,
+        "is_logged_in": false
+      },
+      "storage_path": "./whatsapp_sessions/my-session-1"
+    }
+  },
+  "webhooks": {}
+}
