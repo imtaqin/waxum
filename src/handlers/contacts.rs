@@ -10,6 +10,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/contacts/check",
     tag = "contacts",
     params(
@@ -52,6 +53,7 @@ pub async fn check_on_whatsapp(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/contacts/info",
     tag = "contacts",
     params(
@@ -97,6 +99,7 @@ pub async fn get_contact_info(
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/contacts/{jid}/picture",
     tag = "contacts",
     params(
@@ -140,6 +143,7 @@ pub async fn get_profile_picture(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/contacts/users",
     tag = "contacts",
     params(

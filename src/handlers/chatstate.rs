@@ -11,6 +11,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/chatstate/send",
     tag = "chatstate",
     params(
@@ -64,6 +65,7 @@ pub async fn send_chatstate(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/chatstate/typing",
     tag = "chatstate",
     params(

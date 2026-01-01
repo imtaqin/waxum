@@ -11,6 +11,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/webhooks",
     tag = "webhooks",
     params(
@@ -45,6 +46,7 @@ pub async fn list_webhooks(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/webhooks",
     tag = "webhooks",
     params(
@@ -105,6 +107,7 @@ pub async fn register_webhook(
 
 #[utoipa::path(
     delete,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/webhooks/{webhook_id}",
     tag = "webhooks",
     params(

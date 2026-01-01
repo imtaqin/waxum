@@ -10,6 +10,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/media/upload",
     tag = "media",
     params(

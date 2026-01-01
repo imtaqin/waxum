@@ -11,6 +11,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/text",
     tag = "messages",
     params(
@@ -54,6 +55,7 @@ pub async fn send_text(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/image",
     tag = "messages",
     params(
@@ -111,6 +113,7 @@ pub async fn send_image(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/video",
     tag = "messages",
     params(
@@ -168,6 +171,7 @@ pub async fn send_video(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/audio",
     tag = "messages",
     params(
@@ -225,6 +229,7 @@ pub async fn send_audio(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/document",
     tag = "messages",
     params(
@@ -283,6 +288,7 @@ pub async fn send_document(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/sticker",
     tag = "messages",
     params(
@@ -339,6 +345,7 @@ pub async fn send_sticker(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/location",
     tag = "messages",
     params(
@@ -385,6 +392,7 @@ pub async fn send_location(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/contact",
     tag = "messages",
     params(
@@ -431,6 +439,7 @@ pub async fn send_contact(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/edit",
     tag = "messages",
     params(
@@ -474,6 +483,7 @@ pub async fn edit_message(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/messages/react",
     tag = "messages",
     params(

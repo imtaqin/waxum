@@ -11,6 +11,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/blocking/list",
     tag = "blocking",
     params(
@@ -42,6 +43,7 @@ pub async fn get_blocklist(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/blocking/block",
     tag = "blocking",
     params(
@@ -77,6 +79,7 @@ pub async fn block_contact(
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/blocking/unblock",
     tag = "blocking",
     params(
@@ -112,6 +115,7 @@ pub async fn unblock_contact(
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/blocking/check/{jid}",
     tag = "blocking",
     params(

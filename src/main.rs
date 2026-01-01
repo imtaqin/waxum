@@ -31,6 +31,7 @@ use state::AppState;
     servers(
         (url = "http://localhost:3451", description = "Local development server")
     ),
+    modifiers(&SecurityAddon),
     paths(
 
         handlers::sessions::create_session,
@@ -162,6 +163,25 @@ use state::AppState;
     )
 )]
 struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    )
+                    .bearer_format("JWT")
+                    .description(Some("Enter your Superadmin Token from server logs or /dashboard/settings"))
+                ),
+            );
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {

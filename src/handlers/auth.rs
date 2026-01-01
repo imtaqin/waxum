@@ -8,6 +8,7 @@ use crate::state::{AppState, ConnectionState};
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/auth/qr",
     tag = "auth",
     responses(
@@ -28,6 +29,7 @@ pub async fn get_qr_code(State(state): State<AppState>) -> Result<Json<QrCodeRes
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/auth/status",
     tag = "auth",
     responses(
@@ -48,6 +50,7 @@ pub async fn get_status(State(state): State<AppState>) -> Json<StatusResponse> {
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/auth/connect",
     tag = "auth",
     responses(
@@ -173,6 +176,7 @@ async fn handle_event(event: wacore::types::events::Event, state: AppState) {
 
 #[utoipa::path(
     post,
+    security(("bearer_auth" = [])),
     path = "/api/v1/auth/disconnect",
     tag = "auth",
     responses(

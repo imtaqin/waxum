@@ -10,6 +10,7 @@ use crate::state::AppState;
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/groups",
     tag = "groups",
     params(
@@ -61,6 +62,7 @@ pub async fn list_groups(
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/groups/{group_jid}",
     tag = "groups",
     params(
@@ -110,6 +112,7 @@ pub async fn get_group(
 
 #[utoipa::path(
     get,
+    security(("bearer_auth" = [])),
     path = "/api/v1/sessions/{session_id}/groups/{group_jid}/info",
     tag = "groups",
     params(

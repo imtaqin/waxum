@@ -18,6 +18,7 @@ use crate::state::AppState;
     post,
     path = "/api/v1/sessions",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     request_body = CreateSessionRequest,
     responses(
         (status = 201, description = "Session created and connecting", body = CreateSessionResponse),
@@ -96,6 +97,7 @@ pub async fn create_session(
     get,
     path = "/api/v1/sessions",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     responses(
         (status = 200, description = "List of sessions", body = SessionListResponse)
     )
@@ -127,6 +129,7 @@ pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<Session
     get,
     path = "/api/v1/sessions/{session_id}",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -158,6 +161,7 @@ pub async fn get_session(
     delete,
     path = "/api/v1/sessions/{session_id}",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -205,6 +209,7 @@ pub async fn delete_session(
     get,
     path = "/api/v1/sessions/{session_id}/status",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -243,6 +248,7 @@ pub async fn get_session_status(
     get,
     path = "/api/v1/sessions/{session_id}/qr",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -279,6 +285,7 @@ pub async fn get_qr_code(
     post,
     path = "/api/v1/sessions/{session_id}/connect",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -335,6 +342,7 @@ pub async fn connect_session(
     post,
     path = "/api/v1/sessions/{session_id}/pair",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -413,6 +421,7 @@ pub async fn pair_session(
     post,
     path = "/api/v1/sessions/{session_id}/disconnect",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
@@ -456,6 +465,7 @@ pub async fn disconnect_session(
     get,
     path = "/api/v1/sessions/{session_id}/device",
     tag = "sessions",
+    security(("bearer_auth" = [])),
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
