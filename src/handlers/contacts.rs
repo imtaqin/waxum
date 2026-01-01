@@ -8,7 +8,6 @@ use crate::error::ApiError;
 use crate::models::contacts::*;
 use crate::state::AppState;
 
-/// Check if phone numbers are on WhatsApp
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/contacts/check",
@@ -51,7 +50,6 @@ pub async fn check_on_whatsapp(
     Ok(Json(CheckOnWhatsAppResponse { results }))
 }
 
-/// Get contact information
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/contacts/info",
@@ -97,7 +95,6 @@ pub async fn get_contact_info(
     Ok(Json(ContactInfoResponse { contacts }))
 }
 
-/// Get profile picture
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/contacts/{jid}/picture",
@@ -141,7 +138,6 @@ pub async fn get_profile_picture(
     }
 }
 
-/// Get user info (devices, status, etc.)
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/contacts/users",

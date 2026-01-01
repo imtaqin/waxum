@@ -29,7 +29,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: wagateway
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      SUPERADMIN_TOKEN: ${SUPERADMIN_TOKEN:-}
       WHATSAPP_STORAGE_PATH: /app/whatsapp_sessions
+      DASHBOARD_PATH: /app/dashboard/dist
       RUST_LOG: wa_rs=info,tower_http=info
     volumes:
       - whatsapp_sessions:/app/whatsapp_sessions

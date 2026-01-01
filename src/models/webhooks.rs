@@ -1,51 +1,49 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Webhook configuration
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WebhookConfig {
-    /// Webhook URL to call
+
     pub url: String,
-    /// Events to subscribe to
+
     pub events: Vec<WebhookEvent>,
-    /// Optional secret for HMAC signature
+
     pub secret: Option<String>,
-    /// Whether webhook is enabled
+
     pub enabled: bool,
 }
 
-/// Webhook event types
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WebhookEvent {
-    /// All events
+
     All,
-    /// New message received
+
     Message,
-    /// Message receipt (delivered, read, etc.)
+
     Receipt,
-    /// Presence update
+
     Presence,
-    /// Chat presence (typing, recording)
+
     ChatPresence,
-    /// Group info update
+
     GroupUpdate,
-    /// Joined a group
+
     JoinedGroup,
-    /// QR code event
+
     QrCode,
-    /// Pair code event
+
     PairCode,
-    /// Connected
+
     Connected,
-    /// Disconnected
+
     Disconnected,
-    /// Logged out
+
     LoggedOut,
 }
 
 impl WebhookEvent {
-    /// Check if this event filter matches the given event type
+
     pub fn matches(&self, event: &str) -> bool {
         match self {
             WebhookEvent::All => true,
@@ -63,7 +61,6 @@ impl WebhookEvent {
         }
     }
 
-    /// Convert to string representation
     pub fn as_str(&self) -> &'static str {
         match self {
             WebhookEvent::All => "all",

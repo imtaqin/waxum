@@ -17,7 +17,7 @@ mod models;
 mod routes;
 mod state;
 
-use routes::create_router;
+use routes::{create_router, create_dashboard_router};
 use state::AppState;
 
 #[derive(OpenApi)]
@@ -32,7 +32,7 @@ use state::AppState;
         (url = "http://localhost:3451", description = "Local development server")
     ),
     paths(
-        // Sessions
+
         handlers::sessions::create_session,
         handlers::sessions::list_sessions,
         handlers::sessions::get_session,
@@ -43,7 +43,7 @@ use state::AppState;
         handlers::sessions::pair_session,
         handlers::sessions::disconnect_session,
         handlers::sessions::get_device_info,
-        // Messages
+
         handlers::messages::send_text,
         handlers::messages::send_image,
         handlers::messages::send_video,
@@ -54,35 +54,35 @@ use state::AppState;
         handlers::messages::send_contact,
         handlers::messages::edit_message,
         handlers::messages::send_reaction,
-        // Contacts
+
         handlers::contacts::check_on_whatsapp,
         handlers::contacts::get_contact_info,
         handlers::contacts::get_profile_picture,
         handlers::contacts::get_user_info,
-        // Groups
+
         handlers::groups::list_groups,
         handlers::groups::get_group,
         handlers::groups::get_group_info,
-        // Presence
+
         handlers::presence::set_presence,
-        // Chat state
+
         handlers::chatstate::send_chatstate,
         handlers::chatstate::send_typing,
-        // Blocking
+
         handlers::blocking::get_blocklist,
         handlers::blocking::block_contact,
         handlers::blocking::unblock_contact,
         handlers::blocking::is_blocked,
-        // Media
+
         handlers::media::upload_media,
-        // Webhooks
+
         handlers::webhooks::list_webhooks,
         handlers::webhooks::register_webhook,
         handlers::webhooks::unregister_webhook,
     ),
     components(
         schemas(
-            // Sessions
+
             models::sessions::SessionInfo,
             models::sessions::SessionStatus,
             models::sessions::CreateSessionRequest,
@@ -93,7 +93,7 @@ use state::AppState;
             models::sessions::QrCodeResponse,
             models::sessions::SessionStatusResponse,
             models::sessions::DeviceInfo,
-            // Messages
+
             models::messages::SendTextRequest,
             models::messages::SendImageRequest,
             models::messages::SendVideoRequest,
@@ -108,7 +108,7 @@ use state::AppState;
             models::messages::SendReactionRequest,
             models::messages::MediaData,
             models::messages::MessageResponse,
-            // Contacts
+
             models::contacts::CheckOnWhatsAppRequest,
             models::contacts::CheckOnWhatsAppResponse,
             models::contacts::WhatsAppCheckResult,
@@ -119,33 +119,33 @@ use state::AppState;
             models::contacts::GetUserInfoRequest,
             models::contacts::UserInfoResponse,
             models::contacts::UserInfo,
-            // Groups
+
             models::groups::GroupListResponse,
             models::groups::GroupInfo,
             models::groups::GroupInfoCached,
             models::groups::GroupParticipant,
             models::groups::ParticipantRole,
-            // Presence
+
             models::presence::SetPresenceRequest,
             models::presence::PresenceStatus,
-            // Chat state
+
             models::chatstate::SendChatStateRequest,
             models::chatstate::ChatStateType,
             handlers::chatstate::TypingRequest,
-            // Blocking
+
             models::blocking::BlocklistResponse,
             models::blocking::BlockRequest,
             handlers::blocking::BlockStatusResponse,
-            // Media
+
             models::media::UploadMediaResponse,
             models::media::MediaType,
-            // Webhooks
+
             models::webhooks::WebhookConfig,
             models::webhooks::WebhookEvent,
             models::webhooks::RegisterWebhookRequest,
             models::webhooks::WebhookListResponse,
             models::webhooks::WebhookRequest,
-            // Common
+
             models::common::SuccessResponse,
         )
     ),
@@ -165,7 +165,7 @@ struct ApiDoc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -176,7 +176,6 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting WhatsApp REST API server...");
 
-    // Get database configuration from environment
     let db_host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
     let db_port: u16 = std::env::var("POSTGRES_PORT")
         .unwrap_or_else(|_| "5432".to_string())
@@ -188,7 +187,6 @@ async fn main() -> Result<()> {
 
     tracing::info!("Connecting to PostgreSQL at {}:{}/{}", db_host, db_port, db_name);
 
-    // Build PostgreSQL config
     let mut pg_config = tokio_postgres::Config::new();
     pg_config.host(&db_host);
     pg_config.port(db_port);
@@ -196,51 +194,57 @@ async fn main() -> Result<()> {
     pg_config.password(&db_password);
     pg_config.dbname(&db_name);
 
-    // Create connection pool
     let mgr_config = ManagerConfig {
         recycling_method: RecyclingMethod::Fast,
     };
     let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
     let pool = Pool::builder(mgr).max_size(16).build()?;
 
-    // Test connection
     let _ = pool.get().await?;
     tracing::info!("Connected to PostgreSQL");
 
-    // Initialize database schema
     db::schema::init_schema(&pool).await?;
     tracing::info!("Database schema initialized");
 
-    // Initialize application state
     let state = AppState::new(pool).await;
 
-    // Build CORS layer
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
 
-    // Generate and log superadmin token for initial access
-    let superadmin_token = middleware::jwt::generate_superadmin_token();
+    let (superadmin_token, from_env) = middleware::jwt::get_superadmin_token();
     tracing::info!("===========================================");
-    tracing::info!("SUPERADMIN JWT TOKEN (save this!):");
-    tracing::info!("{}", superadmin_token);
+    if from_env {
+        tracing::info!("SUPERADMIN TOKEN: Loaded from SUPERADMIN_TOKEN env");
+    } else {
+        tracing::info!("SUPERADMIN JWT TOKEN (save this!):");
+        tracing::info!("{}", superadmin_token);
+        tracing::info!("Tip: Set SUPERADMIN_TOKEN in .env to use a fixed token");
+    }
     tracing::info!("===========================================");
 
-    // Build router with all routes
     let swagger_router: axum::Router<AppState> = SwaggerUi::new("/swagger-ui")
         .url("/api-docs/openapi.json", ApiDoc::openapi())
         .into();
-    let app = create_router()
+
+    let api_app = create_router()
         .merge(swagger_router)
-        .layer(axum::middleware::from_fn(middleware::jwt::jwt_auth_middleware))
+        .layer(axum::middleware::from_fn(middleware::jwt::jwt_auth_middleware));
+
+    let dashboard_app = create_dashboard_router();
+
+    let app = axum::Router::new()
+        .nest("/dashboard", dashboard_app)
+        .merge(api_app)
+        .route("/", axum::routing::get(|| async { axum::response::Redirect::to("/dashboard") }))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);
 
-    // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3451));
     tracing::info!("Server listening on http://{}", addr);
+    tracing::info!("Dashboard available at http://{}", addr);
     tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
 
     let listener = TcpListener::bind(addr).await?;

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use utoipa::ToSchema;
 
 use super::webhooks::WebhookRequest;
 
-/// Session status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
@@ -15,7 +15,12 @@ pub enum SessionStatus {
     LoggedIn,
 }
 
-#[allow(dead_code)]
+impl fmt::Display for SessionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl SessionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -36,6 +41,26 @@ impl SessionStatus {
             "connected" => SessionStatus::Connected,
             "logged_in" => SessionStatus::LoggedIn,
             _ => SessionStatus::Disconnected,
+        }
+    }
+
+    pub fn is_connected(&self) -> bool {
+        matches!(self, SessionStatus::LoggedIn | SessionStatus::Connected)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_connecting(&self) -> bool {
+        matches!(
+            self,
+            SessionStatus::Connecting | SessionStatus::WaitingForQr | SessionStatus::WaitingForPairCode
+        )
+    }
+
+    pub fn badge_class(&self) -> &'static str {
+        match self {
+            SessionStatus::LoggedIn | SessionStatus::Connected => "bg-success",
+            SessionStatus::Connecting | SessionStatus::WaitingForQr | SessionStatus::WaitingForPairCode => "bg-warning",
+            SessionStatus::Disconnected => "bg-secondary",
         }
     }
 }

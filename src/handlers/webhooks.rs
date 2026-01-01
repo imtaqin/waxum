@@ -9,7 +9,6 @@ use crate::models::common::SuccessResponse;
 use crate::models::webhooks::{RegisterWebhookRequest, WebhookConfig, WebhookListResponse};
 use crate::state::AppState;
 
-/// List all registered webhooks for a session
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/webhooks",
@@ -26,7 +25,7 @@ pub async fn list_webhooks(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<WebhookListResponse>, ApiError> {
-    // Verify session exists
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -44,7 +43,6 @@ pub async fn list_webhooks(
     Ok(Json(WebhookListResponse { webhooks, count }))
 }
 
-/// Register a new webhook for a session
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/webhooks",
@@ -65,7 +63,7 @@ pub async fn register_webhook(
     Path(session_id): Path<String>,
     Json(request): Json<RegisterWebhookRequest>,
 ) -> Result<Json<WebhookConfig>, ApiError> {
-    // Verify session exists
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -73,20 +71,17 @@ pub async fn register_webhook(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // Validate URL
     if !request.url.starts_with("http://") && !request.url.starts_with("https://") {
         return Err(ApiError::BadRequest(
             "Webhook URL must start with http:// or https://".to_string(),
         ));
     }
 
-    // Check if a webhook with the same URL already exists
     let existing = state.get_webhooks(&session_id);
     if existing.iter().any(|(_, w)| w.url == request.url) {
         return Err(ApiError::WebhookAlreadyExists(request.url));
     }
 
-    // Generate unique ID
     let id = Uuid::new_v4().to_string();
 
     let config = WebhookConfig {
@@ -96,10 +91,8 @@ pub async fn register_webhook(
         enabled: true,
     };
 
-    // Store in memory
     state.register_webhook(&session_id, &id, config.clone());
 
-    // Store in database
     let _ = state
         .session_manager()
         .create_webhook(&id, &session_id, &config)
@@ -110,7 +103,6 @@ pub async fn register_webhook(
     Ok(Json(config))
 }
 
-/// Unregister a webhook
 #[utoipa::path(
     delete,
     path = "/api/v1/sessions/{session_id}/webhooks/{webhook_id}",
@@ -134,7 +126,6 @@ pub async fn unregister_webhook(
         return Err(ApiError::WebhookNotFound(webhook_id));
     }
 
-    // Remove from database
     let _ = state.session_manager().delete_webhook(&webhook_id).await;
 
     tracing::info!(

@@ -9,7 +9,6 @@ use crate::models::chatstate::{ChatStateType, SendChatStateRequest};
 use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 
-/// Send chat state (typing, recording, paused)
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/chatstate/send",
@@ -63,7 +62,6 @@ pub async fn send_chatstate(
     Ok(Json(SuccessResponse::with_message("Chat state sent")))
 }
 
-/// Send typing indicator
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/chatstate/typing",
@@ -99,10 +97,9 @@ pub async fn send_typing(
     Ok(Json(SuccessResponse::with_message("Typing indicator sent")))
 }
 
-/// Simple typing request
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct TypingRequest {
-    /// Recipient JID
+
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 }

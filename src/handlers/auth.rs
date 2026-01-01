@@ -6,7 +6,6 @@ use crate::models::auth::{QrCodeResponse, StatusResponse};
 use crate::models::common::SuccessResponse;
 use crate::state::{AppState, ConnectionState};
 
-/// Get QR codes for authentication
 #[utoipa::path(
     get,
     path = "/api/v1/auth/qr",
@@ -27,7 +26,6 @@ pub async fn get_qr_code(State(state): State<AppState>) -> Result<Json<QrCodeRes
     }))
 }
 
-/// Get current connection and authentication status
 #[utoipa::path(
     get,
     path = "/api/v1/auth/status",
@@ -48,7 +46,6 @@ pub async fn get_status(State(state): State<AppState>) -> Json<StatusResponse> {
     })
 }
 
-/// Connect to WhatsApp servers
 #[utoipa::path(
     post,
     path = "/api/v1/auth/connect",
@@ -66,7 +63,6 @@ pub async fn connect(State(state): State<AppState>) -> Result<Json<SuccessRespon
 
     state.set_connection_status(ConnectionState::Connecting);
 
-    // Spawn connection task
     let state_clone = state.clone();
     tokio::spawn(async move {
         if let Err(e) = connect_client(state_clone).await {
@@ -86,7 +82,6 @@ async fn connect_client(state: AppState) -> Result<(), ApiError> {
     let storage_path = state.get_storage_path();
     let db_path = format!("{}/whatsapp.db", storage_path);
 
-    // Initialize storage
     let backend = SqliteStore::new(&db_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -110,17 +105,14 @@ async fn connect_client(state: AppState) -> Result<(), ApiError> {
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Store client reference
     state.set_client(Some(bot.client()));
     state.set_connection_status(ConnectionState::WaitingForQr);
 
-    // Run the bot (this blocks until disconnect)
     let handle = bot
         .run()
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Wait for the bot to finish
     let _ = handle.await;
 
     state.set_connection_status(ConnectionState::Disconnected);
@@ -158,7 +150,7 @@ async fn handle_event(event: wacore::types::events::Event, state: AppState) {
         }
         Event::Message(_msg, info) => {
             tracing::debug!("Message received: {:?}", info);
-            // Broadcast to webhooks
+
             if let Ok(payload) = serde_json::to_string(&serde_json::json!({
                 "event": "message_received",
                 "timestamp": chrono::Utc::now().timestamp(),
@@ -179,7 +171,6 @@ async fn handle_event(event: wacore::types::events::Event, state: AppState) {
     }
 }
 
-/// Disconnect from WhatsApp servers
 #[utoipa::path(
     post,
     path = "/api/v1/auth/disconnect",

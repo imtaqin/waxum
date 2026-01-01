@@ -1,10 +1,8 @@
 use deadpool_postgres::Pool;
 
-/// Initialize the database schema
 pub async fn init_schema(pool: &Pool) -> anyhow::Result<()> {
     let client = pool.get().await?;
 
-    // Create sessions table
     client
         .execute(
             r#"
@@ -25,7 +23,6 @@ pub async fn init_schema(pool: &Pool) -> anyhow::Result<()> {
         )
         .await?;
 
-    // Create webhooks table
     client
         .execute(
             r#"
@@ -43,7 +40,6 @@ pub async fn init_schema(pool: &Pool) -> anyhow::Result<()> {
         )
         .await?;
 
-    // Create index on webhooks.session_id
     client
         .execute(
             r#"

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Generic API response wrapper
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ApiResponse<T> {
@@ -34,7 +33,6 @@ impl<T> ApiResponse<T> {
     }
 }
 
-/// API error details
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ApiError {
@@ -42,7 +40,6 @@ pub struct ApiError {
     pub message: String,
 }
 
-/// Simple success response
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SuccessResponse {
     pub success: bool,

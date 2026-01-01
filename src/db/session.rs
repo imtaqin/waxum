@@ -4,7 +4,6 @@ use deadpool_postgres::Pool;
 use crate::models::sessions::{SessionInfo, SessionStatus};
 use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 
-/// Session database manager for PostgreSQL
 #[derive(Clone)]
 pub struct SessionManager {
     pool: Pool,
@@ -15,7 +14,6 @@ impl SessionManager {
         Self { pool }
     }
 
-    /// Create a new session
     pub async fn create_session(
         &self,
         id: &str,
@@ -38,7 +36,6 @@ impl SessionManager {
         Ok(self.row_to_session_info(&row))
     }
 
-    /// Get session by ID
     pub async fn get_session(&self, id: &str) -> anyhow::Result<Option<SessionInfo>> {
         let client = self.pool.get().await?;
 
@@ -49,7 +46,6 @@ impl SessionManager {
         Ok(row.map(|r| self.row_to_session_info(&r)))
     }
 
-    /// Get storage path for session
     pub async fn get_storage_path(&self, id: &str) -> anyhow::Result<Option<String>> {
         let client = self.pool.get().await?;
 
@@ -60,7 +56,6 @@ impl SessionManager {
         Ok(row.map(|r| r.get::<_, String>("storage_path")))
     }
 
-    /// Get all sessions
     pub async fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
         let client = self.pool.get().await?;
 
@@ -71,7 +66,6 @@ impl SessionManager {
         Ok(rows.iter().map(|r| self.row_to_session_info(r)).collect())
     }
 
-    /// Update session status
     pub async fn update_session_status(
         &self,
         id: &str,
@@ -94,7 +88,6 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Update session info (phone, push_name)
     pub async fn update_session_info(
         &self,
         id: &str,
@@ -119,7 +112,6 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Update last connected timestamp
     pub async fn update_last_connected(&self, id: &str) -> anyhow::Result<()> {
         let client = self.pool.get().await?;
 
@@ -137,7 +129,6 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Delete session
     pub async fn delete_session(&self, id: &str) -> anyhow::Result<bool> {
         let client = self.pool.get().await?;
 
@@ -148,9 +139,6 @@ impl SessionManager {
         Ok(result > 0)
     }
 
-    // Webhook methods
-
-    /// Create webhook
     pub async fn create_webhook(
         &self,
         id: &str,
@@ -174,7 +162,6 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Get webhooks for session
     #[allow(dead_code)]
     pub async fn get_webhooks(&self, session_id: &str) -> anyhow::Result<Vec<(String, WebhookConfig)>> {
         let client = self.pool.get().await?;
@@ -210,7 +197,6 @@ impl SessionManager {
             .collect())
     }
 
-    /// Delete webhook
     pub async fn delete_webhook(&self, id: &str) -> anyhow::Result<bool> {
         let client = self.pool.get().await?;
 

@@ -9,7 +9,6 @@ use crate::models::blocking::{BlockRequest, BlocklistResponse};
 use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 
-/// Get the current blocklist
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/blocking/list",
@@ -41,7 +40,6 @@ pub async fn get_blocklist(
     Ok(Json(BlocklistResponse { blocked, count }))
 }
 
-/// Block a contact
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/blocking/block",
@@ -77,7 +75,6 @@ pub async fn block_contact(
     Ok(Json(SuccessResponse::with_message("Contact blocked")))
 }
 
-/// Unblock a contact
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/blocking/unblock",
@@ -113,7 +110,6 @@ pub async fn unblock_contact(
     Ok(Json(SuccessResponse::with_message("Contact unblocked")))
 }
 
-/// Check if a contact is blocked
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/blocking/check/{jid}",
@@ -147,12 +143,11 @@ pub async fn is_blocked(
     Ok(Json(BlockStatusResponse { jid, is_blocked: blocked }))
 }
 
-/// Block status response
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BlockStatusResponse {
-    /// JID that was checked
+
     pub jid: String,
-    /// Whether the contact is blocked
+
     pub is_blocked: bool,
 }
 

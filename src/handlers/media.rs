@@ -8,7 +8,6 @@ use crate::error::ApiError;
 use crate::models::media::{MediaType, UploadMediaResponse};
 use crate::state::AppState;
 
-/// Upload media file
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/media/upload",
@@ -34,7 +33,6 @@ pub async fn upload_media(
     let mut media_type: Option<MediaType> = None;
     let mut mimetype: Option<String> = None;
 
-    // Process multipart form
     while let Some(field) = multipart
         .next_field()
         .await
@@ -47,7 +45,6 @@ pub async fn upload_media(
                 let content_type = field.content_type().map(|s| s.to_string());
                 mimetype = content_type.clone();
 
-                // Infer media type from content type if not specified
                 if media_type.is_none() {
                     media_type = content_type.as_ref().and_then(|ct| infer_media_type(ct));
                 }
@@ -84,7 +81,6 @@ pub async fn upload_media(
         media_type.ok_or_else(|| ApiError::BadRequest("Media type not specified".to_string()))?;
     let mimetype = mimetype.unwrap_or_else(|| get_default_mimetype(&media_type));
 
-    // Upload to WhatsApp servers
     let upload_result = client
         .upload(file_data.clone(), media_type.to_wacore_media_type())
         .await

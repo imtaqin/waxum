@@ -8,7 +8,6 @@ use crate::error::ApiError;
 use crate::models::groups::*;
 use crate::state::AppState;
 
-/// List all groups the session participates in
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/groups",
@@ -60,7 +59,6 @@ pub async fn list_groups(
     Ok(Json(GroupListResponse { groups, total }))
 }
 
-/// Get group metadata
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/groups/{group_jid}",
@@ -110,7 +108,6 @@ pub async fn get_group(
     }))
 }
 
-/// Get group info with caching
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/groups/{group_jid}/info",
@@ -147,7 +144,7 @@ pub async fn get_group_info(
             .map(|p| GroupParticipant {
                 jid: p.to_string(),
                 phone_number: None,
-                role: ParticipantRole::Member, // query_info doesn't provide admin info
+                role: ParticipantRole::Member,
             })
             .collect(),
         addressing_mode: format!("{:?}", info.addressing_mode),

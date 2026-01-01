@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - WA-RS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center mb-4">
+    <h1 class="h2">Settings</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-key me-2"></i>API Token
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Superadmin JWT Token</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="tokenInput" value="{{ token }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToken()">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">Use this token for API authentication (Authorization: Bearer &lt;token&gt;)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>Server Info
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <th>Version</th>
+                        <td>{{ version }}</td>
+                    </tr>
+                    <tr>
+                        <th>API Base URL</th>
+                        <td><code>{{ api_url }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Swagger UI</th>
+                        <td><a href="/swagger-ui" target="_blank">/swagger-ui</a></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyToken() {
+    const input = document.getElementById('tokenInput');
+    input.select();
+    document.execCommand('copy');
+    alert('Token copied to clipboard!');
+}
+</script>
+{% endblock %}

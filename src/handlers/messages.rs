@@ -9,7 +9,6 @@ use crate::error::ApiError;
 use crate::models::messages::*;
 use crate::state::AppState;
 
-/// Send a text message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/text",
@@ -33,7 +32,6 @@ pub async fn send_text(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    // Create text message
     let message = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
             text: Some(request.text),
@@ -54,7 +52,6 @@ pub async fn send_text(
     }))
 }
 
-/// Send an image message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/image",
@@ -78,16 +75,13 @@ pub async fn send_image(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    // Get media data
     let (data, mimetype) = get_media_data(&request.image).await?;
 
-    // Upload media
     let upload = client
         .upload(data.clone(), wacore::download::MediaType::Image)
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    // Create image message
     let message = waproto::whatsapp::Message {
         image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
@@ -115,7 +109,6 @@ pub async fn send_image(
     }))
 }
 
-/// Send a video message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/video",
@@ -173,7 +166,6 @@ pub async fn send_video(
     }))
 }
 
-/// Send an audio message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/audio",
@@ -231,7 +223,6 @@ pub async fn send_audio(
     }))
 }
 
-/// Send a document message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/document",
@@ -290,7 +281,6 @@ pub async fn send_document(
     }))
 }
 
-/// Send a sticker message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/sticker",
@@ -347,7 +337,6 @@ pub async fn send_sticker(
     }))
 }
 
-/// Send a location message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/location",
@@ -394,7 +383,6 @@ pub async fn send_location(
     }))
 }
 
-/// Send a contact card message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/contact",
@@ -418,7 +406,6 @@ pub async fn send_contact(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    // Build vCard
     let vcard = build_vcard(&request.contact);
 
     let message = waproto::whatsapp::Message {
@@ -442,7 +429,6 @@ pub async fn send_contact(
     }))
 }
 
-/// Edit a message
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/edit",
@@ -466,7 +452,6 @@ pub async fn edit_message(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    // Create new text message content
     let new_content = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
             text: Some(request.text),
@@ -487,7 +472,6 @@ pub async fn edit_message(
     }))
 }
 
-/// Send a reaction
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/messages/react",
@@ -511,7 +495,6 @@ pub async fn send_reaction(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    // Create reaction message
     let message = waproto::whatsapp::Message {
         reaction_message: Some(waproto::whatsapp::message::ReactionMessage {
             key: Some(waproto::whatsapp::MessageKey {
@@ -538,7 +521,6 @@ pub async fn send_reaction(
     }))
 }
 
-// Legacy endpoint for backwards compatibility
 #[allow(dead_code)]
 pub async fn send_message(
     State(state): State<AppState>,
@@ -556,8 +538,6 @@ pub async fn send_message(
     )
     .await
 }
-
-// Helper functions
 
 fn get_client(
     state: &AppState,
@@ -609,8 +589,7 @@ async fn get_media_data(media: &MediaData) -> Result<(Vec<u8>, String), ApiError
             Ok((decoded, mimetype.clone()))
         }
         MediaData::Uploaded { mimetype: _, .. } => {
-            // For pre-uploaded media, we don't need to re-upload
-            // This is handled differently in the send functions
+
             Err(ApiError::BadRequest(
                 "Pre-uploaded media not supported in this context".to_string(),
             ))

@@ -8,7 +8,6 @@ use crate::models::common::SuccessResponse;
 use crate::models::presence::{PresenceStatus, SetPresenceRequest};
 use crate::state::AppState;
 
-/// Set presence status (available/unavailable)
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/presence/set",

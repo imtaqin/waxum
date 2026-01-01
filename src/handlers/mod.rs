@@ -1,6 +1,7 @@
 pub mod blocking;
 pub mod chatstate;
 pub mod contacts;
+pub mod dashboard;
 pub mod groups;
 pub mod media;
 pub mod messages;

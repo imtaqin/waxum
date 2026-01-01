@@ -1,5 +1,5 @@
-# Build stage - use slim variant
-FROM rust:slim-bookworm AS builder
+# Rust build stage
+FROM rust:slim-bookworm AS rust-builder
 
 WORKDIR /app
 
@@ -12,10 +12,33 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy source code
-COPY . .
+# Install Rust nightly (required by whatsapp-rust for portable_simd)
+RUN rustup default nightly
 
-# Build release binary
+# === DEPENDENCY CACHING LAYER ===
+# Copy only dependency manifests first
+COPY Cargo.toml Cargo.lock* ./
+
+# Create dummy source files to build dependencies only
+RUN mkdir -p src && \
+    echo 'fn main() { println!("dummy"); }' > src/main.rs
+
+# Create dummy templates directory (Askama checks at compile time)
+RUN mkdir -p templates && \
+    echo '<!DOCTYPE html><html><body></body></html>' > templates/base.html
+
+# Build dependencies only (this layer will be cached)
+RUN cargo build --release 2>/dev/null || true
+
+# Remove dummy source AND the dummy binary (important!)
+RUN rm -rf src templates target/release/wa-rs target/release/deps/wa_rs*
+
+# === ACTUAL SOURCE BUILD ===
+# Now copy real source code and templates
+COPY src/ ./src/
+COPY templates/ ./templates/
+
+# Build release binary (dependencies are already cached)
 RUN cargo build --release
 
 # Runtime stage - minimal image
@@ -31,8 +54,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
-# Copy binary from builder
-COPY --from=builder /app/target/release/wa-rs /app/wa-rs
+# Copy binary from builder (templates are embedded at compile time)
+COPY --from=rust-builder /app/target/release/wa-rs /app/wa-rs
 
 # Create directory for WhatsApp session storage
 RUN mkdir -p /app/whatsapp_sessions

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}New Session - WA-RS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center mb-4">
+    <h1 class="h2">Create Session</h1>
+    <a href="/dashboard/sessions" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+{% match error %}
+{% when Some with (err) %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ err }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% when None %}
+{% endmatch %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="/dashboard/sessions/new" id="createSessionForm">
+            <div class="mb-3">
+                <label class="form-label">Session ID <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="id" placeholder="my-session" required>
+                <div class="form-text">Unique identifier for this session (alphanumeric and hyphens only)</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Session Name</label>
+                <input type="text" class="form-control" name="name" placeholder="My WhatsApp">
+                <div class="form-text">A friendly name for this session</div>
+            </div>
+
+            <hr>
+            <h6 class="mb-3">Webhook (Optional)</h6>
+
+            <div class="mb-3">
+                <label class="form-label">Webhook URL</label>
+                <input type="url" class="form-control" name="webhook_url" placeholder="https://example.com/webhook">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Webhook Secret</label>
+                <input type="text" class="form-control" name="webhook_secret" placeholder="your-secret">
+                <div class="form-text">Used for HMAC-SHA256 signature verification</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Events</label>
+                <input type="hidden" name="events" id="eventsHidden" value="message,connected,disconnected">
+                <div class="row g-2">
+                    <div class="col-6 col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="message" id="evtMessage" checked>
+                            <label class="form-check-label" for="evtMessage">message</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="connected" id="evtConnected" checked>
+                            <label class="form-check-label" for="evtConnected">connected</label>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="disconnected" id="evtDisconnected" checked>
+                            <label class="form-check-label" for="evtDisconnected">disconnected</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="receipt" id="evtReceipt">
+                            <label class="form-check-label" for="evtReceipt">receipt</label>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="presence" id="evtPresence">
+                            <label class="form-check-label" for="evtPresence">presence</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input event-checkbox" type="checkbox" value="qr_code" id="evtQrCode">
+                            <label class="form-check-label" for="evtQrCode">qr_code</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+            <div class="d-flex justify-content-end">
+                <a href="/dashboard/sessions" class="btn btn-secondary me-2">Cancel</a>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-plus me-1"></i>Create Session
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.event-checkbox');
+    const hiddenInput = document.getElementById('eventsHidden');
+
+    function updateHiddenField() {
+        const selected = [];
+        checkboxes.forEach(cb => {
+            if (cb.checked) selected.push(cb.value);
+        });
+        hiddenInput.value = selected.join(',');
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateHiddenField);
+    });
+
+    updateHiddenField();
+});
+</script>
+{% endblock %}

@@ -30,3 +30,4 @@ logs/
 tmp/
 temp/
 *.tmp
+postman/

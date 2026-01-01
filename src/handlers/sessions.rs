@@ -14,10 +14,6 @@ use crate::models::sessions::{
 use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 use crate::state::AppState;
 
-/// Create a new session
-///
-/// Creates a session and optionally registers a webhook.
-/// The session will automatically start connecting to WhatsApp.
 #[utoipa::path(
     post,
     path = "/api/v1/sessions",
@@ -35,7 +31,6 @@ pub async fn create_session(
 ) -> Result<Json<CreateSessionResponse>, ApiError> {
     let session_id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    // Check if session already exists
     if state
         .session_manager()
         .get_session(&session_id)
@@ -46,20 +41,17 @@ pub async fn create_session(
         return Err(ApiError::AlreadyConnected);
     }
 
-    // Create storage path for this session
     let storage_path = format!("{}/{}", state.base_storage_path(), session_id);
     tokio::fs::create_dir_all(&storage_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Create session in database
     let session = state
         .session_manager()
         .create_session(&session_id, request.name.as_deref(), &storage_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Register webhook if provided
     if let Some(webhook_req) = request.webhook {
         let webhook_id = Uuid::new_v4().to_string();
         let events = if webhook_req.events.is_empty() {
@@ -74,22 +66,18 @@ pub async fn create_session(
             enabled: true,
         };
 
-        // Save to database
         state
             .session_manager()
             .create_webhook(&webhook_id, &session_id, &config)
             .await
             .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        // Cache in memory
         state.register_webhook(&session_id, &webhook_id, config);
     }
 
-    // Get or create runtime state and start connecting
     let runtime = state.get_or_create_session(&session_id, &storage_path);
     runtime.set_status(SessionStatus::Connecting);
 
-    // Spawn connection task
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
     tokio::spawn(async move {
@@ -104,7 +92,6 @@ pub async fn create_session(
     Ok(Json(CreateSessionResponse { session }))
 }
 
-/// List all sessions
 #[utoipa::path(
     get,
     path = "/api/v1/sessions",
@@ -120,7 +107,6 @@ pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<Session
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Update runtime status for active sessions
     let mut updated_sessions = Vec::with_capacity(sessions.len());
     for mut session in sessions {
         if let Some(runtime) = state.get_session(&session.id) {
@@ -137,7 +123,6 @@ pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<Session
     }))
 }
 
-/// Get session info
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}",
@@ -161,7 +146,6 @@ pub async fn get_session(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // Update runtime status
     if let Some(runtime) = state.get_session(&session_id) {
         session.status = runtime.get_status();
         session.is_logged_in = session.status == SessionStatus::LoggedIn;
@@ -170,7 +154,6 @@ pub async fn get_session(
     Ok(Json(session))
 }
 
-/// Delete session
 #[utoipa::path(
     delete,
     path = "/api/v1/sessions/{session_id}",
@@ -187,17 +170,15 @@ pub async fn delete_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    // Disconnect if connected
+
     if let Some(runtime) = state.get_session(&session_id) {
         if let Some(client) = runtime.get_client() {
             client.disconnect().await;
         }
     }
 
-    // Remove runtime state
     state.remove_session(&session_id);
 
-    // Get storage path and delete it
     if let Some(storage_path) = state
         .session_manager()
         .get_storage_path(&session_id)
@@ -207,7 +188,6 @@ pub async fn delete_session(
         let _ = tokio::fs::remove_dir_all(&storage_path).await;
     }
 
-    // Delete from database
     let deleted = state
         .session_manager()
         .delete_session(&session_id)
@@ -221,7 +201,6 @@ pub async fn delete_session(
     }
 }
 
-/// Get session status
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/status",
@@ -260,7 +239,6 @@ pub async fn get_session_status(
     }))
 }
 
-/// Get QR codes for session
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/qr",
@@ -278,7 +256,7 @@ pub async fn get_qr_code(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<QrCodeResponse>, ApiError> {
-    // Check session exists
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -297,7 +275,6 @@ pub async fn get_qr_code(
     }))
 }
 
-/// Connect session
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/connect",
@@ -315,7 +292,7 @@ pub async fn connect_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    // Verify session exists in database
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -323,7 +300,6 @@ pub async fn connect_session(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // Check if already connected
     if let Some(runtime) = state.get_session(&session_id) {
         let status = runtime.get_status();
         if status != SessionStatus::Disconnected {
@@ -331,7 +307,6 @@ pub async fn connect_session(
         }
     }
 
-    // Get or create runtime state
     let storage_path = state
         .session_manager()
         .get_storage_path(&session_id)
@@ -342,7 +317,6 @@ pub async fn connect_session(
     let runtime = state.get_or_create_session(&session_id, &storage_path);
     runtime.set_status(SessionStatus::Connecting);
 
-    // Spawn connection task
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
     tokio::spawn(async move {
@@ -357,7 +331,6 @@ pub async fn connect_session(
     Ok(Json(SuccessResponse::with_message("Connection initiated")))
 }
 
-/// Connect session with pair code
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/pair",
@@ -377,7 +350,7 @@ pub async fn pair_session(
     Path(session_id): Path<String>,
     Json(request): Json<PairCodeRequest>,
 ) -> Result<Json<PairCodeResponse>, ApiError> {
-    // Get session from database
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -385,7 +358,6 @@ pub async fn pair_session(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // Check if already connected
     if let Some(runtime) = state.get_session(&session_id) {
         let status = runtime.get_status();
         if status == SessionStatus::LoggedIn {
@@ -393,7 +365,6 @@ pub async fn pair_session(
         }
     }
 
-    // Get or create runtime state
     let storage_path = state
         .session_manager()
         .get_storage_path(&session_id)
@@ -404,7 +375,6 @@ pub async fn pair_session(
     let runtime = state.get_or_create_session(&session_id, &storage_path);
     runtime.set_status(SessionStatus::WaitingForPairCode);
 
-    // Spawn pairing task
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
     let phone_number = request.phone_number.clone();
@@ -426,7 +396,6 @@ pub async fn pair_session(
         }
     });
 
-    // Wait briefly for pair code to be generated
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     let pair_code = state
@@ -440,7 +409,6 @@ pub async fn pair_session(
     }))
 }
 
-/// Disconnect session
 #[utoipa::path(
     post,
     path = "/api/v1/sessions/{session_id}/disconnect",
@@ -458,7 +426,7 @@ pub async fn disconnect_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    // Check session exists
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -476,7 +444,6 @@ pub async fn disconnect_session(
     runtime.set_status(SessionStatus::Disconnected);
     runtime.set_client(None);
 
-    // Update database
     let _ = state
         .session_manager()
         .update_session_status(&session_id, SessionStatus::Disconnected, false)
@@ -485,7 +452,6 @@ pub async fn disconnect_session(
     Ok(Json(SuccessResponse::with_message("Disconnected")))
 }
 
-/// Get device info for session
 #[utoipa::path(
     get,
     path = "/api/v1/sessions/{session_id}/device",
@@ -503,7 +469,7 @@ pub async fn get_device_info(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<DeviceInfo>, ApiError> {
-    // Check session exists
+
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -523,14 +489,25 @@ pub async fn get_device_info(
     let lid = client.get_lid().await.map(|j| j.to_string());
 
     Ok(Json(DeviceInfo {
-        device_id: None, // Device ID not directly exposed
+        device_id: None,
         phone_number: pn,
         lid,
         push_name,
     }))
 }
 
-// Internal functions
+pub async fn connect_client_public(state: &AppState, session_id: &str) -> Result<(), ApiError> {
+    connect_client(state, session_id).await
+}
+
+pub async fn connect_client_with_pair_code_public(
+    state: &AppState,
+    session_id: &str,
+    phone_number: &str,
+    show_notification: bool,
+) -> Result<(), ApiError> {
+    connect_client_with_pair_code(state, session_id, phone_number, show_notification).await
+}
 
 async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
@@ -547,7 +524,6 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
 
     let db_path = format!("{}/whatsapp.db", storage_path);
 
-    // Initialize storage
     let backend = SqliteStore::new(&db_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -573,28 +549,23 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Store client reference
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_client(Some(bot.client()));
         runtime.set_status(SessionStatus::WaitingForQr);
     }
 
-    // Update database
     let _ = state
         .session_manager()
         .update_session_status(session_id, SessionStatus::WaitingForQr, false)
         .await;
 
-    // Run the bot
     let handle = bot
         .run()
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Wait for the bot to finish
     let _ = handle.await;
 
-    // Cleanup
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_status(SessionStatus::Disconnected);
         runtime.set_client(None);
@@ -629,7 +600,6 @@ async fn connect_client_with_pair_code(
 
     let db_path = format!("{}/whatsapp.db", storage_path);
 
-    // Initialize storage
     let backend = SqliteStore::new(&db_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -640,7 +610,6 @@ async fn connect_client_with_pair_code(
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
-    // Configure pair code options
     let pair_options = PairCodeOptions {
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
@@ -665,21 +634,17 @@ async fn connect_client_with_pair_code(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Store client reference
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_client(Some(bot.client()));
     }
 
-    // Run the bot
     let handle = bot
         .run()
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    // Wait for the bot to finish
     let _ = handle.await;
 
-    // Cleanup
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_status(SessionStatus::Disconnected);
         runtime.set_client(None);
@@ -726,7 +691,6 @@ async fn handle_event(
             runtime.set_qr_codes(vec![]);
             runtime.set_pair_code(None);
 
-            // Update session info
             let push_name_str = client.get_push_name().await;
             let push_name = if push_name_str.is_empty() { None } else { Some(push_name_str) };
             let phone = client.get_pn().await.map(|j| j.user.clone());
@@ -761,7 +725,6 @@ async fn handle_event(
         _ => {}
     }
 
-    // Broadcast event to webhooks
     if let Ok(payload) = serde_json::to_string(&event_to_json(&event, session_id)) {
         let event_type = get_event_type(&event);
         state.broadcast_to_webhooks(session_id, &event_type, &payload).await;
