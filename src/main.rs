@@ -207,13 +207,13 @@ async fn main() -> Result<()> {
         .init();
 
     // Print banner
-    println!("\x1b[36m{}\x1b[0m", BANNER);
-    println!("\x1b[90m  WhatsApp Gateway REST API\x1b[0m");
-    println!("\x1b[90m  Version: {}\x1b[0m", VERSION);
+    println!("\x1b[96m{}\x1b[0m", BANNER);
+    println!("\x1b[97m  WhatsApp Gateway REST API\x1b[0m");
+    println!("\x1b[37m  Version: \x1b[96m{}\x1b[0m", VERSION);
     println!();
-    println!("\x1b[90m  Author:\x1b[0m    \x1b[97m@taqin\x1b[0m");
-    println!("\x1b[90m  GitHub:\x1b[0m    \x1b[94mhttps://github.com/fdciabdul/wa-rs\x1b[0m");
-    println!("\x1b[90m  Docs:\x1b[0m      \x1b[94mhttps://wa-rs.imtaqin.id/\x1b[0m");
+    println!("\x1b[37m  Author:  \x1b[93m@taqin\x1b[0m");
+    println!("\x1b[37m  GitHub:  \x1b[96mhttps://github.com/fdciabdul/wa-rs\x1b[0m");
+    println!("\x1b[37m  Docs:    \x1b[96mhttps://wa-rs.imtaqin.id/\x1b[0m");
     println!();
 
     tracing::info!("Starting WhatsApp REST API server...");

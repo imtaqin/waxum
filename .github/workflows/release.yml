@@ -16,7 +16,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: docker.io
-  IMAGE_NAME: mumur/wa-rs
+  IMAGE_NAME: fdciabdul/wa-rs
 
 jobs:
   # Determine version and create tag

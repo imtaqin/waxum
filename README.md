@@ -5,7 +5,8 @@
 <h1 align="center">WA-RS</h1>
 
 <p align="center">
-  High-performance multi-session WhatsApp Gateway built with Rust
+  High-performance multi-session WhatsApp Gateway built with Rust, why?
+ because life's too short for garbage collection.
 </p>
 
 <p align="center">
