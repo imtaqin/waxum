@@ -2,11 +2,18 @@
   <img src="assets/logo.jpg" alt="WA-RS Logo" width="200">
 </p>
 
-<h1 align="center">WA-RS</h1>
+<pre align="center">
+██╗    ██╗ █████╗       ██████╗ ███████╗
+██║    ██║██╔══██╗      ██╔══██╗██╔════╝
+██║ █╗ ██║███████║█████╗██████╔╝███████╗
+██║███╗██║██╔══██║╚════╝██╔══██╗╚════██║
+╚███╔███╔╝██║  ██║      ██║  ██║███████║
+ ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝
+</pre>
 
 <p align="center">
-  High-performance multi-session WhatsApp Gateway built with Rust, why?
- because life's too short for garbage collection.
+  <strong>High-performance multi-session WhatsApp Gateway built with Rust</strong><br>
+  <em>Because life's too short for garbage collection.</em>
 </p>
 
 <p align="center">
