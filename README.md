@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/logo.jpg" alt="WA-RS Logo" width="200">
-</p>
+
 
 <pre align="center">
 ██╗    ██╗ █████╗       ██████╗ ███████╗
