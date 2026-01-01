@@ -1,0 +1,227 @@
+{% extends "base.askama" %}
+
+{% block title %}{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}{{ session.id }}{% endmatch %} — WA-RS{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <h1 class="page-title">{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}Session{% endmatch %}</h1>
+        <p class="page-subtitle"><span class="code">{{ session.id }}</span></p>
+    </div>
+    <div class="flex gap-1">
+        <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Refresh
+        </a>
+        <a href="/dashboard/sessions" class="btn btn-ghost">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+</header>
+
+{% match message %}
+{% when Some with (msg) %}
+<div class="alert alert-success">
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    {{ msg }}
+</div>
+{% when None %}
+{% endmatch %}
+
+{% match error %}
+{% when Some with (err) %}
+<div class="alert alert-danger">
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    {{ err }}
+</div>
+{% when None %}
+{% endmatch %}
+
+<div class="grid-2">
+    <div>
+        <div class="card mb-2">
+            <div class="card-header">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Session Info
+            </div>
+            <div class="card-body">
+                <div style="display: grid; gap: 1rem;">
+                    <div class="flex justify-between items-center">
+                        <span class="text-secondary">Status</span>
+                        {% if session.status.is_connected() %}
+                        <span class="status online"><span class="status-dot"></span> Online</span>
+                        {% else %}
+                        {% if session.status.is_connecting() %}
+                        <span class="status connecting"><span class="status-dot"></span> Connecting</span>
+                        {% else %}
+                        <span class="status offline"><span class="status-dot"></span> Offline</span>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-secondary">Created</span>
+                        <span class="mono" style="font-size: 0.85rem;">{{ session.created_at }}</span>
+                    </div>
+                    {% match device_info %}
+                    {% when Some with (info) %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-secondary">Phone</span>
+                        <span class="mono" style="font-size: 0.9rem;">{{ info.phone }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-secondary">Name</span>
+                        <span>{{ info.push_name }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-secondary">Platform</span>
+                        <span>{{ info.platform }}</span>
+                    </div>
+                    {% when None %}
+                    {% endmatch %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Actions
+            </div>
+            <div class="card-body">
+                <div class="flex gap-1" style="flex-wrap: wrap;">
+                    {% if session.status.is_connected() %}
+                    <form method="POST" action="/dashboard/sessions/{{ session.id }}/disconnect">
+                        <button type="submit" class="btn btn-ghost">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                            </svg>
+                            Disconnect
+                        </button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="/dashboard/sessions/{{ session.id }}/connect">
+                        <button type="submit" class="btn btn-primary">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Connect
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="/dashboard/sessions/{{ session.id }}/delete" onsubmit="return confirm('Delete this session? This cannot be undone.')">
+                        <button type="submit" class="btn btn-danger">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('qr')">QR Code</button>
+            <button class="tab" onclick="showTab('pair')">Pair Code</button>
+        </div>
+
+        <div id="tab-qr" class="tab-content active">
+            <div class="text-center" style="padding: 2rem;">
+                {% if session.status.is_connected() %}
+                <div style="padding: 3rem 0;">
+                    <svg width="64" height="64" fill="none" stroke="var(--success)" viewBox="0 0 24 24" style="margin: 0 auto 1rem;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p style="font-size: 1.1rem;">Session is connected!</p>
+                </div>
+                {% else %}
+                {% match qr_code %}
+                {% when Some with (code) %}
+                <div class="qr-frame" style="margin-bottom: 1.5rem;">
+                    <img src="data:image/png;base64,{{ code }}" alt="QR Code">
+                </div>
+                <p class="text-secondary mb-2">Scan with WhatsApp to connect</p>
+                <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost btn-sm">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh QR
+                </a>
+                {% when None %}
+                <div style="padding: 3rem 0;">
+                    <svg width="48" height="48" fill="none" stroke="var(--warning)" viewBox="0 0 24 24" style="margin: 0 auto 1rem; opacity: 0.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-secondary">{% match qr_error %}{% when Some with (e) %}{{ e }}{% when None %}Waiting for QR code...{% endmatch %}</p>
+                    <form method="POST" action="/dashboard/sessions/{{ session.id }}/connect" style="margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary">Connect to generate QR</button>
+                    </form>
+                </div>
+                {% endmatch %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="tab-pair" class="tab-content">
+            <div class="text-center" style="padding: 2rem;">
+                {% if session.status.is_connected() %}
+                <div style="padding: 3rem 0;">
+                    <svg width="64" height="64" fill="none" stroke="var(--success)" viewBox="0 0 24 24" style="margin: 0 auto 1rem;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p style="font-size: 1.1rem;">Session is connected!</p>
+                </div>
+                {% else %}
+                <form method="POST" action="/dashboard/sessions/{{ session.id }}/pair" style="max-width: 300px; margin: 0 auto;">
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <div style="display: flex; gap: 0;">
+                            <span style="padding: 0.75rem 1rem; background: var(--bg-elevated); border: 1px solid var(--border-dim); border-right: none; border-radius: 8px 0 0 8px; color: var(--text-secondary);">+</span>
+                            <input type="text" name="phone" class="form-input mono" placeholder="628123456789" required style="border-radius: 0 8px 8px 0;">
+                        </div>
+                        <p class="form-hint">Enter without + or spaces</p>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Get Pair Code</button>
+                </form>
+
+                {% match pair_code %}
+                {% when Some with (code) %}
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-dim);">
+                    <p class="text-secondary mb-2">Enter this code in WhatsApp</p>
+                    <div class="pair-code">{{ code }}</div>
+                    <p class="text-dim mt-2" style="font-size: 0.85rem;">Settings → Linked Devices → Link with phone number</p>
+                </div>
+                {% when None %}
+                {% endmatch %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+{% endblock %}

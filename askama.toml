@@ -1,0 +1,6 @@
+[general]
+dirs = ["templates"]
+
+[[escaper]]
+path = "askama::Html"
+extensions = ["askama"]

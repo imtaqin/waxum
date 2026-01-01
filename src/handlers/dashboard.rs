@@ -14,6 +14,7 @@ use crate::state::AppState;
 pub struct SessionView {
     pub id: String,
     pub name: Option<String>,
+    pub phone: Option<String>,
     pub status: SessionStatus,
     pub created_at: String,
 }
@@ -29,6 +30,7 @@ impl From<SessionInfo> for SessionView {
         SessionView {
             id: s.id,
             name: s.name,
+            phone: s.phone_number,
             status: s.status,
             created_at,
         }
@@ -36,7 +38,7 @@ impl From<SessionInfo> for SessionView {
 }
 
 #[derive(Template)]
-#[template(path = "dashboard.html")]
+#[template(path = "dashboard.askama")]
 pub struct DashboardTemplate {
     pub total_sessions: usize,
     pub connected_sessions: usize,
@@ -45,19 +47,19 @@ pub struct DashboardTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "sessions.html")]
+#[template(path = "sessions.askama")]
 pub struct SessionsTemplate {
     pub sessions: Vec<SessionView>,
 }
 
 #[derive(Template)]
-#[template(path = "session_new.html")]
+#[template(path = "session_new.askama")]
 pub struct SessionNewTemplate {
     pub error: Option<String>,
 }
 
 #[derive(Template)]
-#[template(path = "session_detail.html")]
+#[template(path = "session_detail.askama")]
 pub struct SessionDetailTemplate {
     pub session: SessionView,
     pub qr_code: Option<String>,
@@ -69,7 +71,7 @@ pub struct SessionDetailTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "settings.html")]
+#[template(path = "settings.askama")]
 pub struct SettingsTemplate {
     pub token: String,
     pub version: String,

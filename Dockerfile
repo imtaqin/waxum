@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y \
 RUN rustup default nightly
 
 # === DEPENDENCY CACHING LAYER ===
-# Copy only dependency manifests first
-COPY Cargo.toml Cargo.lock* ./
+# Copy only dependency manifests and askama config first
+COPY Cargo.toml Cargo.lock* askama.toml ./
 
 # Create dummy source files to build dependencies only
 RUN mkdir -p src && \
@@ -25,7 +25,7 @@ RUN mkdir -p src && \
 
 # Create dummy templates directory (Askama checks at compile time)
 RUN mkdir -p templates && \
-    echo '<!DOCTYPE html><html><body></body></html>' > templates/base.html
+    echo '<!DOCTYPE html><html><body></body></html>' > templates/base.askama
 
 # Build dependencies only (this layer will be cached)
 RUN cargo build --release 2>/dev/null || true

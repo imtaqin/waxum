@@ -1,0 +1,130 @@
+{% extends "base.askama" %}
+
+{% block title %}New Session — WA-RS{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <h1 class="page-title">New Session</h1>
+        <p class="page-subtitle">Create a new WhatsApp connection</p>
+    </div>
+    <a href="/dashboard/sessions" class="btn btn-ghost">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Back
+    </a>
+</header>
+
+{% match error %}
+{% when Some with (err) %}
+<div class="alert alert-danger">
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    {{ err }}
+</div>
+{% when None %}
+{% endmatch %}
+
+<div class="card" style="max-width: 600px;">
+    <div class="card-header">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        Session Details
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/dashboard/sessions/new" id="sessionForm">
+            <div class="form-group">
+                <label class="form-label">Session ID</label>
+                <input type="text" name="id" class="form-input mono" placeholder="my-session" pattern="[a-zA-Z0-9_-]+" title="Only letters, numbers, hyphens and underscores">
+                <p class="form-hint">Leave empty to auto-generate. Only alphanumeric, hyphens and underscores.</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Display Name</label>
+                <input type="text" name="name" class="form-input" placeholder="My WhatsApp">
+                <p class="form-hint">Optional friendly name for this session</p>
+            </div>
+
+            <div style="border-top: 1px solid var(--border-dim); margin: 1.5rem 0; padding-top: 1.5rem;">
+                <h3 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
+                    Webhook Configuration
+                    <span style="font-weight: 400; opacity: 0.7;">(optional)</span>
+                </h3>
+
+                <div class="form-group">
+                    <label class="form-label">Webhook URL</label>
+                    <input type="url" name="webhook_url" class="form-input mono" placeholder="https://example.com/webhook">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Webhook Secret</label>
+                    <input type="text" name="webhook_secret" class="form-input mono" placeholder="your-secret-key">
+                    <p class="form-hint">Used for HMAC-SHA256 signature verification</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Events</label>
+                    <input type="hidden" name="events" id="eventsHidden" value="message,connected,disconnected">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="message" checked style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">Messages</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="connected" checked style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">Connected</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="disconnected" checked style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">Disconnected</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="receipt" style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">Receipts</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="presence" style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">Presence</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--bg-void);">
+                            <input type="checkbox" class="event-checkbox" value="qr_code" style="accent-color: var(--accent-primary);">
+                            <span style="font-size: 0.85rem;">QR Code</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-1" style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Create Session
+                </button>
+                <a href="/dashboard/sessions" class="btn btn-ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.event-checkbox');
+    const hiddenInput = document.getElementById('eventsHidden');
+
+    function updateHiddenField() {
+        const selected = [];
+        checkboxes.forEach(cb => { if (cb.checked) selected.push(cb.value); });
+        hiddenInput.value = selected.join(',');
+    }
+
+    checkboxes.forEach(cb => cb.addEventListener('change', updateHiddenField));
+    updateHiddenField();
+});
+</script>
+{% endblock %}
