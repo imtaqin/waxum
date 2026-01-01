@@ -58,6 +58,7 @@ impl SessionStatus {
         )
     }
 
+    #[allow(dead_code)]
     pub fn badge_class(&self) -> &'static str {
         match self {
             SessionStatus::LoggedIn | SessionStatus::Connected => "bg-success",

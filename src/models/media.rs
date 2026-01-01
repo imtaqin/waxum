@@ -35,7 +35,7 @@ pub enum MediaType {
 }
 
 impl MediaType {
-    pub fn to_wacore_media_type(&self) -> wacore::download::MediaType {
+    pub fn to_wacore_media_type(self) -> wacore::download::MediaType {
         match self {
             MediaType::Image => wacore::download::MediaType::Image,
             MediaType::Video => wacore::download::MediaType::Video,
