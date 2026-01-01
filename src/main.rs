@@ -9,6 +9,17 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const BANNER: &str = r#"
+██╗    ██╗ █████╗       ██████╗ ███████╗
+██║    ██║██╔══██╗      ██╔══██╗██╔════╝
+██║ █╗ ██║███████║█████╗██████╔╝███████╗
+██║███╗██║██╔══██║╚════╝██╔══██╗╚════██║
+╚███╔███╔╝██║  ██║      ██║  ██║███████║
+ ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝
+"#;
+
 mod db;
 mod error;
 mod handlers;
@@ -194,6 +205,16 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // Print banner
+    println!("\x1b[36m{}\x1b[0m", BANNER);
+    println!("\x1b[90m  WhatsApp Gateway REST API\x1b[0m");
+    println!("\x1b[90m  Version: {}\x1b[0m", VERSION);
+    println!();
+    println!("\x1b[90m  Author:\x1b[0m    \x1b[97m@taqin\x1b[0m");
+    println!("\x1b[90m  GitHub:\x1b[0m    \x1b[94mhttps://github.com/fdciabdul/wa-rs\x1b[0m");
+    println!("\x1b[90m  Docs:\x1b[0m      \x1b[94mhttps://wa-rs.imtaqin.id/\x1b[0m");
+    println!();
+
     tracing::info!("Starting WhatsApp REST API server...");
 
     let db_host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
@@ -234,15 +255,19 @@ async fn main() -> Result<()> {
         .allow_headers(Any);
 
     let (superadmin_token, from_env) = middleware::jwt::get_superadmin_token();
-    tracing::info!("===========================================");
+    println!();
+    println!("\x1b[33m  ┌─────────────────────────────────────────────────────────────┐\x1b[0m");
+    println!("\x1b[33m  │\x1b[0m  \x1b[1;97mSUPERADMIN TOKEN\x1b[0m                                            \x1b[33m│\x1b[0m");
+    println!("\x1b[33m  ├─────────────────────────────────────────────────────────────┤\x1b[0m");
     if from_env {
-        tracing::info!("SUPERADMIN TOKEN: Loaded from SUPERADMIN_TOKEN env");
+        println!("\x1b[33m  │\x1b[0m  \x1b[32mLoaded from SUPERADMIN_TOKEN environment variable\x1b[0m          \x1b[33m│\x1b[0m");
     } else {
-        tracing::info!("SUPERADMIN JWT TOKEN (save this!):");
-        tracing::info!("{}", superadmin_token);
-        tracing::info!("Tip: Set SUPERADMIN_TOKEN in .env to use a fixed token");
+        println!("\x1b[33m  │\x1b[0m  \x1b[97m{}\x1b[0m", superadmin_token);
+        println!("\x1b[33m  ├─────────────────────────────────────────────────────────────┤\x1b[0m");
+        println!("\x1b[33m  │\x1b[0m  \x1b[90mTip: Set SUPERADMIN_TOKEN in .env to use a fixed token\x1b[0m     \x1b[33m│\x1b[0m");
     }
-    tracing::info!("===========================================");
+    println!("\x1b[33m  └─────────────────────────────────────────────────────────────┘\x1b[0m");
+    println!();
 
     let swagger_router: axum::Router<AppState> = SwaggerUi::new("/swagger-ui")
         .url("/api-docs/openapi.json", ApiDoc::openapi())
@@ -263,9 +288,11 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3451));
-    tracing::info!("Server listening on http://{}", addr);
-    tracing::info!("Dashboard available at http://{}", addr);
-    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
+    println!("\x1b[32m  Server listening on:\x1b[0m");
+    println!("    \x1b[90m→\x1b[0m API:       \x1b[94mhttp://{}/api/v1\x1b[0m", addr);
+    println!("    \x1b[90m→\x1b[0m Dashboard: \x1b[94mhttp://{}/dashboard\x1b[0m", addr);
+    println!("    \x1b[90m→\x1b[0m Swagger:   \x1b[94mhttp://{}/swagger-ui\x1b[0m", addr);
+    println!();
 
     let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

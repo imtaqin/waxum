@@ -17,8 +17,10 @@ jobs:
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
+
+      - name: Install rustfmt and clippy
+        run: |
+          rustup component add rustfmt clippy
 
       - name: Install dependencies
         run: |
