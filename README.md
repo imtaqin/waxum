@@ -93,7 +93,7 @@ docker compose up -d
 
 ```bash
 # Clone repository
-git clone https://github.com/mfranceschi/wa-rs.git
+git clone https://github.com/fdciabdul/wa-rs.git
 cd wa-rs
 
 # Install Rust nightly
