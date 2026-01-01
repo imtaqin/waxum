@@ -3,7 +3,6 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendTextRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -16,7 +15,6 @@ pub struct SendTextRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendImageRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -30,7 +28,6 @@ pub struct SendImageRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendVideoRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -44,7 +41,6 @@ pub struct SendVideoRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendAudioRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -59,7 +55,6 @@ pub struct SendAudioRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendDocumentRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -76,7 +71,6 @@ pub struct SendDocumentRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendStickerRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -88,7 +82,6 @@ pub struct SendStickerRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendLocationRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -108,7 +101,6 @@ pub struct SendLocationRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendContactRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -119,7 +111,6 @@ pub struct SendContactRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ContactCard {
-
     pub display_name: String,
 
     pub phones: Vec<ContactPhone>,
@@ -129,7 +120,6 @@ pub struct ContactCard {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ContactPhone {
-
     pub number: String,
 
     #[serde(default = "default_phone_type")]
@@ -142,7 +132,6 @@ fn default_phone_type() -> String {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EditMessageRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -153,7 +142,6 @@ pub struct EditMessageRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendReactionRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
@@ -167,10 +155,14 @@ pub struct SendReactionRequest {
 #[serde(untagged)]
 #[allow(dead_code)]
 pub enum MediaData {
+    Url {
+        url: String,
+    },
 
-    Url { url: String },
-
-    Base64 { data: String, mimetype: String },
+    Base64 {
+        data: String,
+        mimetype: String,
+    },
 
     Uploaded {
         url: String,
@@ -185,7 +177,6 @@ pub enum MediaData {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MessageResponse {
-
     pub message_id: String,
 
     pub timestamp: i64,
@@ -196,7 +187,6 @@ pub struct MessageResponse {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendMessageRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 

@@ -77,7 +77,8 @@ pub async fn upload_media(
         }
     }
 
-    let file_data = file_data.ok_or_else(|| ApiError::BadRequest("No file provided".to_string()))?;
+    let file_data =
+        file_data.ok_or_else(|| ApiError::BadRequest("No file provided".to_string()))?;
     let media_type =
         media_type.ok_or_else(|| ApiError::BadRequest("Media type not specified".to_string()))?;
     let mimetype = mimetype.unwrap_or_else(|| get_default_mimetype(&media_type));

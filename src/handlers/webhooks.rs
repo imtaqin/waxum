@@ -26,7 +26,6 @@ pub async fn list_webhooks(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<WebhookListResponse>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -65,7 +64,6 @@ pub async fn register_webhook(
     Path(session_id): Path<String>,
     Json(request): Json<RegisterWebhookRequest>,
 ) -> Result<Json<WebhookConfig>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)

@@ -35,7 +35,10 @@ pub async fn get_blocklist(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    let blocked: Vec<String> = blocklist.iter().map(|entry| entry.jid.to_string()).collect();
+    let blocked: Vec<String> = blocklist
+        .iter()
+        .map(|entry| entry.jid.to_string())
+        .collect();
     let count = blocked.len();
 
     Ok(Json(BlocklistResponse { blocked, count }))
@@ -134,9 +137,7 @@ pub async fn is_blocked(
     Path((session_id, jid)): Path<(String, String)>,
 ) -> Result<Json<BlockStatusResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let jid_parsed: Jid = jid
-        .parse()
-        .map_err(|_| ApiError::InvalidJid(jid.clone()))?;
+    let jid_parsed: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
 
     let blocked = client
         .blocking()
@@ -144,12 +145,14 @@ pub async fn is_blocked(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    Ok(Json(BlockStatusResponse { jid, is_blocked: blocked }))
+    Ok(Json(BlockStatusResponse {
+        jid,
+        is_blocked: blocked,
+    }))
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BlockStatusResponse {
-
     pub jid: String,
 
     pub is_blocked: bool,

@@ -28,7 +28,7 @@ mod models;
 mod routes;
 mod state;
 
-use routes::{create_router, create_dashboard_router};
+use routes::{create_dashboard_router, create_router};
 use state::AppState;
 
 #[derive(OpenApi)]
@@ -186,7 +186,9 @@ impl utoipa::Modify for SecurityAddon {
                     utoipa::openapi::security::HttpBuilder::new()
                         .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
                         .bearer_format("JWT")
-                        .description(Some("Enter your Superadmin Token from server logs or /dashboard/settings"))
+                        .description(Some(
+                            "Enter your Superadmin Token from server logs or /dashboard/settings",
+                        ))
                         .build(),
                 ),
             );
@@ -196,7 +198,6 @@ impl utoipa::Modify for SecurityAddon {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -226,7 +227,12 @@ async fn main() -> Result<()> {
     let db_password = std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
     let db_name = std::env::var("POSTGRES_DB").unwrap_or_else(|_| "wagateway".to_string());
 
-    tracing::info!("Connecting to PostgreSQL at {}:{}/{}", db_host, db_port, db_name);
+    tracing::info!(
+        "Connecting to PostgreSQL at {}:{}/{}",
+        db_host,
+        db_port,
+        db_name
+    );
 
     let mut pg_config = tokio_postgres::Config::new();
     pg_config.host(&db_host);
@@ -263,7 +269,9 @@ async fn main() -> Result<()> {
         println!("\x1b[33m  │\x1b[0m  \x1b[32mLoaded from SUPERADMIN_TOKEN environment variable\x1b[0m          \x1b[33m│\x1b[0m");
     } else {
         println!("\x1b[33m  │\x1b[0m  \x1b[97m{}\x1b[0m", superadmin_token);
-        println!("\x1b[33m  ├─────────────────────────────────────────────────────────────┤\x1b[0m");
+        println!(
+            "\x1b[33m  ├─────────────────────────────────────────────────────────────┤\x1b[0m"
+        );
         println!("\x1b[33m  │\x1b[0m  \x1b[90mTip: Set SUPERADMIN_TOKEN in .env to use a fixed token\x1b[0m     \x1b[33m│\x1b[0m");
     }
     println!("\x1b[33m  └─────────────────────────────────────────────────────────────┘\x1b[0m");
@@ -275,23 +283,37 @@ async fn main() -> Result<()> {
 
     let api_app = create_router()
         .merge(swagger_router)
-        .layer(axum::middleware::from_fn(middleware::jwt::jwt_auth_middleware));
+        .layer(axum::middleware::from_fn(
+            middleware::jwt::jwt_auth_middleware,
+        ));
 
     let dashboard_app = create_dashboard_router();
 
     let app = axum::Router::new()
         .nest("/dashboard", dashboard_app)
         .merge(api_app)
-        .route("/", axum::routing::get(|| async { axum::response::Redirect::to("/dashboard") }))
+        .route(
+            "/",
+            axum::routing::get(|| async { axum::response::Redirect::to("/dashboard") }),
+        )
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3451));
     println!("\x1b[32m  Server listening on:\x1b[0m");
-    println!("    \x1b[90m→\x1b[0m API:       \x1b[94mhttp://{}/api/v1\x1b[0m", addr);
-    println!("    \x1b[90m→\x1b[0m Dashboard: \x1b[94mhttp://{}/dashboard\x1b[0m", addr);
-    println!("    \x1b[90m→\x1b[0m Swagger:   \x1b[94mhttp://{}/swagger-ui\x1b[0m", addr);
+    println!(
+        "    \x1b[90m→\x1b[0m API:       \x1b[94mhttp://{}/api/v1\x1b[0m",
+        addr
+    );
+    println!(
+        "    \x1b[90m→\x1b[0m Dashboard: \x1b[94mhttp://{}/dashboard\x1b[0m",
+        addr
+    );
+    println!(
+        "    \x1b[90m→\x1b[0m Swagger:   \x1b[94mhttp://{}/swagger-ui\x1b[0m",
+        addr
+    );
     println!();
 
     let listener = TcpListener::bind(addr).await?;

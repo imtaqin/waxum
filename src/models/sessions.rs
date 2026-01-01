@@ -52,14 +52,18 @@ impl SessionStatus {
     pub fn is_connecting(&self) -> bool {
         matches!(
             self,
-            SessionStatus::Connecting | SessionStatus::WaitingForQr | SessionStatus::WaitingForPairCode
+            SessionStatus::Connecting
+                | SessionStatus::WaitingForQr
+                | SessionStatus::WaitingForPairCode
         )
     }
 
     pub fn badge_class(&self) -> &'static str {
         match self {
             SessionStatus::LoggedIn | SessionStatus::Connected => "bg-success",
-            SessionStatus::Connecting | SessionStatus::WaitingForQr | SessionStatus::WaitingForPairCode => "bg-warning",
+            SessionStatus::Connecting
+            | SessionStatus::WaitingForQr
+            | SessionStatus::WaitingForPairCode => "bg-warning",
             SessionStatus::Disconnected => "bg-secondary",
         }
     }

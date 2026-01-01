@@ -10,7 +10,6 @@ use crate::models::sessions::SessionStatus;
 use crate::models::webhooks::WebhookConfig;
 
 pub struct SessionState {
-
     pub client: RwLock<Option<Arc<Client>>>,
 
     pub qr_codes: RwLock<Vec<String>>,
@@ -86,7 +85,6 @@ pub struct AppState {
 }
 
 struct AppStateInner {
-
     pub session_manager: SessionManager,
 
     pub sessions: DashMap<String, Arc<SessionState>>,

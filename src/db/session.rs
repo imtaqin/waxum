@@ -147,7 +147,11 @@ impl SessionManager {
     ) -> anyhow::Result<()> {
         let client = self.pool.get().await?;
 
-        let events: Vec<String> = config.events.iter().map(|e| e.as_str().to_string()).collect();
+        let events: Vec<String> = config
+            .events
+            .iter()
+            .map(|e| e.as_str().to_string())
+            .collect();
 
         client
             .execute(
@@ -155,7 +159,14 @@ impl SessionManager {
                 INSERT INTO webhooks (id, session_id, url, events, secret, enabled)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
-                &[&id, &session_id, &config.url, &events, &config.secret, &config.enabled],
+                &[
+                    &id,
+                    &session_id,
+                    &config.url,
+                    &events,
+                    &config.secret,
+                    &config.enabled,
+                ],
             )
             .await?;
 
@@ -163,11 +174,17 @@ impl SessionManager {
     }
 
     #[allow(dead_code)]
-    pub async fn get_webhooks(&self, session_id: &str) -> anyhow::Result<Vec<(String, WebhookConfig)>> {
+    pub async fn get_webhooks(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<(String, WebhookConfig)>> {
         let client = self.pool.get().await?;
 
         let rows = client
-            .query("SELECT * FROM webhooks WHERE session_id = $1", &[&session_id])
+            .query(
+                "SELECT * FROM webhooks WHERE session_id = $1",
+                &[&session_id],
+            )
             .await?;
 
         Ok(rows

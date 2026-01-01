@@ -598,12 +598,9 @@ async fn get_media_data(media: &MediaData) -> Result<(Vec<u8>, String), ApiError
                 .map_err(|e| ApiError::BadRequest(format!("Invalid base64: {}", e)))?;
             Ok((decoded, mimetype.clone()))
         }
-        MediaData::Uploaded { mimetype: _, .. } => {
-
-            Err(ApiError::BadRequest(
-                "Pre-uploaded media not supported in this context".to_string(),
-            ))
-        }
+        MediaData::Uploaded { mimetype: _, .. } => Err(ApiError::BadRequest(
+            "Pre-uploaded media not supported in this context".to_string(),
+        )),
     }
 }
 
@@ -619,10 +616,7 @@ fn build_vcard(contact: &ContactCard) -> String {
     }
 
     for phone in &contact.phones {
-        vcard.push_str(&format!(
-            "TEL;type={}:{}\n",
-            phone.phone_type, phone.number
-        ));
+        vcard.push_str(&format!("TEL;type={}:{}\n", phone.phone_type, phone.number));
     }
 
     vcard.push_str("END:VCARD");

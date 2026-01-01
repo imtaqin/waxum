@@ -117,9 +117,7 @@ pub async fn get_profile_picture(
     Path((session_id, jid)): Path<(String, String)>,
 ) -> Result<Json<ProfilePictureResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let jid: Jid = jid
-        .parse()
-        .map_err(|_| ApiError::InvalidJid(jid.clone()))?;
+    let jid: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
 
     let picture = client
         .contacts()

@@ -12,7 +12,6 @@ use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-
     pub sub: String,
 
     pub role: String,
@@ -28,7 +27,6 @@ pub struct JwtAuth {
 }
 
 impl JwtAuth {
-
     pub fn new() -> Self {
         let secret = std::env::var("JWT_SECRET")
             .unwrap_or_else(|_| "your-super-secret-jwt-key-change-in-production".to_string());
@@ -40,7 +38,12 @@ impl JwtAuth {
         Self { secret }
     }
 
-    pub fn generate_token(&self, subject: &str, role: &str, expires_in_hours: i64) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn generate_token(
+        &self,
+        subject: &str,
+        role: &str,
+        expires_in_hours: i64,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
         let now = chrono::Utc::now();
         let exp = (now + chrono::Duration::hours(expires_in_hours)).timestamp() as usize;
         let iat = now.timestamp() as usize;
@@ -73,11 +76,7 @@ impl JwtAuth {
     }
 }
 
-pub async fn jwt_auth_middleware(
-    request: Request<Body>,
-    next: Next,
-) -> Response {
-
+pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response {
     if request.uri().path() == "/health" {
         return next.run(request).await;
     }
@@ -98,13 +97,14 @@ pub async fn jwt_auth_middleware(
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => &header[7..],
         _ => {
-            return unauthorized_response("Missing or invalid Authorization header. Use: Bearer <token>");
+            return unauthorized_response(
+                "Missing or invalid Authorization header. Use: Bearer <token>",
+            );
         }
     };
 
     match jwt_auth.validate_token(token) {
         Ok(claims) => {
-
             if !JwtAuth::is_superadmin(&claims) {
                 return forbidden_response("Superadmin role required");
             }
@@ -146,7 +146,6 @@ fn forbidden_response(message: &str) -> Response {
 }
 
 pub fn get_superadmin_token() -> (String, bool) {
-
     if let Ok(token) = std::env::var("SUPERADMIN_TOKEN") {
         if !token.is_empty() {
             return (token, true);

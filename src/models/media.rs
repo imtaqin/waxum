@@ -3,7 +3,6 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UploadMediaResponse {
-
     pub url: String,
 
     pub direct_path: String,
@@ -24,7 +23,6 @@ pub struct UploadMediaResponse {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaType {
-
     Image,
 
     Video,

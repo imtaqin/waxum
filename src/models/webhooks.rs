@@ -3,7 +3,6 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WebhookConfig {
-
     pub url: String,
 
     pub events: Vec<WebhookEvent>,
@@ -16,7 +15,6 @@ pub struct WebhookConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WebhookEvent {
-
     All,
 
     Message,
@@ -43,7 +41,6 @@ pub enum WebhookEvent {
 }
 
 impl WebhookEvent {
-
     pub fn matches(&self, event: &str) -> bool {
         match self {
             WebhookEvent::All => true,

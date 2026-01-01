@@ -101,7 +101,6 @@ pub async fn send_typing(
 
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct TypingRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 }

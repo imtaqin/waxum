@@ -3,14 +3,12 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SetPresenceRequest {
-
     pub status: PresenceStatus,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PresenceStatus {
-
     Available,
 
     Unavailable,
@@ -19,7 +17,6 @@ pub enum PresenceStatus {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ChatStateRequest {
-
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub chat: String,
 
@@ -30,7 +27,6 @@ pub struct ChatStateRequest {
 #[serde(rename_all = "snake_case")]
 #[allow(dead_code)]
 pub enum ChatStateType {
-
     Composing,
 
     Recording,
@@ -41,7 +37,6 @@ pub enum ChatStateType {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct PresenceUpdate {
-
     pub jid: String,
 
     pub status: PresenceStatus,
@@ -53,7 +48,6 @@ pub struct PresenceUpdate {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ChatStateUpdate {
-
     pub jid: String,
 
     pub chat: String,

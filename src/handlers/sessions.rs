@@ -102,7 +102,9 @@ pub async fn create_session(
         (status = 200, description = "List of sessions", body = SessionListResponse)
     )
 )]
-pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<SessionListResponse>, ApiError> {
+pub async fn list_sessions(
+    State(state): State<AppState>,
+) -> Result<Json<SessionListResponse>, ApiError> {
     let sessions = state
         .session_manager()
         .list_sessions()
@@ -174,7 +176,6 @@ pub async fn delete_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-
     if let Some(runtime) = state.get_session(&session_id) {
         if let Some(client) = runtime.get_client() {
             client.disconnect().await;
@@ -262,7 +263,6 @@ pub async fn get_qr_code(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<QrCodeResponse>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -299,7 +299,6 @@ pub async fn connect_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -358,7 +357,6 @@ pub async fn pair_session(
     Path(session_id): Path<String>,
     Json(request): Json<PairCodeRequest>,
 ) -> Result<Json<PairCodeResponse>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -397,7 +395,11 @@ pub async fn pair_session(
         )
         .await
         {
-            tracing::error!("Session {} pair code connection failed: {}", session_id_clone, e);
+            tracing::error!(
+                "Session {} pair code connection failed: {}",
+                session_id_clone,
+                e
+            );
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
             }
@@ -435,7 +437,6 @@ pub async fn disconnect_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -479,7 +480,6 @@ pub async fn get_device_info(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<DeviceInfo>, ApiError> {
-
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -494,7 +494,11 @@ pub async fn get_device_info(
     let client = runtime.get_client().ok_or(ApiError::NotConnected)?;
 
     let push_name_str = client.get_push_name().await;
-    let push_name = if push_name_str.is_empty() { None } else { Some(push_name_str) };
+    let push_name = if push_name_str.is_empty() {
+        None
+    } else {
+        Some(push_name_str)
+    };
     let pn = client.get_pn().await.map(|j| j.to_string());
     let lid = client.get_lid().await.map(|j| j.to_string());
 
@@ -702,7 +706,11 @@ async fn handle_event(
             runtime.set_pair_code(None);
 
             let push_name_str = client.get_push_name().await;
-            let push_name = if push_name_str.is_empty() { None } else { Some(push_name_str) };
+            let push_name = if push_name_str.is_empty() {
+                None
+            } else {
+                Some(push_name_str)
+            };
             let phone = client.get_pn().await.map(|j| j.user.clone());
 
             let _ = state
@@ -713,7 +721,10 @@ async fn handle_event(
                 .session_manager()
                 .update_session_info(session_id, phone.as_deref(), push_name.as_deref())
                 .await;
-            let _ = state.session_manager().update_last_connected(session_id).await;
+            let _ = state
+                .session_manager()
+                .update_last_connected(session_id)
+                .await;
         }
         Event::Disconnected(_) => {
             tracing::warn!("Session {}: Disconnected", session_id);
@@ -724,7 +735,11 @@ async fn handle_event(
                 .await;
         }
         Event::LoggedOut(logged_out) => {
-            tracing::warn!("Session {}: Logged out: {:?}", session_id, logged_out.reason);
+            tracing::warn!(
+                "Session {}: Logged out: {:?}",
+                session_id,
+                logged_out.reason
+            );
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
             let _ = state
@@ -737,7 +752,9 @@ async fn handle_event(
 
     if let Ok(payload) = serde_json::to_string(&event_to_json(&event, session_id)) {
         let event_type = get_event_type(&event);
-        state.broadcast_to_webhooks(session_id, &event_type, &payload).await;
+        state
+            .broadcast_to_webhooks(session_id, &event_type, &payload)
+            .await;
         runtime.broadcast_event(payload);
     }
 }

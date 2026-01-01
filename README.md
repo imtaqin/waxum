@@ -42,7 +42,7 @@
 
 **From Docker Hub:**
 ```bash
-docker pull mumur/wa-rs:latest
+docker pull fdciabdul/wa-rs:latest
 ```
 
 **Using Docker Compose:**
@@ -51,7 +51,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   wa-rs:
-    image: mumur/wa-rs:latest
+    image: fdciabdul/wa-rs:latest
     ports:
       - "3451:3451"
     environment:

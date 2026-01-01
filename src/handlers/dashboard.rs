@@ -164,7 +164,11 @@ pub async fn dashboard_home(State(state): State<AppState>) -> impl IntoResponse 
         sessions: updated_sessions,
     };
 
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
 }
 
 pub async fn sessions_list(State(state): State<AppState>) -> impl IntoResponse {
@@ -188,12 +192,20 @@ pub async fn sessions_list(State(state): State<AppState>) -> impl IntoResponse {
         sessions: updated_sessions,
     };
 
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
 }
 
 pub async fn session_new_form() -> impl IntoResponse {
     let template = SessionNewTemplate { error: None };
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
 }
 
 pub async fn session_create(
@@ -206,16 +218,24 @@ pub async fn session_create(
         let template = SessionNewTemplate {
             error: Some("Session ID is required".to_string()),
         };
-        return Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
-            .into_response();
+        return Html(
+            template
+                .render()
+                .unwrap_or_else(|e| format!("Template error: {}", e)),
+        )
+        .into_response();
     }
 
     if let Ok(Some(_)) = state.session_manager().get_session(&session_id).await {
         let template = SessionNewTemplate {
             error: Some(format!("Session '{}' already exists", session_id)),
         };
-        return Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
-            .into_response();
+        return Html(
+            template
+                .render()
+                .unwrap_or_else(|e| format!("Template error: {}", e)),
+        )
+        .into_response();
     }
 
     let storage_path = format!("{}/{}", state.base_storage_path(), session_id);
@@ -223,8 +243,12 @@ pub async fn session_create(
         let template = SessionNewTemplate {
             error: Some(format!("Failed to create storage: {}", e)),
         };
-        return Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
-            .into_response();
+        return Html(
+            template
+                .render()
+                .unwrap_or_else(|e| format!("Template error: {}", e)),
+        )
+        .into_response();
     }
 
     let form_events = form.get_events();
@@ -240,8 +264,12 @@ pub async fn session_create(
         let template = SessionNewTemplate {
             error: Some(format!("Failed to create session: {}", e)),
         };
-        return Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
-            .into_response();
+        return Html(
+            template
+                .render()
+                .unwrap_or_else(|e| format!("Template error: {}", e)),
+        )
+        .into_response();
     }
 
     if let Some(webhook_url) = webhook_url {
@@ -305,10 +333,16 @@ pub async fn session_detail(
             if let Some(qr_data) = qr_codes.first() {
                 (generate_qr_image(qr_data), None)
             } else {
-                (None, Some("Waiting for QR code... Click Connect to start".to_string()))
+                (
+                    None,
+                    Some("Waiting for QR code... Click Connect to start".to_string()),
+                )
             }
         } else {
-            (None, Some("Session not connected. Click Connect to start.".to_string()))
+            (
+                None,
+                Some("Session not connected. Click Connect to start.".to_string()),
+            )
         }
     } else {
         (None, None)
@@ -348,14 +382,18 @@ pub async fn session_detail(
         error: None,
     };
 
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e))).into_response()
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
+    .into_response()
 }
 
 pub async fn session_connect(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Response {
-
     let _session = match state.session_manager().get_session(&session_id).await {
         Ok(Some(s)) => s,
         _ => return Redirect::to("/dashboard/sessions").into_response(),
@@ -371,7 +409,11 @@ pub async fn session_connect(
 
     if let Err(e) = tokio::fs::create_dir_all(&storage_path).await {
         tracing::error!("Failed to create storage directory {}: {}", storage_path, e);
-        return Redirect::to(&format!("/dashboard/sessions/{}?error=Failed to create storage", session_id)).into_response();
+        return Redirect::to(&format!(
+            "/dashboard/sessions/{}?error=Failed to create storage",
+            session_id
+        ))
+        .into_response();
     }
 
     let runtime = state.get_or_create_session(&session_id, &storage_path);
@@ -380,7 +422,9 @@ pub async fn session_connect(
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
     tokio::spawn(async move {
-        if let Err(e) = crate::handlers::sessions::connect_client_public(&state_clone, &session_id_clone).await {
+        if let Err(e) =
+            crate::handlers::sessions::connect_client_public(&state_clone, &session_id_clone).await
+        {
             tracing::error!("Session {} connection failed: {}", session_id_clone, e);
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
@@ -410,14 +454,17 @@ pub async fn session_disconnect(
         .update_session_status(&session_id, SessionStatus::Disconnected, false)
         .await;
 
-    Redirect::to(&format!("/dashboard/sessions/{}?message=Disconnected", session_id)).into_response()
+    Redirect::to(&format!(
+        "/dashboard/sessions/{}?message=Disconnected",
+        session_id
+    ))
+    .into_response()
 }
 
 pub async fn session_delete(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Response {
-
     if let Some(runtime) = state.get_session(&session_id) {
         if let Some(client) = runtime.get_client() {
             client.disconnect().await;
@@ -459,7 +506,11 @@ pub async fn session_pair(
 
     if let Err(e) = tokio::fs::create_dir_all(&storage_path).await {
         tracing::error!("Failed to create storage directory {}: {}", storage_path, e);
-        return Redirect::to(&format!("/dashboard/sessions/{}?error=Failed to create storage", session_id)).into_response();
+        return Redirect::to(&format!(
+            "/dashboard/sessions/{}?error=Failed to create storage",
+            session_id
+        ))
+        .into_response();
     }
 
     let runtime = state.get_or_create_session(&session_id, &storage_path);
@@ -506,7 +557,12 @@ pub async fn session_pair(
         error,
     };
 
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e))).into_response()
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
+    .into_response()
 }
 
 pub async fn settings_page() -> impl IntoResponse {
@@ -518,5 +574,9 @@ pub async fn settings_page() -> impl IntoResponse {
         api_url: "http://localhost:3451/api/v1".to_string(),
     };
 
-    Html(template.render().unwrap_or_else(|e| format!("Template error: {}", e)))
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
 }
