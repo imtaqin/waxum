@@ -172,11 +172,11 @@ impl utoipa::Modify for SecurityAddon {
             components.add_security_scheme(
                 "bearer_auth",
                 utoipa::openapi::security::SecurityScheme::Http(
-                    utoipa::openapi::security::Http::new(
-                        utoipa::openapi::security::HttpAuthScheme::Bearer,
-                    )
-                    .bearer_format("JWT")
-                    .description(Some("Enter your Superadmin Token from server logs or /dashboard/settings"))
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .description(Some("Enter your Superadmin Token from server logs or /dashboard/settings"))
+                        .build(),
                 ),
             );
         }
