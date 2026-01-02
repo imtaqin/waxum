@@ -7,7 +7,7 @@ use axum_extra::extract::Form;
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
-use crate::middleware::jwt::get_superadmin_token;
+use crate::middleware::jwt::{get_superadmin_token, validate_superadmin_token};
 use crate::models::sessions::{SessionInfo, SessionStatus};
 use crate::state::AppState;
 
@@ -76,6 +76,17 @@ pub struct SettingsTemplate {
     pub token: String,
     pub version: String,
     pub api_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "login.askama")]
+pub struct LoginTemplate {
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct LoginForm {
+    pub token: String,
 }
 
 pub struct DeviceInfoView {
@@ -579,4 +590,54 @@ pub async fn settings_page() -> impl IntoResponse {
             .render()
             .unwrap_or_else(|e| format!("Template error: {}", e)),
     )
+}
+
+pub async fn login_page() -> impl IntoResponse {
+    let template = LoginTemplate { error: None };
+    Html(
+        template
+            .render()
+            .unwrap_or_else(|e| format!("Template error: {}", e)),
+    )
+}
+
+pub async fn login_submit(Form(form): Form<LoginForm>) -> Response {
+    if validate_superadmin_token(&form.token) {
+        // Set cookie and redirect to dashboard
+        Response::builder()
+            .status(axum::http::StatusCode::SEE_OTHER)
+            .header(axum::http::header::LOCATION, "/dashboard")
+            .header(
+                axum::http::header::SET_COOKIE,
+                format!(
+                    "wa_rs_token={}; Path=/; HttpOnly; SameSite=Strict; Max-Age={}",
+                    form.token,
+                    60 * 60 * 24 * 30 // 30 days
+                ),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap()
+    } else {
+        let template = LoginTemplate {
+            error: Some("Invalid token".to_string()),
+        };
+        Html(
+            template
+                .render()
+                .unwrap_or_else(|e| format!("Template error: {}", e)),
+        )
+        .into_response()
+    }
+}
+
+pub async fn logout() -> Response {
+    Response::builder()
+        .status(axum::http::StatusCode::SEE_OTHER)
+        .header(axum::http::header::LOCATION, "/dashboard/login")
+        .header(
+            axum::http::header::SET_COOKIE,
+            "wa_rs_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0",
+        )
+        .body(axum::body::Body::empty())
+        .unwrap()
 }

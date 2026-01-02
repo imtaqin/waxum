@@ -38,6 +38,9 @@ utoipa-swagger-ui = { version = "9", features = ["axum"] }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"] }
 deadpool-postgres = "0.14"
 
+# Environment
+dotenvy = "0.15"
+
 # Utilities
 anyhow = "1"
 thiserror = "2"

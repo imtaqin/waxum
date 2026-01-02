@@ -4,6 +4,7 @@ use axum::{
 };
 
 use crate::handlers;
+use crate::middleware::jwt::dashboard_auth_middleware;
 use crate::state::AppState;
 
 pub fn create_router() -> Router<AppState> {
@@ -13,7 +14,8 @@ pub fn create_router() -> Router<AppState> {
 }
 
 pub fn create_dashboard_router() -> Router<AppState> {
-    Router::new()
+    // Protected routes (require auth)
+    let protected = Router::new()
         .route("/", get(handlers::dashboard::dashboard_home))
         .route("/sessions", get(handlers::dashboard::sessions_list))
         .route("/sessions/new", get(handlers::dashboard::session_new_form))
@@ -39,6 +41,14 @@ pub fn create_dashboard_router() -> Router<AppState> {
             post(handlers::dashboard::session_pair),
         )
         .route("/settings", get(handlers::dashboard::settings_page))
+        .route("/logout", post(handlers::dashboard::logout))
+        .layer(axum::middleware::from_fn(dashboard_auth_middleware));
+
+    // Public routes (login page)
+    Router::new()
+        .route("/login", get(handlers::dashboard::login_page))
+        .route("/login", post(handlers::dashboard::login_submit))
+        .merge(protected)
 }
 
 fn api_routes() -> Router<AppState> {

@@ -2,40 +2,53 @@
 
 {% block title %}Sessions — WA-RS{% endblock %}
 
+{% block header_title %}~/wa-rs/sessions{% endblock %}
+
 {% block content %}
 <header class="page-header">
     <div>
-        <h1 class="page-title">Sessions</h1>
-        <p class="page-subtitle">Manage your WhatsApp connections</p>
+        <div class="page-prompt">
+            <span class="prompt-symbol">></span>
+            <span class="prompt-path">~/wa-rs</span>
+            <span>sessions --list<span class="cursor"></span></span>
+        </div>
+        <p class="page-subtitle">manage your WhatsApp connections</p>
     </div>
-    <a href="/dashboard/sessions/new" class="btn btn-primary">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-        New Session
-    </a>
+    <a href="/dashboard/sessions/new" class="btn btn-primary">new_session</a>
 </header>
 
 <div class="card">
+    <div class="card-header">
+        <div class="card-header-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+        </div>
+        <span class="card-title">sessions --all</span>
+    </div>
     {% if sessions.is_empty() %}
     <div class="empty-state">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-        </svg>
-        <p>No sessions yet</p>
-        <p class="text-dim mt-1">Create a session to connect your WhatsApp account</p>
-        <a href="/dashboard/sessions/new" class="btn btn-primary mt-2">Create Session</a>
+        <div class="empty-state-icon">[]</div>
+        <p class="empty-state-text">no sessions found</p>
+        <div class="terminal-output mt-2" style="display: inline-block; text-align: left;">
+            <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-cmd">sessions --create --help</span>
+            </div>
+            <div class="terminal-result">usage: sessions --create [--id ID] [--name NAME]</div>
+        </div>
+        <a href="/dashboard/sessions/new" class="btn btn-primary mt-2">create_session</a>
     </div>
     {% else %}
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>Session ID</th>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Status</th>
-                    <th>Created</th>
+                    <th>session_id</th>
+                    <th>name</th>
+                    <th>phone</th>
+                    <th>status</th>
+                    <th>created_at</th>
                     <th></th>
                 </tr>
             </thead>
@@ -43,8 +56,8 @@
                 {% for session in sessions %}
                 <tr>
                     <td><span class="code">{{ session.id }}</span></td>
-                    <td>{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}<span class="text-dim">—</span>{% endmatch %}</td>
-                    <td class="mono" style="font-size: 0.85rem;">{% match session.phone %}{% when Some with (p) %}{{ p }}{% when None %}<span class="text-dim">—</span>{% endmatch %}</td>
+                    <td>{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}<span class="text-dim">null</span>{% endmatch %}</td>
+                    <td style="font-size: 0.85rem;">{% match session.phone %}{% when Some with (p) %}<span class="text-accent">{{ p }}</span>{% when None %}<span class="text-dim">null</span>{% endmatch %}</td>
                     <td>
                         {% if session.status.is_connected() %}
                         <span class="status online"><span class="status-dot"></span> Online</span>
@@ -56,9 +69,9 @@
                         {% endif %}
                         {% endif %}
                     </td>
-                    <td class="text-secondary mono" style="font-size: 0.8rem;">{{ session.created_at }}</td>
+                    <td class="text-secondary" style="font-size: 0.8rem;">{{ session.created_at }}</td>
                     <td>
-                        <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost btn-sm">Manage</a>
+                        <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost btn-sm">manage</a>
                     </td>
                 </tr>
                 {% endfor %}

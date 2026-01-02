@@ -2,71 +2,81 @@
 
 {% block title %}Dashboard — WA-RS{% endblock %}
 
+{% block header_title %}~/wa-rs/dashboard{% endblock %}
+
 {% block content %}
 <header class="page-header">
     <div>
-        <h1 class="page-title">Dashboard</h1>
+        <div class="page-prompt">
+            <span class="prompt-symbol">></span>
+            <span class="prompt-path">~/wa-rs</span>
+            <span>status<span class="cursor"></span></span>
+        </div>
         <p class="page-subtitle">WhatsApp Gateway Overview</p>
     </div>
-    <a href="/dashboard" class="btn btn-ghost">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-        Refresh
-    </a>
+    <a href="/dashboard" class="btn btn-ghost">refresh</a>
 </header>
 
 <div class="stat-grid">
     <div class="stat-card info">
+        <div class="stat-label">total_sessions</div>
         <div class="stat-value">{{ total_sessions }}</div>
-        <div class="stat-label">Total Sessions</div>
     </div>
     <div class="stat-card success">
+        <div class="stat-label">connected</div>
         <div class="stat-value">{{ connected_sessions }}</div>
-        <div class="stat-label">Connected</div>
     </div>
     <div class="stat-card warning">
+        <div class="stat-label">disconnected</div>
         <div class="stat-value">{{ disconnected_sessions }}</div>
-        <div class="stat-label">Disconnected</div>
     </div>
 </div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-            Quick Actions
+            <div class="card-header-dots">
+                <span class="dot-red"></span>
+                <span class="dot-yellow"></span>
+                <span class="dot-green"></span>
+            </div>
+            <span class="card-title">quick_actions.sh</span>
         </div>
         <div class="card-body">
-            <div class="flex gap-1">
-                <a href="/dashboard/sessions/new" class="btn btn-primary">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    New Session
-                </a>
-                <a href="/swagger-ui" target="_blank" class="btn btn-ghost">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-                    </svg>
-                    API Docs
-                </a>
+            <div class="terminal-output">
+                <div class="terminal-line">
+                    <span class="terminal-prompt">$</span>
+                    <span class="terminal-cmd">./create_session.sh</span>
+                </div>
+            </div>
+            <div class="flex gap-1 mt-2">
+                <a href="/dashboard/sessions/new" class="btn btn-primary">new_session</a>
+                <a href="/swagger-ui" target="_blank" class="btn btn-ghost">api_docs</a>
             </div>
         </div>
     </div>
 
     <div class="card">
         <div class="card-header">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-            </svg>
-            System Status
+            <div class="card-header-dots">
+                <span class="dot-red"></span>
+                <span class="dot-yellow"></span>
+                <span class="dot-green"></span>
+            </div>
+            <span class="card-title">system_status.sh</span>
         </div>
         <div class="card-body">
-            <div class="flex items-center justify-between">
-                <span class="text-secondary">Gateway</span>
+            <div class="terminal-output">
+                <div class="terminal-line">
+                    <span class="terminal-prompt">$</span>
+                    <span class="terminal-cmd">systemctl status wa-rs</span>
+                </div>
+                <div class="terminal-result">
+                    <span class="text-accent">Active:</span> running (gateway)
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-2">
+                <span class="text-secondary">gateway_status</span>
                 <span class="status online"><span class="status-dot"></span> Online</span>
             </div>
         </div>
@@ -75,28 +85,34 @@
 
 <div class="card mt-2">
     <div class="card-header">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        Recent Sessions
+        <div class="card-header-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+        </div>
+        <span class="card-title">sessions --list --recent</span>
     </div>
     {% if sessions.is_empty() %}
     <div class="empty-state">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-        </svg>
-        <p>No sessions yet</p>
-        <a href="/dashboard/sessions/new" class="btn btn-primary mt-2">Create your first session</a>
+        <div class="empty-state-icon">[]</div>
+        <p class="empty-state-text">no sessions found</p>
+        <div class="terminal-output mt-2" style="display: inline-block; text-align: left;">
+            <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-cmd">./create_session.sh --help</span>
+            </div>
+        </div>
+        <a href="/dashboard/sessions/new" class="btn btn-primary mt-2">create_session</a>
     </div>
     {% else %}
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>Session ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Created</th>
+                    <th>session_id</th>
+                    <th>name</th>
+                    <th>status</th>
+                    <th>created_at</th>
                     <th></th>
                 </tr>
             </thead>
@@ -104,7 +120,7 @@
                 {% for session in sessions %}
                 <tr>
                     <td><span class="code">{{ session.id }}</span></td>
-                    <td>{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}<span class="text-dim">—</span>{% endmatch %}</td>
+                    <td>{% match session.name %}{% when Some with (n) %}{{ n }}{% when None %}<span class="text-dim">null</span>{% endmatch %}</td>
                     <td>
                         {% if session.status.is_connected() %}
                         <span class="status online"><span class="status-dot"></span> Online</span>
@@ -116,9 +132,9 @@
                         {% endif %}
                         {% endif %}
                     </td>
-                    <td class="text-secondary mono" style="font-size: 0.8rem;">{{ session.created_at }}</td>
+                    <td class="text-secondary" style="font-size: 0.8rem;">{{ session.created_at }}</td>
                     <td>
-                        <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost btn-sm">View</a>
+                        <a href="/dashboard/sessions/{{ session.id }}" class="btn btn-ghost btn-sm">view</a>
                     </td>
                 </tr>
                 {% endfor %}
