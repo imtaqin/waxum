@@ -5,7 +5,7 @@ use axum::{
 use base64::Engine;
 
 use crate::error::ApiError;
-use crate::models::media::{MediaType, UploadMediaResponse};
+use crate::models::media::{DownloadMediaRequest, DownloadMediaResponse, MediaType, UploadMediaResponse};
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -136,6 +136,62 @@ fn get_default_mimetype(media_type: &MediaType) -> String {
         MediaType::Document => "application/octet-stream".to_string(),
         MediaType::Sticker => "image/webp".to_string(),
     }
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/media/download",
+    tag = "media",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = DownloadMediaRequest,
+    responses(
+        (status = 200, description = "Media downloaded", body = DownloadMediaResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn download_media(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<DownloadMediaRequest>,
+) -> Result<Json<DownloadMediaResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+
+    let media_key = base64::engine::general_purpose::STANDARD
+        .decode(&request.media_key)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid media_key base64: {}", e)))?;
+
+    let file_sha256 = base64::engine::general_purpose::STANDARD
+        .decode(&request.file_sha256)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid file_sha256 base64: {}", e)))?;
+
+    let file_enc_sha256 = base64::engine::general_purpose::STANDARD
+        .decode(&request.file_enc_sha256)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid file_enc_sha256 base64: {}", e)))?;
+
+    let data = client
+        .download_from_params(
+            &request.direct_path,
+            &media_key,
+            &file_sha256,
+            &file_enc_sha256,
+            request.file_length,
+            request.media_type.to_wacore_media_type(),
+        )
+        .await
+        .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
+
+    let size = data.len() as u64;
+    let data_base64 = base64::engine::general_purpose::STANDARD.encode(&data);
+
+    Ok(Json(DownloadMediaResponse {
+        data: data_base64,
+        size,
+    }))
 }
 
 fn get_client(

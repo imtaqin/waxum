@@ -549,6 +549,85 @@ pub async fn send_message(
     .await
 }
 
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/revoke",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = RevokeMessageRequest,
+    responses(
+        (status = 200, description = "Message revoked", body = SuccessResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn revoke_message(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<RevokeMessageRequest>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let revoke_type = match request.original_sender {
+        Some(sender) => {
+            let sender_jid = parse_jid(&sender)?;
+            whatsapp_rust::RevokeType::Admin {
+                original_sender: sender_jid,
+            }
+        }
+        None => whatsapp_rust::RevokeType::Sender,
+    };
+
+    client
+        .revoke_message(to_jid, &request.message_id, revoke_type)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(SuccessResponse { success: true }))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/read",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = MarkAsReadRequest,
+    responses(
+        (status = 200, description = "Messages marked as read", body = SuccessResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn mark_as_read(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<MarkAsReadRequest>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let chat_jid = parse_jid(&request.chat_jid)?;
+
+    let sender = match &request.sender {
+        Some(s) => Some(parse_jid(s)?),
+        None => None,
+    };
+
+    client
+        .mark_as_read(&chat_jid, sender.as_ref(), request.message_ids)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(SuccessResponse { success: true }))
+}
+
 fn get_client(
     state: &AppState,
     session_id: &str,

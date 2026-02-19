@@ -542,7 +542,7 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    let transport_factory = TokioWebSocketTransportFactory;
+    let transport_factory = TokioWebSocketTransportFactory::new();
     let http_client = UreqHttpClient::new();
 
     let state_for_events = state.clone();
@@ -618,7 +618,7 @@ async fn connect_client_with_pair_code(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    let transport_factory = TokioWebSocketTransportFactory;
+    let transport_factory = TokioWebSocketTransportFactory::new();
     let http_client = UreqHttpClient::new();
 
     let state_for_events = state.clone();

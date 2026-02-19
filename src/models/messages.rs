@@ -193,3 +193,30 @@ pub struct SendMessageRequest {
     #[schema(example = "Hello, World!")]
     pub text: String,
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RevokeMessageRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub message_id: String,
+
+    #[schema(example = "559888888888@s.whatsapp.net")]
+    pub original_sender: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MarkAsReadRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub chat_jid: String,
+
+    #[schema(example = "559888888888@s.whatsapp.net")]
+    pub sender: Option<String>,
+
+    pub message_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SuccessResponse {
+    pub success: bool,
+}

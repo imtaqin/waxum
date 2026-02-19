@@ -54,3 +54,9 @@ pub struct ChatStateUpdate {
 
     pub state: ChatStateType,
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SubscribePresenceRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub jid: String,
+}

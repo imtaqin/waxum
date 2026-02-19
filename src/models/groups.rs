@@ -44,3 +44,66 @@ pub enum ParticipantRole {
 
     SuperAdmin,
 }
+
+// Group Management Request/Response Models
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateGroupRequest {
+    #[schema(example = "My New Group")]
+    pub name: String,
+
+    #[schema(example = json!(["559999999999@s.whatsapp.net"]))]
+    pub participants: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CreateGroupResponse {
+    pub group_jid: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ParticipantsRequest {
+    #[schema(example = json!(["559999999999@s.whatsapp.net"]))]
+    pub participants: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ParticipantChangeResult {
+    pub jid: String,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ParticipantsResponse {
+    pub results: Vec<ParticipantChangeResult>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetSubjectRequest {
+    #[schema(example = "New Group Name")]
+    pub subject: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetDescriptionRequest {
+    #[schema(example = "This is the group description")]
+    pub description: Option<String>,
+
+    pub prev_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InviteLinkResponse {
+    pub invite_link: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GetInviteLinkRequest {
+    #[serde(default)]
+    pub reset: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SuccessResponse {
+    pub success: bool,
+}

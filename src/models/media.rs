@@ -45,3 +45,25 @@ impl MediaType {
         }
     }
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DownloadMediaRequest {
+    pub direct_path: String,
+
+    pub media_key: String,
+
+    pub file_sha256: String,
+
+    pub file_enc_sha256: String,
+
+    pub file_length: u64,
+
+    pub media_type: MediaType,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DownloadMediaResponse {
+    pub data: String,
+
+    pub size: u64,
+}
