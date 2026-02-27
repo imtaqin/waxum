@@ -38,6 +38,32 @@ pub enum WebhookEvent {
     Disconnected,
 
     LoggedOut,
+
+    PictureUpdate,
+
+    UserAboutUpdate,
+
+    PushNameUpdate,
+
+    ContactUpdate,
+
+    DeviceListUpdate,
+
+    PinUpdate,
+
+    MuteUpdate,
+
+    ArchiveUpdate,
+
+    MarkChatAsRead,
+
+    UndecryptableMessage,
+
+    ClientOutdated,
+
+    OfflineSyncPreview,
+
+    OfflineSyncCompleted,
 }
 
 impl WebhookEvent {
@@ -55,6 +81,19 @@ impl WebhookEvent {
             WebhookEvent::Connected => event == "connected",
             WebhookEvent::Disconnected => event == "disconnected",
             WebhookEvent::LoggedOut => event == "logged_out",
+            WebhookEvent::PictureUpdate => event == "picture_update",
+            WebhookEvent::UserAboutUpdate => event == "user_about_update",
+            WebhookEvent::PushNameUpdate => event == "push_name_update",
+            WebhookEvent::ContactUpdate => event == "contact_update",
+            WebhookEvent::DeviceListUpdate => event == "device_list_update",
+            WebhookEvent::PinUpdate => event == "pin_update",
+            WebhookEvent::MuteUpdate => event == "mute_update",
+            WebhookEvent::ArchiveUpdate => event == "archive_update",
+            WebhookEvent::MarkChatAsRead => event == "mark_chat_as_read",
+            WebhookEvent::UndecryptableMessage => event == "undecryptable_message",
+            WebhookEvent::ClientOutdated => event == "client_outdated",
+            WebhookEvent::OfflineSyncPreview => event == "offline_sync_preview",
+            WebhookEvent::OfflineSyncCompleted => event == "offline_sync_completed",
         }
     }
 
@@ -72,6 +111,19 @@ impl WebhookEvent {
             WebhookEvent::Connected => "connected",
             WebhookEvent::Disconnected => "disconnected",
             WebhookEvent::LoggedOut => "logged_out",
+            WebhookEvent::PictureUpdate => "picture_update",
+            WebhookEvent::UserAboutUpdate => "user_about_update",
+            WebhookEvent::PushNameUpdate => "push_name_update",
+            WebhookEvent::ContactUpdate => "contact_update",
+            WebhookEvent::DeviceListUpdate => "device_list_update",
+            WebhookEvent::PinUpdate => "pin_update",
+            WebhookEvent::MuteUpdate => "mute_update",
+            WebhookEvent::ArchiveUpdate => "archive_update",
+            WebhookEvent::MarkChatAsRead => "mark_chat_as_read",
+            WebhookEvent::UndecryptableMessage => "undecryptable_message",
+            WebhookEvent::ClientOutdated => "client_outdated",
+            WebhookEvent::OfflineSyncPreview => "offline_sync_preview",
+            WebhookEvent::OfflineSyncCompleted => "offline_sync_completed",
         }
     }
 
@@ -91,6 +143,19 @@ impl WebhookEvent {
             "connected" => Some(WebhookEvent::Connected),
             "disconnected" => Some(WebhookEvent::Disconnected),
             "logged_out" => Some(WebhookEvent::LoggedOut),
+            "picture_update" => Some(WebhookEvent::PictureUpdate),
+            "user_about_update" => Some(WebhookEvent::UserAboutUpdate),
+            "push_name_update" => Some(WebhookEvent::PushNameUpdate),
+            "contact_update" => Some(WebhookEvent::ContactUpdate),
+            "device_list_update" => Some(WebhookEvent::DeviceListUpdate),
+            "pin_update" => Some(WebhookEvent::PinUpdate),
+            "mute_update" => Some(WebhookEvent::MuteUpdate),
+            "archive_update" => Some(WebhookEvent::ArchiveUpdate),
+            "mark_chat_as_read" => Some(WebhookEvent::MarkChatAsRead),
+            "undecryptable_message" => Some(WebhookEvent::UndecryptableMessage),
+            "client_outdated" => Some(WebhookEvent::ClientOutdated),
+            "offline_sync_preview" => Some(WebhookEvent::OfflineSyncPreview),
+            "offline_sync_completed" => Some(WebhookEvent::OfflineSyncCompleted),
             _ => None,
         }
     }

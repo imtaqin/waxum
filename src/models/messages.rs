@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -219,4 +220,534 @@ pub struct MarkAsReadRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SuccessResponse {
     pub success: bool,
+}
+
+// --- Poll Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendPollRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    #[schema(example = "What's your favorite color?")]
+    pub name: String,
+
+    #[schema(example = json!(["Red", "Blue", "Green"]))]
+    pub options: Vec<String>,
+
+    /// Max number of selectable options (0 = unlimited)
+    #[serde(default)]
+    pub selectable_count: u32,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Buttons Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendButtonsRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    #[schema(example = "Please choose an option")]
+    pub content_text: String,
+
+    pub footer: Option<String>,
+
+    pub buttons: Vec<ButtonItem>,
+
+    pub header_text: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ButtonItem {
+    pub button_id: String,
+    pub display_text: String,
+}
+
+// --- List Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendListRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    #[schema(example = "Main Menu")]
+    pub title: String,
+
+    #[schema(example = "Please select an option")]
+    pub description: String,
+
+    #[schema(example = "View Options")]
+    pub button_text: String,
+
+    pub sections: Vec<ListSection>,
+
+    pub footer: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ListSection {
+    pub title: String,
+    pub rows: Vec<ListRow>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ListRow {
+    pub row_id: String,
+    pub title: String,
+    pub description: Option<String>,
+}
+
+// --- Interactive Messages (Native Flow) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendInteractiveRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub body_text: String,
+
+    pub footer_text: Option<String>,
+
+    pub buttons: Vec<NativeFlowButtonItem>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct NativeFlowButtonItem {
+    pub name: String,
+    pub button_params_json: String,
+}
+
+// --- Template Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendTemplateRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Raw template message content as JSON (passed through to protobuf)
+    pub content: Value,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Newsletter Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendNewsletterAdminInviteRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub newsletter_jid: String,
+
+    pub newsletter_name: String,
+
+    pub caption: Option<String>,
+
+    pub invite_expiration: Option<i64>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendNewsletterFollowerInviteRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub newsletter_jid: String,
+
+    pub newsletter_name: String,
+
+    pub caption: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Business Messages ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendOrderRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub order_id: String,
+
+    pub item_count: Option<i32>,
+
+    /// Order status: "inquiry", "accepted", "declined"
+    pub status: Option<String>,
+
+    pub message: Option<String>,
+
+    pub order_title: Option<String>,
+
+    pub seller_jid: Option<String>,
+
+    pub token: Option<String>,
+
+    pub total_amount_1000: Option<i64>,
+
+    pub total_currency_code: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendInvoiceRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub note: Option<String>,
+
+    pub token: Option<String>,
+
+    /// "image" or "pdf"
+    pub attachment_type: Option<String>,
+
+    pub attachment_mimetype: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendPaymentInviteRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Payment service type (integer)
+    pub service_type: Option<i32>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Pin Message ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendPinMessageRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub chat: String,
+
+    pub message_id: String,
+
+    /// Pin duration in seconds (0 to unpin, 86400 for 24h, 604800 for 7d, 2592000 for 30d)
+    #[serde(default = "default_pin_duration")]
+    pub duration_seconds: i64,
+}
+
+fn default_pin_duration() -> i64 {
+    86400
+}
+
+// --- Forward Message ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ForwardMessageRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub text: String,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Poll Update (Vote) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendPollUpdateRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// The message ID of the poll creation message
+    pub poll_message_id: String,
+
+    /// Selected option hashes (SHA-256 of option text)
+    pub selected_options: Vec<String>,
+
+    /// Encryption IV for the vote (base64)
+    pub enc_iv: Option<String>,
+
+    /// Encryption key (base64)
+    pub enc_payload: Option<String>,
+}
+
+// --- Buttons Response ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendButtonsResponseRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// ID of the selected button
+    pub selected_button_id: String,
+
+    /// Display text of the selected button
+    pub selected_display_text: String,
+
+    pub reply_to: Option<String>,
+}
+
+// --- List Response ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendListResponseRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub title: String,
+
+    /// ID of the selected row
+    pub selected_row_id: String,
+
+    pub description: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Interactive Response ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendInteractiveResponseRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Body text of the response
+    pub body_text: Option<String>,
+
+    /// Native flow response name
+    pub name: String,
+
+    /// Native flow response params (JSON string)
+    pub params_json: String,
+
+    /// Version of the native flow response
+    #[serde(default = "default_version")]
+    pub version: i32,
+
+    pub reply_to: Option<String>,
+}
+
+fn default_version() -> i32 {
+    3
+}
+
+// --- Highly Structured Message (HSM) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendHighlyStructuredRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub namespace: String,
+
+    pub element_name: String,
+
+    #[serde(default)]
+    pub params: Vec<String>,
+
+    pub fallback_lg: Option<String>,
+
+    pub fallback_lc: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Template Button Reply ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendTemplateButtonReplyRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub selected_id: String,
+
+    pub selected_display_text: String,
+
+    pub selected_index: Option<u32>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Comment Message (Groups) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendCommentRequest {
+    #[schema(example = "120363000000000000@g.us")]
+    pub to: String,
+
+    /// The text content of the comment
+    pub text: String,
+
+    /// The message ID of the message being commented on
+    pub target_message_id: String,
+
+    /// The JID of the chat containing the target message
+    pub target_chat_jid: Option<String>,
+}
+
+// --- Scheduled Call ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendScheduledCallRequest {
+    #[schema(example = "120363000000000000@g.us")]
+    pub to: String,
+
+    /// Scheduled call time as Unix timestamp in milliseconds
+    pub scheduled_timestamp_ms: i64,
+
+    /// "voice" or "video"
+    #[serde(default = "default_call_type")]
+    pub call_type: String,
+
+    pub title: Option<String>,
+}
+
+fn default_call_type() -> String {
+    "voice".to_string()
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendScheduledCallEditRequest {
+    #[schema(example = "120363000000000000@g.us")]
+    pub to: String,
+
+    /// Message ID of the scheduled call creation message
+    pub scheduled_call_message_id: String,
+
+    /// "cancel"
+    #[serde(default = "default_edit_type")]
+    pub edit_type: String,
+}
+
+fn default_edit_type() -> String {
+    "cancel".to_string()
+}
+
+// --- Send Payment ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendPaymentRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Optional note message text
+    pub note: Option<String>,
+
+    /// Message ID of the payment request being responded to
+    pub request_message_id: Option<String>,
+
+    /// Transaction data (JSON string)
+    pub transaction_data: Option<String>,
+}
+
+// --- Request Payment ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RequestPaymentRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// ISO 4217 currency code
+    #[schema(example = "USD")]
+    pub currency_code: String,
+
+    /// Amount in smallest unit * 1000 (e.g., 1000 = $0.001)
+    pub amount1000: u64,
+
+    /// Optional note message text
+    pub note: Option<String>,
+
+    /// Expiration timestamp
+    pub expiry_timestamp: Option<i64>,
+}
+
+// --- Cancel Payment Request ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CancelPaymentRequestRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Message ID of the payment request to cancel
+    pub request_message_id: String,
+}
+
+// --- Decline Payment Request ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DeclinePaymentRequestRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Message ID of the payment request to decline
+    pub request_message_id: String,
+}
+
+// --- Newsletter Forward ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendNewsletterForwardRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// The text content to forward
+    pub text: String,
+
+    /// Newsletter JID
+    pub newsletter_jid: String,
+
+    /// Server message ID from the newsletter
+    pub server_message_id: i32,
+
+    /// Newsletter name
+    pub newsletter_name: Option<String>,
+
+    /// Content type: "update", "update_card", "link_card"
+    pub content_type: Option<String>,
+}
+
+// --- Spam Report ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SpamReportRequest {
+    /// The message ID being reported
+    pub message_id: String,
+
+    /// The timestamp of the message
+    pub message_timestamp: u64,
+
+    /// The JID of the message sender
+    pub from_jid: Option<String>,
+
+    /// For group messages, the participant JID
+    pub participant_jid: Option<String>,
+
+    /// For group reports, the group JID
+    pub group_jid: Option<String>,
+
+    /// For group reports, the group subject/name
+    pub group_subject: Option<String>,
+
+    /// Spam flow: "message_menu", "group_spam_banner_report", "group_info_report", "contact_info", "status_report"
+    #[serde(default = "default_spam_flow")]
+    pub spam_flow: String,
+
+    /// Media type of the message
+    pub media_type: Option<String>,
+}
+
+fn default_spam_flow() -> String {
+    "message_menu".to_string()
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SpamReportResponse {
+    pub success: bool,
+    pub report_id: Option<String>,
 }

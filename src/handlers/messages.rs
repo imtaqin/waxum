@@ -531,6 +531,1526 @@ pub async fn send_reaction(
     }))
 }
 
+// --- Poll ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/poll",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendPollRequest,
+    responses(
+        (status = 200, description = "Poll sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_poll(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendPollRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
+        .options
+        .into_iter()
+        .map(|name| waproto::whatsapp::message::poll_creation_message::Option {
+            option_name: Some(name),
+            ..Default::default()
+        })
+        .collect();
+
+    let message = waproto::whatsapp::Message {
+        poll_creation_message: Some(Box::new(
+            waproto::whatsapp::message::PollCreationMessage {
+                name: Some(request.name),
+                options,
+                selectable_options_count: Some(request.selectable_count),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Buttons ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/buttons",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendButtonsRequest,
+    responses(
+        (status = 200, description = "Buttons message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_buttons(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendButtonsRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
+        .buttons
+        .into_iter()
+        .map(|b| waproto::whatsapp::message::buttons_message::Button {
+            button_id: Some(b.button_id),
+            button_text: Some(
+                waproto::whatsapp::message::buttons_message::button::ButtonText {
+                    display_text: Some(b.display_text),
+                },
+            ),
+            r#type: Some(1), // RESPONSE type
+            ..Default::default()
+        })
+        .collect();
+
+    let header = request
+        .header_text
+        .map(|t| waproto::whatsapp::message::buttons_message::Header::Text(t));
+
+    let message = waproto::whatsapp::Message {
+        buttons_message: Some(Box::new(waproto::whatsapp::message::ButtonsMessage {
+            content_text: Some(request.content_text),
+            footer_text: request.footer,
+            buttons,
+            header_type: header.as_ref().map(|_| 2), // TEXT header type
+            header,
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- List (via Interactive NativeFlow) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/list",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendListRequest,
+    responses(
+        (status = 200, description = "List message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_list(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendListRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    // Build list params JSON for native flow
+    let sections_json: Vec<serde_json::Value> = request
+        .sections
+        .iter()
+        .map(|s| {
+            let rows: Vec<serde_json::Value> = s
+                .rows
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "id": r.row_id,
+                        "title": r.title,
+                        "description": r.description.as_deref().unwrap_or("")
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "title": s.title,
+                "rows": rows
+            })
+        })
+        .collect();
+
+    let list_params = serde_json::json!({
+        "title": request.title,
+        "button": request.button_text,
+        "sections": sections_json
+    });
+
+    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+        buttons: vec![
+            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+                name: Some("single_select".to_string()),
+                button_params_json: Some(list_params.to_string()),
+            },
+        ],
+        ..Default::default()
+    };
+
+    let message = waproto::whatsapp::Message {
+        interactive_message: Some(Box::new(
+            waproto::whatsapp::message::InteractiveMessage {
+                body: Some(waproto::whatsapp::message::interactive_message::Body {
+                    text: Some(request.description),
+                }),
+                footer: request.footer.map(|f| {
+                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                        text: Some(f),
+                        ..Default::default()
+                    })
+                }),
+                interactive_message: Some(
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                ),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Interactive (Generic Native Flow) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/interactive",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendInteractiveRequest,
+    responses(
+        (status = 200, description = "Interactive message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_interactive(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendInteractiveRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let buttons: Vec<waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton> = request
+        .buttons
+        .into_iter()
+        .map(|b| {
+            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+                name: Some(b.name),
+                button_params_json: Some(b.button_params_json),
+            }
+        })
+        .collect();
+
+    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+        buttons,
+        ..Default::default()
+    };
+
+    let message = waproto::whatsapp::Message {
+        interactive_message: Some(Box::new(
+            waproto::whatsapp::message::InteractiveMessage {
+                body: Some(waproto::whatsapp::message::interactive_message::Body {
+                    text: Some(request.body_text),
+                }),
+                footer: request.footer_text.map(|f| {
+                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                        text: Some(f),
+                        ..Default::default()
+                    })
+                }),
+                interactive_message: Some(
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                ),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Newsletter Admin Invite ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/newsletter-admin-invite",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendNewsletterAdminInviteRequest,
+    responses(
+        (status = 200, description = "Newsletter admin invite sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_newsletter_admin_invite(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendNewsletterAdminInviteRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        newsletter_admin_invite_message: Some(Box::new(
+            waproto::whatsapp::message::NewsletterAdminInviteMessage {
+                newsletter_jid: Some(request.newsletter_jid),
+                newsletter_name: Some(request.newsletter_name),
+                caption: request.caption,
+                invite_expiration: request.invite_expiration,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Newsletter Follower Invite ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/newsletter-follower-invite",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendNewsletterFollowerInviteRequest,
+    responses(
+        (status = 200, description = "Newsletter follower invite sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_newsletter_follower_invite(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendNewsletterFollowerInviteRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        newsletter_follower_invite_message_v2: Some(Box::new(
+            waproto::whatsapp::message::NewsletterFollowerInviteMessage {
+                newsletter_jid: Some(request.newsletter_jid),
+                newsletter_name: Some(request.newsletter_name),
+                caption: request.caption,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Order Message ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/order",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendOrderRequest,
+    responses(
+        (status = 200, description = "Order message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_order(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendOrderRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let status = request.status.as_deref().and_then(|s| match s {
+        "inquiry" => Some(1),
+        "accepted" => Some(2),
+        "declined" => Some(3),
+        _ => None,
+    });
+
+    let message = waproto::whatsapp::Message {
+        order_message: Some(Box::new(waproto::whatsapp::message::OrderMessage {
+            order_id: Some(request.order_id),
+            item_count: request.item_count,
+            status,
+            message: request.message,
+            order_title: request.order_title,
+            seller_jid: request.seller_jid,
+            token: request.token,
+            total_amount1000: request.total_amount_1000,
+            total_currency_code: request.total_currency_code,
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Invoice Message ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/invoice",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendInvoiceRequest,
+    responses(
+        (status = 200, description = "Invoice message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_invoice(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendInvoiceRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
+        "image" => Some(0),
+        "pdf" => Some(1),
+        _ => None,
+    });
+
+    let message = waproto::whatsapp::Message {
+        invoice_message: Some(waproto::whatsapp::message::InvoiceMessage {
+            note: request.note,
+            token: request.token,
+            attachment_type,
+            attachment_mimetype: request.attachment_mimetype,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Payment Invite ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/payment-invite",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendPaymentInviteRequest,
+    responses(
+        (status = 200, description = "Payment invite sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_payment_invite(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendPaymentInviteRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        payment_invite_message: Some(
+            waproto::whatsapp::message::PaymentInviteMessage {
+                service_type: request.service_type,
+                ..Default::default()
+            },
+        ),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Pin Message ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/pin",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendPinMessageRequest,
+    responses(
+        (status = 200, description = "Message pinned/unpinned", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_pin_message(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendPinMessageRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let chat_jid = parse_jid(&request.chat)?;
+
+    let pin_type = if request.duration_seconds > 0 { 1 } else { 2 }; // 1 = PIN, 2 = UNPIN
+
+    let message = waproto::whatsapp::Message {
+        pin_in_chat_message: Some(waproto::whatsapp::message::PinInChatMessage {
+            key: Some(waproto::whatsapp::MessageKey {
+                remote_jid: Some(request.chat.clone()),
+                id: Some(request.message_id),
+                from_me: Some(false),
+                ..Default::default()
+            }),
+            r#type: Some(pin_type),
+            sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
+        }),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(chat_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: chat_jid.to_string(),
+    }))
+}
+
+// --- Forward Message ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/forward",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = ForwardMessageRequest,
+    responses(
+        (status = 200, description = "Message forwarded", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn forward_message(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<ForwardMessageRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
+            text: Some(request.text),
+            context_info: Some(Box::new(waproto::whatsapp::ContextInfo {
+                is_forwarded: Some(true),
+                forwarding_score: Some(1),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Poll Update (Vote) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/poll-update",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendPollUpdateRequest,
+    responses(
+        (status = 200, description = "Poll vote sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_poll_update(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendPollUpdateRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let enc_payload = request
+        .enc_payload
+        .map(|p| {
+            base64::engine::general_purpose::STANDARD
+                .decode(&p)
+                .unwrap_or_default()
+        });
+    let enc_iv = request
+        .enc_iv
+        .map(|iv| {
+            base64::engine::general_purpose::STANDARD
+                .decode(&iv)
+                .unwrap_or_default()
+        });
+
+    let message = waproto::whatsapp::Message {
+        poll_update_message: Some(waproto::whatsapp::message::PollUpdateMessage {
+            poll_creation_message_key: Some(waproto::whatsapp::MessageKey {
+                remote_jid: Some(request.to.clone()),
+                id: Some(request.poll_message_id),
+                from_me: Some(false),
+                ..Default::default()
+            }),
+            vote: Some(waproto::whatsapp::message::PollEncValue {
+                enc_payload,
+                enc_iv,
+            }),
+            sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Buttons Response ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/buttons-response",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendButtonsResponseRequest,
+    responses(
+        (status = 200, description = "Buttons response sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_buttons_response(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendButtonsResponseRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        buttons_response_message: Some(Box::new(
+            waproto::whatsapp::message::ButtonsResponseMessage {
+            selected_button_id: Some(request.selected_button_id),
+            r#type: Some(1), // DisplayText
+            context_info: request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            }),
+                response: Some(
+                    waproto::whatsapp::message::buttons_response_message::Response::SelectedDisplayText(
+                        request.selected_display_text,
+                    ),
+                ),
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- List Response ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/list-response",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendListResponseRequest,
+    responses(
+        (status = 200, description = "List response sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_list_response(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendListResponseRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        list_response_message: Some(Box::new(
+            waproto::whatsapp::message::ListResponseMessage {
+                title: Some(request.title),
+                list_type: Some(1), // SingleSelect
+                single_select_reply: Some(
+                    waproto::whatsapp::message::list_response_message::SingleSelectReply {
+                        selected_row_id: Some(request.selected_row_id),
+                    },
+            ),
+            description: request.description,
+            context_info: request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            }),
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Interactive Response ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/interactive-response",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendInteractiveResponseRequest,
+    responses(
+        (status = 200, description = "Interactive response sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_interactive_response(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendInteractiveResponseRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let native_flow = waproto::whatsapp::message::interactive_response_message::NativeFlowResponseMessage {
+        name: Some(request.name),
+        params_json: Some(request.params_json),
+        version: Some(request.version),
+    };
+
+    let message = waproto::whatsapp::Message {
+        interactive_response_message: Some(Box::new(
+            waproto::whatsapp::message::InteractiveResponseMessage {
+                body: request.body_text.map(|text| {
+                    waproto::whatsapp::message::interactive_response_message::Body {
+                        text: Some(text),
+                        ..Default::default()
+                    }
+                }),
+                context_info: request.reply_to.map(|id| {
+                    Box::new(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
+                }),
+                interactive_response_message: Some(
+                    waproto::whatsapp::message::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(native_flow),
+                ),
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Highly Structured Message ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/highly-structured",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendHighlyStructuredRequest,
+    responses(
+        (status = 200, description = "HSM sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_highly_structured(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendHighlyStructuredRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        highly_structured_message: Some(Box::new(
+            waproto::whatsapp::message::HighlyStructuredMessage {
+                namespace: Some(request.namespace),
+                element_name: Some(request.element_name),
+                params: request.params,
+                fallback_lg: request.fallback_lg,
+                fallback_lc: request.fallback_lc,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Template Button Reply ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/template-button-reply",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendTemplateButtonReplyRequest,
+    responses(
+        (status = 200, description = "Template button reply sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_template_button_reply(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendTemplateButtonReplyRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        template_button_reply_message: Some(Box::new(
+            waproto::whatsapp::message::TemplateButtonReplyMessage {
+                selected_id: Some(request.selected_id),
+                selected_display_text: Some(request.selected_display_text),
+                selected_index: request.selected_index,
+                context_info: request.reply_to.map(|id| {
+                    Box::new(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
+                }),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Comment Message (Groups) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/comment",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendCommentRequest,
+    responses(
+        (status = 200, description = "Comment sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_comment(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendCommentRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let inner_message = waproto::whatsapp::Message {
+        extended_text_message: Some(Box::new(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let target_jid = request
+        .target_chat_jid
+        .unwrap_or_else(|| request.to.clone());
+
+    let message = waproto::whatsapp::Message {
+        comment_message: Some(Box::new(waproto::whatsapp::message::CommentMessage {
+            message: Some(Box::new(inner_message)),
+            target_message_key: Some(waproto::whatsapp::MessageKey {
+                remote_jid: Some(target_jid),
+                id: Some(request.target_message_id),
+                from_me: Some(false),
+                ..Default::default()
+            }),
+        })),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Scheduled Call Creation ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/scheduled-call",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendScheduledCallRequest,
+    responses(
+        (status = 200, description = "Scheduled call created", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_scheduled_call(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendScheduledCallRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let call_type = match request.call_type.to_lowercase().as_str() {
+        "video" => 2,
+        _ => 1, // voice
+    };
+
+    let message = waproto::whatsapp::Message {
+        scheduled_call_creation_message: Some(
+            waproto::whatsapp::message::ScheduledCallCreationMessage {
+                scheduled_timestamp_ms: Some(request.scheduled_timestamp_ms),
+                call_type: Some(call_type),
+                title: request.title,
+            },
+        ),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Scheduled Call Edit ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/scheduled-call-edit",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendScheduledCallEditRequest,
+    responses(
+        (status = 200, description = "Scheduled call edited", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_scheduled_call_edit(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendScheduledCallEditRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let edit_type = match request.edit_type.to_lowercase().as_str() {
+        "cancel" => 1,
+        _ => 0, // unknown
+    };
+
+    let message = waproto::whatsapp::Message {
+        scheduled_call_edit_message: Some(
+            waproto::whatsapp::message::ScheduledCallEditMessage {
+                key: Some(waproto::whatsapp::MessageKey {
+                    remote_jid: Some(request.to.clone()),
+                    id: Some(request.scheduled_call_message_id),
+                    from_me: Some(true),
+                    ..Default::default()
+                }),
+                edit_type: Some(edit_type),
+            },
+        ),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Send Payment ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/send-payment",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendPaymentRequest,
+    responses(
+        (status = 200, description = "Payment sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_payment(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendPaymentRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let note_message = request.note.map(|text| {
+        Box::new(waproto::whatsapp::Message {
+            extended_text_message: Some(Box::new(
+                waproto::whatsapp::message::ExtendedTextMessage {
+                    text: Some(text),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        })
+    });
+
+    let request_message_key = request.request_message_id.map(|id| {
+        waproto::whatsapp::MessageKey {
+            remote_jid: Some(request.to.clone()),
+            id: Some(id),
+            from_me: Some(false),
+            ..Default::default()
+        }
+    });
+
+    let message = waproto::whatsapp::Message {
+        send_payment_message: Some(Box::new(
+            waproto::whatsapp::message::SendPaymentMessage {
+                note_message,
+                request_message_key,
+                transaction_data: request.transaction_data,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Request Payment ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/request-payment",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = RequestPaymentRequest,
+    responses(
+        (status = 200, description = "Payment request sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn request_payment(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<RequestPaymentRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let note_message = request.note.map(|text| {
+        Box::new(waproto::whatsapp::Message {
+            extended_text_message: Some(Box::new(
+                waproto::whatsapp::message::ExtendedTextMessage {
+                    text: Some(text),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        })
+    });
+
+    let message = waproto::whatsapp::Message {
+        request_payment_message: Some(Box::new(
+            waproto::whatsapp::message::RequestPaymentMessage {
+                note_message,
+                currency_code_iso4217: Some(request.currency_code),
+                amount1000: Some(request.amount1000),
+                request_from: Some(request.to.clone()),
+                expiry_timestamp: request.expiry_timestamp,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Cancel Payment Request ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/cancel-payment",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = CancelPaymentRequestRequest,
+    responses(
+        (status = 200, description = "Payment request cancelled", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn cancel_payment_request(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<CancelPaymentRequestRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        cancel_payment_request_message: Some(
+            waproto::whatsapp::message::CancelPaymentRequestMessage {
+                key: Some(waproto::whatsapp::MessageKey {
+                    remote_jid: Some(request.to.clone()),
+                    id: Some(request.request_message_id),
+                    from_me: Some(false),
+                    ..Default::default()
+                }),
+            },
+        ),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Decline Payment Request ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/decline-payment",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = DeclinePaymentRequestRequest,
+    responses(
+        (status = 200, description = "Payment request declined", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn decline_payment_request(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<DeclinePaymentRequestRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let message = waproto::whatsapp::Message {
+        decline_payment_request_message: Some(
+            waproto::whatsapp::message::DeclinePaymentRequestMessage {
+                key: Some(waproto::whatsapp::MessageKey {
+                    remote_jid: Some(request.to.clone()),
+                    id: Some(request.request_message_id),
+                    from_me: Some(false),
+                    ..Default::default()
+                }),
+            },
+        ),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Newsletter Forward ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/newsletter-forward",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendNewsletterForwardRequest,
+    responses(
+        (status = 200, description = "Newsletter message forwarded", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_newsletter_forward(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendNewsletterForwardRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let content_type = match request.content_type.as_deref() {
+        Some("update_card") => Some(2),
+        Some("link_card") => Some(3),
+        _ => Some(1), // update
+    };
+
+    let message = waproto::whatsapp::Message {
+        extended_text_message: Some(Box::new(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                context_info: Some(Box::new(waproto::whatsapp::ContextInfo {
+                    is_forwarded: Some(true),
+                    forwarding_score: Some(1),
+                    forwarded_newsletter_message_info: Some(
+                        waproto::whatsapp::context_info::ForwardedNewsletterMessageInfo {
+                            newsletter_jid: Some(request.newsletter_jid),
+                            server_message_id: Some(request.server_message_id),
+                            newsletter_name: request.newsletter_name,
+                            content_type,
+                            ..Default::default()
+                        },
+                    ),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
 #[allow(dead_code)]
 pub async fn send_message(
     State(state): State<AppState>,

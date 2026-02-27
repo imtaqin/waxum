@@ -1,11 +1,13 @@
 pub mod blocking;
 pub mod chatstate;
 pub mod contacts;
-pub mod dashboard;
 pub mod groups;
 pub mod groups_management;
 pub mod media;
 pub mod messages;
+pub mod mex;
+pub mod operations;
 pub mod presence;
+pub mod privacy;
 pub mod sessions;
 pub mod webhooks;

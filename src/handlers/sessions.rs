@@ -773,6 +773,20 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
         Event::ChatPresence(_) => "chat_presence".to_string(),
         Event::GroupInfoUpdate { .. } => "group_update".to_string(),
         Event::JoinedGroup(_) => "joined_group".to_string(),
+        Event::PictureUpdate(_) => "picture_update".to_string(),
+        Event::UserAboutUpdate(_) => "user_about_update".to_string(),
+        Event::PushNameUpdate(_) => "push_name_update".to_string(),
+        Event::SelfPushNameUpdated(_) => "push_name_update".to_string(),
+        Event::ContactUpdate(_) => "contact_update".to_string(),
+        Event::DeviceListUpdate(_) => "device_list_update".to_string(),
+        Event::PinUpdate(_) => "pin_update".to_string(),
+        Event::MuteUpdate(_) => "mute_update".to_string(),
+        Event::ArchiveUpdate(_) => "archive_update".to_string(),
+        Event::MarkChatAsReadUpdate(_) => "mark_chat_as_read".to_string(),
+        Event::UndecryptableMessage(_) => "undecryptable_message".to_string(),
+        Event::ClientOutdated(_) => "client_outdated".to_string(),
+        Event::OfflineSyncPreview(_) => "offline_sync_preview".to_string(),
+        Event::OfflineSyncCompleted(_) => "offline_sync_completed".to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -816,6 +830,93 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
             serde_json::json!({
                 "group": jid.to_string(),
                 "update": format!("{:?}", update),
+            })
+        }
+        Event::PictureUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "author": update.author.to_string(),
+                "timestamp": update.timestamp.timestamp(),
+            })
+        }
+        Event::UserAboutUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "status": update.status,
+                "timestamp": update.timestamp.timestamp(),
+            })
+        }
+        Event::PushNameUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "old_push_name": update.old_push_name,
+                "new_push_name": update.new_push_name,
+            })
+        }
+        Event::SelfPushNameUpdated(update) => {
+            serde_json::json!({
+                "old_name": update.old_name,
+                "new_name": update.new_name,
+                "from_server": update.from_server,
+            })
+        }
+        Event::ContactUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+            })
+        }
+        Event::DeviceListUpdate(update) => {
+            serde_json::json!({
+                "user": update.user.to_string(),
+                "update_type": format!("{:?}", update.update_type),
+            })
+        }
+        Event::PinUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "pinned": update.action.pinned,
+                "timestamp": update.timestamp.timestamp(),
+            })
+        }
+        Event::MuteUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "muted": update.action.muted,
+                "timestamp": update.timestamp.timestamp(),
+            })
+        }
+        Event::ArchiveUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "archived": update.action.archived,
+                "timestamp": update.timestamp.timestamp(),
+            })
+        }
+        Event::MarkChatAsReadUpdate(update) => {
+            serde_json::json!({
+                "jid": update.jid.to_string(),
+                "timestamp": update.timestamp.timestamp(),
+                "from_full_sync": update.from_full_sync,
+            })
+        }
+        Event::UndecryptableMessage(msg) => {
+            serde_json::json!({
+                "info": format!("{:?}", msg),
+            })
+        }
+        Event::ClientOutdated(info) => {
+            serde_json::json!({
+                "info": format!("{:?}", info),
+            })
+        }
+        Event::OfflineSyncPreview(preview) => {
+            serde_json::json!({
+                "info": format!("{:?}", preview),
+            })
+        }
+        Event::OfflineSyncCompleted(completed) => {
+            serde_json::json!({
+                "info": format!("{:?}", completed),
             })
         }
         _ => serde_json::json!({}),

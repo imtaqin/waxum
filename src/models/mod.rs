@@ -5,6 +5,8 @@ pub mod contacts;
 pub mod groups;
 pub mod media;
 pub mod messages;
+pub mod mex;
 pub mod presence;
+pub mod privacy;
 pub mod sessions;
 pub mod webhooks;

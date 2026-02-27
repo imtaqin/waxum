@@ -2,6 +2,8 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+#[allow(unused_imports)]
+use axum::routing::patch;
 
 use crate::handlers;
 use crate::middleware::jwt::dashboard_auth_middleware;
@@ -127,6 +129,110 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/messages/read",
             post(handlers::messages::mark_as_read),
         )
+        // New message types
+        .route(
+            "/{session_id}/messages/poll",
+            post(handlers::messages::send_poll),
+        )
+        .route(
+            "/{session_id}/messages/buttons",
+            post(handlers::messages::send_buttons),
+        )
+        .route(
+            "/{session_id}/messages/list",
+            post(handlers::messages::send_list),
+        )
+        .route(
+            "/{session_id}/messages/interactive",
+            post(handlers::messages::send_interactive),
+        )
+        .route(
+            "/{session_id}/messages/newsletter-admin-invite",
+            post(handlers::messages::send_newsletter_admin_invite),
+        )
+        .route(
+            "/{session_id}/messages/newsletter-follower-invite",
+            post(handlers::messages::send_newsletter_follower_invite),
+        )
+        .route(
+            "/{session_id}/messages/order",
+            post(handlers::messages::send_order),
+        )
+        .route(
+            "/{session_id}/messages/invoice",
+            post(handlers::messages::send_invoice),
+        )
+        .route(
+            "/{session_id}/messages/payment-invite",
+            post(handlers::messages::send_payment_invite),
+        )
+        .route(
+            "/{session_id}/messages/pin",
+            post(handlers::messages::send_pin_message),
+        )
+        .route(
+            "/{session_id}/messages/forward",
+            post(handlers::messages::forward_message),
+        )
+        // New message types (v0.3.0)
+        .route(
+            "/{session_id}/messages/poll-update",
+            post(handlers::messages::send_poll_update),
+        )
+        .route(
+            "/{session_id}/messages/buttons-response",
+            post(handlers::messages::send_buttons_response),
+        )
+        .route(
+            "/{session_id}/messages/list-response",
+            post(handlers::messages::send_list_response),
+        )
+        .route(
+            "/{session_id}/messages/interactive-response",
+            post(handlers::messages::send_interactive_response),
+        )
+        .route(
+            "/{session_id}/messages/highly-structured",
+            post(handlers::messages::send_highly_structured),
+        )
+        .route(
+            "/{session_id}/messages/template-button-reply",
+            post(handlers::messages::send_template_button_reply),
+        )
+        .route(
+            "/{session_id}/messages/comment",
+            post(handlers::messages::send_comment),
+        )
+        .route(
+            "/{session_id}/messages/scheduled-call",
+            post(handlers::messages::send_scheduled_call),
+        )
+        .route(
+            "/{session_id}/messages/scheduled-call-edit",
+            post(handlers::messages::send_scheduled_call_edit),
+        )
+        // Payment messages
+        .route(
+            "/{session_id}/messages/send-payment",
+            post(handlers::messages::send_payment),
+        )
+        .route(
+            "/{session_id}/messages/request-payment",
+            post(handlers::messages::request_payment),
+        )
+        .route(
+            "/{session_id}/messages/cancel-payment",
+            post(handlers::messages::cancel_payment_request),
+        )
+        .route(
+            "/{session_id}/messages/decline-payment",
+            post(handlers::messages::decline_payment_request),
+        )
+        // Newsletter forward
+        .route(
+            "/{session_id}/messages/newsletter-forward",
+            post(handlers::messages::send_newsletter_forward),
+        )
         .route(
             "/{session_id}/contacts/check",
             post(handlers::contacts::check_on_whatsapp),
@@ -182,6 +288,10 @@ fn session_routes() -> Router<AppState> {
             get(handlers::groups_management::get_invite_link),
         )
         .route(
+            "/{session_id}/groups/{group_jid}/settings",
+            put(handlers::groups_management::set_group_settings),
+        )
+        .route(
             "/{session_id}/presence/set",
             post(handlers::presence::set_presence),
         )
@@ -212,6 +322,54 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/blocking/check/{jid}",
             get(handlers::blocking::is_blocked),
+        )
+        // Privacy settings
+        .route(
+            "/{session_id}/privacy/settings",
+            get(handlers::privacy::get_privacy_settings),
+        )
+        // MEX / GraphQL
+        .route(
+            "/{session_id}/mex/query",
+            post(handlers::mex::mex_query),
+        )
+        .route(
+            "/{session_id}/mex/mutate",
+            post(handlers::mex::mex_mutate),
+        )
+        // Spam reporting
+        .route(
+            "/{session_id}/spam/report",
+            post(handlers::operations::spam_report),
+        )
+        // TCToken management
+        .route(
+            "/{session_id}/tctoken/issue",
+            post(handlers::operations::tctoken_issue),
+        )
+        .route(
+            "/{session_id}/tctoken/list",
+            get(handlers::operations::tctoken_list),
+        )
+        .route(
+            "/{session_id}/tctoken/expired",
+            delete(handlers::operations::tctoken_prune),
+        )
+        .route(
+            "/{session_id}/tctoken/{jid}",
+            get(handlers::operations::tctoken_get),
+        )
+        // Auto-reconnect
+        .route(
+            "/{session_id}/reconnect",
+            get(handlers::operations::get_auto_reconnect)
+                .put(handlers::operations::set_auto_reconnect),
+        )
+        // History sync
+        .route(
+            "/{session_id}/history-sync",
+            get(handlers::operations::get_history_sync)
+                .put(handlers::operations::set_history_sync),
         )
         .route(
             "/{session_id}/media/upload",

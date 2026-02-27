@@ -54,6 +54,15 @@ pub struct CreateGroupRequest {
 
     #[schema(example = json!(["559999999999@s.whatsapp.net"]))]
     pub participants: Vec<String>,
+
+    /// Membership approval mode
+    pub membership_approval_mode: Option<MembershipApprovalMode>,
+
+    /// Member add mode
+    pub member_add_mode: Option<MemberAddMode>,
+
+    /// Member link mode
+    pub member_link_mode: Option<MemberLinkMode>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -106,4 +115,39 @@ pub struct GetInviteLinkRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SuccessResponse {
     pub success: bool,
+}
+
+// --- Advanced Group Settings ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetGroupSettingsRequest {
+    /// Membership approval mode for join requests
+    pub membership_approval_mode: Option<MembershipApprovalMode>,
+
+    /// Who can add participants
+    pub member_add_mode: Option<MemberAddMode>,
+
+    /// Who can edit group invite link
+    pub member_link_mode: Option<MemberLinkMode>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MembershipApprovalMode {
+    Off,
+    On,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MemberAddMode {
+    AdminAdd,
+    AllMemberAdd,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MemberLinkMode {
+    AdminLink,
+    AllMemberLink,
 }
