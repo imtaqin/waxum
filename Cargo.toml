@@ -19,9 +19,8 @@ whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-r
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }
-axum-extra = { version = "0.12", features = ["typed-header", "form"] }
 tower = { version = "0.5", features = ["util", "timeout"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -62,10 +61,6 @@ hex = "0.4"
 
 # JWT authentication
 jsonwebtoken = "9"
-
-# QR code generation
-qrcode = "0.14"
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [profile.release]
 opt-level = "z"

@@ -510,19 +510,6 @@ pub async fn get_device_info(
     }))
 }
 
-pub async fn connect_client_public(state: &AppState, session_id: &str) -> Result<(), ApiError> {
-    connect_client(state, session_id).await
-}
-
-pub async fn connect_client_with_pair_code_public(
-    state: &AppState,
-    session_id: &str,
-    phone_number: &str,
-    show_notification: bool,
-) -> Result<(), ApiError> {
-    connect_client_with_pair_code(state, session_id, phone_number, show_notification).await
-}
-
 async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust_sqlite_storage::SqliteStore;

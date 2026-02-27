@@ -2,55 +2,14 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-#[allow(unused_imports)]
-use axum::routing::patch;
 
 use crate::handlers;
-use crate::middleware::jwt::dashboard_auth_middleware;
 use crate::state::AppState;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .nest("/api/v1", api_routes())
         .route("/health", get(health_check))
-}
-
-pub fn create_dashboard_router() -> Router<AppState> {
-    // Protected routes (require auth)
-    let protected = Router::new()
-        .route("/", get(handlers::dashboard::dashboard_home))
-        .route("/sessions", get(handlers::dashboard::sessions_list))
-        .route("/sessions/new", get(handlers::dashboard::session_new_form))
-        .route("/sessions/new", post(handlers::dashboard::session_create))
-        .route(
-            "/sessions/{session_id}",
-            get(handlers::dashboard::session_detail),
-        )
-        .route(
-            "/sessions/{session_id}/connect",
-            post(handlers::dashboard::session_connect),
-        )
-        .route(
-            "/sessions/{session_id}/disconnect",
-            post(handlers::dashboard::session_disconnect),
-        )
-        .route(
-            "/sessions/{session_id}/delete",
-            post(handlers::dashboard::session_delete),
-        )
-        .route(
-            "/sessions/{session_id}/pair",
-            post(handlers::dashboard::session_pair),
-        )
-        .route("/settings", get(handlers::dashboard::settings_page))
-        .route("/logout", post(handlers::dashboard::logout))
-        .layer(axum::middleware::from_fn(dashboard_auth_middleware));
-
-    // Public routes (login page)
-    Router::new()
-        .route("/login", get(handlers::dashboard::login_page))
-        .route("/login", post(handlers::dashboard::login_submit))
-        .merge(protected)
 }
 
 fn api_routes() -> Router<AppState> {
@@ -129,7 +88,6 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/messages/read",
             post(handlers::messages::mark_as_read),
         )
-        // New message types
         .route(
             "/{session_id}/messages/poll",
             post(handlers::messages::send_poll),
@@ -174,7 +132,6 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/messages/forward",
             post(handlers::messages::forward_message),
         )
-        // New message types (v0.3.0)
         .route(
             "/{session_id}/messages/poll-update",
             post(handlers::messages::send_poll_update),
@@ -211,7 +168,6 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/messages/scheduled-call-edit",
             post(handlers::messages::send_scheduled_call_edit),
         )
-        // Payment messages
         .route(
             "/{session_id}/messages/send-payment",
             post(handlers::messages::send_payment),
@@ -228,7 +184,6 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/messages/decline-payment",
             post(handlers::messages::decline_payment_request),
         )
-        // Newsletter forward
         .route(
             "/{session_id}/messages/newsletter-forward",
             post(handlers::messages::send_newsletter_forward),
@@ -323,12 +278,10 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/blocking/check/{jid}",
             get(handlers::blocking::is_blocked),
         )
-        // Privacy settings
         .route(
             "/{session_id}/privacy/settings",
             get(handlers::privacy::get_privacy_settings),
         )
-        // MEX / GraphQL
         .route(
             "/{session_id}/mex/query",
             post(handlers::mex::mex_query),
@@ -337,12 +290,10 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/mex/mutate",
             post(handlers::mex::mex_mutate),
         )
-        // Spam reporting
         .route(
             "/{session_id}/spam/report",
             post(handlers::operations::spam_report),
         )
-        // TCToken management
         .route(
             "/{session_id}/tctoken/issue",
             post(handlers::operations::tctoken_issue),
@@ -359,13 +310,11 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/tctoken/{jid}",
             get(handlers::operations::tctoken_get),
         )
-        // Auto-reconnect
         .route(
             "/{session_id}/reconnect",
             get(handlers::operations::get_auto_reconnect)
                 .put(handlers::operations::set_auto_reconnect),
         )
-        // History sync
         .route(
             "/{session_id}/history-sync",
             get(handlers::operations::get_history_sync)

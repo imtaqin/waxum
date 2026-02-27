@@ -28,7 +28,7 @@ mod models;
 mod routes;
 mod state;
 
-use routes::{create_dashboard_router, create_router};
+use routes::create_router;
 use state::AppState;
 
 #[derive(OpenApi)]
@@ -309,7 +309,7 @@ impl utoipa::Modify for SecurityAddon {
                         .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
                         .bearer_format("JWT")
                         .description(Some(
-                            "Enter your Superadmin Token from server logs or /dashboard/settings",
+                            "Enter your Superadmin Token from server logs",
                         ))
                         .build(),
                 ),
@@ -406,21 +406,11 @@ async fn main() -> Result<()> {
         .url("/api-docs/openapi.json", ApiDoc::openapi())
         .into();
 
-    let api_app = create_router()
+    let app = create_router()
         .merge(swagger_router)
         .layer(axum::middleware::from_fn(
             middleware::jwt::jwt_auth_middleware,
-        ));
-
-    let dashboard_app = create_dashboard_router();
-
-    let app = axum::Router::new()
-        .nest("/dashboard", dashboard_app)
-        .merge(api_app)
-        .route(
-            "/",
-            axum::routing::get(|| async { axum::response::Redirect::to("/dashboard") }),
-        )
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);
@@ -429,10 +419,6 @@ async fn main() -> Result<()> {
     println!("\x1b[32m  Server listening on:\x1b[0m");
     println!(
         "    \x1b[90m→\x1b[0m API:       \x1b[94mhttp://{}/api/v1\x1b[0m",
-        addr
-    );
-    println!(
-        "    \x1b[90m→\x1b[0m Dashboard: \x1b[94mhttp://{}/dashboard\x1b[0m",
         addr
     );
     println!(
