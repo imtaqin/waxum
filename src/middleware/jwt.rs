@@ -166,5 +166,3 @@ pub fn generate_superadmin_token() -> String {
         .generate_token("superadmin", "superadmin", 24 * 365)
         .expect("Failed to generate token")
 }
-
-

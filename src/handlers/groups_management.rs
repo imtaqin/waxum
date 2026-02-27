@@ -114,8 +114,8 @@ pub async fn set_group_subject(
         .parse()
         .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
 
-    let subject = GroupSubject::new(&request.subject)
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    let subject =
+        GroupSubject::new(&request.subject).map_err(|e| ApiError::BadRequest(e.to_string()))?;
 
     client
         .groups()
@@ -154,9 +154,9 @@ pub async fn set_group_description(
         .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
 
     let description = match &request.description {
-        Some(desc) => Some(
-            GroupDescription::new(desc).map_err(|e| ApiError::BadRequest(e.to_string()))?,
-        ),
+        Some(desc) => {
+            Some(GroupDescription::new(desc).map_err(|e| ApiError::BadRequest(e.to_string()))?)
+        }
         None => None,
     };
 

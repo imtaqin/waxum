@@ -47,10 +47,7 @@ pub async fn mex_query(
                 message: e.message,
                 error_code: e.extensions.as_ref().and_then(|ext| ext.error_code),
                 is_retryable: e.extensions.as_ref().and_then(|ext| ext.is_retryable),
-                severity: e
-                    .extensions
-                    .as_ref()
-                    .and_then(|ext| ext.severity.clone()),
+                severity: e.extensions.as_ref().and_then(|ext| ext.severity.clone()),
             })
             .collect()
     });
@@ -101,10 +98,7 @@ pub async fn mex_mutate(
                 message: e.message,
                 error_code: e.extensions.as_ref().and_then(|ext| ext.error_code),
                 is_retryable: e.extensions.as_ref().and_then(|ext| ext.is_retryable),
-                severity: e
-                    .extensions
-                    .as_ref()
-                    .and_then(|ext| ext.severity.clone()),
+                severity: e.extensions.as_ref().and_then(|ext| ext.severity.clone()),
             })
             .collect()
     });

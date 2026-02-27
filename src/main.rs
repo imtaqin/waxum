@@ -308,9 +308,7 @@ impl utoipa::Modify for SecurityAddon {
                     utoipa::openapi::security::HttpBuilder::new()
                         .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
                         .bearer_format("JWT")
-                        .description(Some(
-                            "Enter your Superadmin Token from server logs",
-                        ))
+                        .description(Some("Enter your Superadmin Token from server logs"))
                         .build(),
                 ),
             );

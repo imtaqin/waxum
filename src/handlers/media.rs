@@ -5,7 +5,9 @@ use axum::{
 use base64::Engine;
 
 use crate::error::ApiError;
-use crate::models::media::{DownloadMediaRequest, DownloadMediaResponse, MediaType, UploadMediaResponse};
+use crate::models::media::{
+    DownloadMediaRequest, DownloadMediaResponse, MediaType, UploadMediaResponse,
+};
 use crate::state::AppState;
 
 #[utoipa::path(

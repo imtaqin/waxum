@@ -282,14 +282,8 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/privacy/settings",
             get(handlers::privacy::get_privacy_settings),
         )
-        .route(
-            "/{session_id}/mex/query",
-            post(handlers::mex::mex_query),
-        )
-        .route(
-            "/{session_id}/mex/mutate",
-            post(handlers::mex::mex_mutate),
-        )
+        .route("/{session_id}/mex/query", post(handlers::mex::mex_query))
+        .route("/{session_id}/mex/mutate", post(handlers::mex::mex_mutate))
         .route(
             "/{session_id}/spam/report",
             post(handlers::operations::spam_report),
@@ -317,8 +311,7 @@ fn session_routes() -> Router<AppState> {
         )
         .route(
             "/{session_id}/history-sync",
-            get(handlers::operations::get_history_sync)
-                .put(handlers::operations::set_history_sync),
+            get(handlers::operations::get_history_sync).put(handlers::operations::set_history_sync),
         )
         .route(
             "/{session_id}/media/upload",

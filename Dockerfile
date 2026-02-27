@@ -16,27 +16,22 @@ RUN apt-get update && apt-get install -y \
 RUN rustup default nightly
 
 # === DEPENDENCY CACHING LAYER ===
-# Copy only dependency manifests and askama config first
-COPY Cargo.toml Cargo.lock* askama.toml ./
+# Copy only dependency manifests first
+COPY Cargo.toml Cargo.lock* ./
 
 # Create dummy source files to build dependencies only
 RUN mkdir -p src && \
     echo 'fn main() { println!("dummy"); }' > src/main.rs
 
-# Create dummy templates directory (Askama checks at compile time)
-RUN mkdir -p templates && \
-    echo '<!DOCTYPE html><html><body></body></html>' > templates/base.askama
-
 # Build dependencies only (this layer will be cached)
 RUN cargo build --release 2>/dev/null || true
 
 # Remove dummy source AND the dummy binary (important!)
-RUN rm -rf src templates target/release/wa-rs target/release/deps/wa_rs*
+RUN rm -rf src target/release/wa-rs target/release/deps/wa_rs*
 
 # === ACTUAL SOURCE BUILD ===
-# Now copy real source code and templates
+# Now copy real source code
 COPY src/ ./src/
-COPY templates/ ./templates/
 
 # Build release binary (dependencies are already cached)
 RUN cargo build --release
@@ -54,7 +49,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
-# Copy binary from builder (templates are embedded at compile time)
+# Copy binary from builder
 COPY --from=rust-builder /app/target/release/wa-rs /app/wa-rs
 
 # Create directory for WhatsApp session storage

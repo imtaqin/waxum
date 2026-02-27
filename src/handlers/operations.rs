@@ -177,10 +177,7 @@ pub async fn tctoken_issue(
     let jids: Vec<wacore_binary::jid::Jid> = request
         .jids
         .iter()
-        .map(|s| {
-            s.parse()
-                .map_err(|_| ApiError::InvalidJid(s.clone()))
-        })
+        .map(|s| s.parse().map_err(|_| ApiError::InvalidJid(s.clone())))
         .collect::<Result<_, _>>()?;
 
     let tokens = client
