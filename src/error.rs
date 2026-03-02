@@ -59,6 +59,9 @@ pub enum ApiError {
 
     #[error("Session error: {0}")]
     SessionError(String),
+
+    #[error("NATS error: {0}")]
+    NatsError(String),
 }
 
 impl IntoResponse for ApiError {
@@ -83,6 +86,7 @@ impl IntoResponse for ApiError {
             ApiError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::SessionError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            ApiError::NatsError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
 
         let body = Json(json!({

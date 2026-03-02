@@ -6,6 +6,7 @@ pub mod groups_management;
 pub mod media;
 pub mod messages;
 pub mod mex;
+pub mod nats_handler;
 pub mod operations;
 pub mod presence;
 pub mod privacy;

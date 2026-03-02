@@ -742,6 +742,9 @@ async fn handle_event(
         state
             .broadcast_to_webhooks(session_id, &event_type, &payload)
             .await;
+        state
+            .publish_to_nats(session_id, &event_type, &payload)
+            .await;
         runtime.broadcast_event(payload);
     }
 }

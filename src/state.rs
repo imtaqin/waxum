@@ -8,6 +8,7 @@ use whatsapp_rust::Client;
 use crate::db::SessionManager;
 use crate::models::sessions::SessionStatus;
 use crate::models::webhooks::WebhookConfig;
+use crate::nats::NatsManager;
 
 pub struct SessionState {
     pub client: RwLock<Option<Arc<Client>>>,
@@ -92,10 +93,12 @@ struct AppStateInner {
     pub webhooks: DashMap<String, DashMap<String, WebhookConfig>>,
 
     pub base_storage_path: String,
+
+    pub nats: Option<NatsManager>,
 }
 
 impl AppState {
-    pub async fn new(pool: Pool) -> Self {
+    pub async fn new(pool: Pool, nats: Option<NatsManager>) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
             .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
 
@@ -109,7 +112,25 @@ impl AppState {
                 sessions: DashMap::new(),
                 webhooks: DashMap::new(),
                 base_storage_path,
+                nats,
             }),
+        }
+    }
+
+    pub fn nats(&self) -> Option<&NatsManager> {
+        self.inner.nats.as_ref()
+    }
+
+    /// Publish an event to NATS JetStream (no-op if NATS not configured).
+    pub async fn publish_to_nats(&self, session_id: &str, event_type: &str, payload: &str) {
+        if let Some(nats) = &self.inner.nats {
+            crate::nats::publisher::publish_event(
+                nats.jetstream(),
+                session_id,
+                event_type,
+                payload,
+            )
+            .await;
         }
     }
 

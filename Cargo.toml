@@ -62,6 +62,11 @@ hex = "0.4"
 # JWT authentication
 jsonwebtoken = "9"
 
+# NATS JetStream
+async-nats = "0.38"
+bytes = "1"
+futures = "0.3"
+
 [profile.release]
 opt-level = "z"
 debug = false

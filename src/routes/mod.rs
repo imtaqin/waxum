@@ -13,7 +13,22 @@ pub fn create_router() -> Router<AppState> {
 }
 
 fn api_routes() -> Router<AppState> {
-    Router::new().nest("/sessions", session_routes())
+    Router::new()
+        .nest("/sessions", session_routes())
+        .nest("/nats", nats_routes())
+}
+
+fn nats_routes() -> Router<AppState> {
+    Router::new()
+        .route("/status", get(handlers::nats_handler::nats_status))
+        .route(
+            "/streams/{stream_name}/purge",
+            post(handlers::nats_handler::nats_purge_stream),
+        )
+        .route(
+            "/streams/{stream_name}/consumers",
+            get(handlers::nats_handler::nats_list_consumers),
+        )
 }
 
 fn session_routes() -> Router<AppState> {

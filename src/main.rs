@@ -25,6 +25,7 @@ mod error;
 mod handlers;
 mod middleware;
 mod models;
+mod nats;
 mod routes;
 mod state;
 
@@ -145,6 +146,10 @@ use state::AppState;
         handlers::webhooks::list_webhooks,
         handlers::webhooks::register_webhook,
         handlers::webhooks::unregister_webhook,
+
+        handlers::nats_handler::nats_status,
+        handlers::nats_handler::nats_purge_stream,
+        handlers::nats_handler::nats_list_consumers,
     ),
     components(
         schemas(
@@ -277,6 +282,10 @@ use state::AppState;
             models::webhooks::WebhookRequest,
 
             models::common::SuccessResponse,
+
+            nats::models::NatsStatusResponse,
+            nats::models::NatsStreamInfo,
+            nats::models::SendResult,
         )
     ),
     tags(
@@ -292,7 +301,8 @@ use state::AppState;
         (name = "privacy", description = "Privacy settings management"),
         (name = "mex", description = "GraphQL/MEX operations"),
         (name = "newsletter", description = "Newsletter/Channel messages"),
-        (name = "operations", description = "Spam reporting, TCToken, reconnection, and sync operations")
+        (name = "operations", description = "Spam reporting, TCToken, reconnection, and sync operations"),
+        (name = "nats", description = "NATS JetStream management and status")
     )
 )]
 struct ApiDoc;
@@ -376,7 +386,48 @@ async fn main() -> Result<()> {
     db::schema::init_schema(&pool).await?;
     tracing::info!("Database schema initialized");
 
-    let state = AppState::new(pool).await;
+    // Initialize NATS if configured
+    let nats_manager = match nats::config::NatsConfig::from_env() {
+        Some(config) => {
+            tracing::info!("Connecting to NATS at {}", config.url);
+            match nats::NatsManager::connect(config).await {
+                Ok(manager) => {
+                    if let Err(e) = manager.init_streams().await {
+                        tracing::error!("Failed to initialize NATS streams: {}", e);
+                        None
+                    } else {
+                        tracing::info!("NATS JetStream initialized");
+                        Some(manager)
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to connect to NATS: {}. Continuing without NATS.", e);
+                    None
+                }
+            }
+        }
+        None => {
+            tracing::info!("NATS not configured (NATS_URL not set). Running without NATS.");
+            None
+        }
+    };
+
+    let nats_enabled = nats_manager.is_some();
+    let state = AppState::new(pool, nats_manager).await;
+
+    // Start NATS outbound consumer if enabled
+    if nats_enabled {
+        if let Some(nats) = state.nats() {
+            match nats::consumer::start_consumer(nats.jetstream().clone(), state.clone()).await {
+                Ok(_handle) => {
+                    tracing::info!("NATS outbound message consumer started");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to start NATS consumer: {}", e);
+                }
+            }
+        }
+    }
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -423,6 +474,11 @@ async fn main() -> Result<()> {
         "    \x1b[90m→\x1b[0m Swagger:   \x1b[94mhttp://{}/swagger-ui\x1b[0m",
         addr
     );
+    if nats_enabled {
+        println!("    \x1b[90m→\x1b[0m NATS:      \x1b[92mConnected\x1b[0m");
+    } else {
+        println!("    \x1b[90m→\x1b[0m NATS:      \x1b[90mDisabled\x1b[0m");
+    }
     println!();
 
     let listener = TcpListener::bind(addr).await?;

@@ -2135,7 +2135,7 @@ pub async fn mark_as_read(
     Ok(Json(SuccessResponse { success: true }))
 }
 
-fn get_client(
+pub(crate) fn get_client(
     state: &AppState,
     session_id: &str,
 ) -> Result<std::sync::Arc<whatsapp_rust::Client>, ApiError> {
@@ -2146,7 +2146,7 @@ fn get_client(
     runtime.get_client().ok_or(ApiError::NotConnected)
 }
 
-fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {
+pub(crate) fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {
     if jid_str.contains('@') {
         jid_str
             .parse()
@@ -2156,7 +2156,7 @@ fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {
     }
 }
 
-async fn get_media_data(media: &MediaData) -> Result<(Vec<u8>, String), ApiError> {
+pub(crate) async fn get_media_data(media: &MediaData) -> Result<(Vec<u8>, String), ApiError> {
     match media {
         MediaData::Url { url } => {
             let response = reqwest::get(url)
