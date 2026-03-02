@@ -225,6 +225,7 @@ pub struct SuccessResponse {
 // --- Poll Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendPollRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -245,6 +246,7 @@ pub struct SendPollRequest {
 // --- Buttons Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendButtonsRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -270,6 +272,7 @@ pub struct ButtonItem {
 // --- List Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendListRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -306,6 +309,7 @@ pub struct ListRow {
 // --- Interactive Messages (Native Flow) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendInteractiveRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -328,6 +332,7 @@ pub struct NativeFlowButtonItem {
 // --- Template Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendTemplateRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -341,6 +346,7 @@ pub struct SendTemplateRequest {
 // --- Newsletter Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendNewsletterAdminInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -357,6 +363,7 @@ pub struct SendNewsletterAdminInviteRequest {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendNewsletterFollowerInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -373,6 +380,7 @@ pub struct SendNewsletterFollowerInviteRequest {
 // --- Business Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendOrderRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -400,6 +408,7 @@ pub struct SendOrderRequest {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendInvoiceRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -417,6 +426,7 @@ pub struct SendInvoiceRequest {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendPaymentInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -448,6 +458,7 @@ fn default_pin_duration() -> i64 {
 // --- Forward Message ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct ForwardMessageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -460,6 +471,7 @@ pub struct ForwardMessageRequest {
 // --- Poll Update (Vote) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendPollUpdateRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -540,6 +552,7 @@ fn default_version() -> i32 {
 // --- Highly Structured Message (HSM) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct SendHighlyStructuredRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,

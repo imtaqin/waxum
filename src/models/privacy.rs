@@ -14,6 +14,7 @@ pub struct PrivacySettingItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum PrivacyCategory {
     Last,
     Online,
@@ -25,6 +26,7 @@ pub enum PrivacyCategory {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum PrivacyValue {
     All,
     Contacts,

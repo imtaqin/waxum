@@ -44,6 +44,7 @@ impl SessionStatus {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_connected(&self) -> bool {
         matches!(self, SessionStatus::LoggedIn | SessionStatus::Connected)
     }
