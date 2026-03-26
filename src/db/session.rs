@@ -1,17 +1,39 @@
-use chrono::{DateTime, Utc};
-use deadpool_postgres::Pool;
+use sqlx::any::AnyRow;
+use sqlx::{AnyPool, Row};
 
 use crate::models::sessions::{SessionInfo, SessionStatus};
 use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 
 #[derive(Clone)]
 pub struct SessionManager {
-    pool: Pool,
+    pool: AnyPool,
+    backend: DbBackend,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum DbBackend {
+    Postgres,
+    MySQL,
+    SQLite,
+}
+
+fn detect_backend() -> DbBackend {
+    let url = std::env::var("DATABASE_URL").unwrap_or_default();
+    if url.starts_with("postgres") {
+        DbBackend::Postgres
+    } else if url.starts_with("mysql") {
+        DbBackend::MySQL
+    } else {
+        DbBackend::SQLite
+    }
 }
 
 impl SessionManager {
-    pub fn new(pool: Pool) -> Self {
-        Self { pool }
+    pub fn new(pool: AnyPool) -> Self {
+        Self {
+            pool,
+            backend: detect_backend(),
+        }
     }
 
     pub async fn create_session(
@@ -20,47 +42,43 @@ impl SessionManager {
         name: Option<&str>,
         storage_path: &str,
     ) -> anyhow::Result<SessionInfo> {
-        let client = self.pool.get().await?;
+        let name_str = name.unwrap_or("");
 
-        let row = client
-            .query_one(
-                r#"
-                INSERT INTO sessions (id, name, storage_path, status, is_logged_in)
-                VALUES ($1, $2, $3, 'disconnected', FALSE)
-                RETURNING id, name, storage_path, phone_number, push_name, status, is_logged_in, created_at, updated_at, last_connected_at
-                "#,
-                &[&id, &name, &storage_path],
-            )
-            .await?;
+        sqlx::query(
+            "INSERT INTO sessions (id, name, storage_path, status, is_logged_in) VALUES (?, ?, ?, 'disconnected', 0)",
+        )
+        .bind(id)
+        .bind(name_str)
+        .bind(storage_path)
+        .execute(&self.pool)
+        .await?;
 
-        Ok(self.row_to_session_info(&row))
+        // Fetch back
+        let session = self.get_session(id).await?;
+        session.ok_or_else(|| anyhow::anyhow!("Failed to fetch created session"))
     }
 
     pub async fn get_session(&self, id: &str) -> anyhow::Result<Option<SessionInfo>> {
-        let client = self.pool.get().await?;
-
-        let row = client
-            .query_opt("SELECT * FROM sessions WHERE id = $1", &[&id])
+        let row: Option<AnyRow> = sqlx::query("SELECT * FROM sessions WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
             .await?;
 
         Ok(row.map(|r| self.row_to_session_info(&r)))
     }
 
     pub async fn get_storage_path(&self, id: &str) -> anyhow::Result<Option<String>> {
-        let client = self.pool.get().await?;
-
-        let row = client
-            .query_opt("SELECT storage_path FROM sessions WHERE id = $1", &[&id])
+        let row: Option<AnyRow> = sqlx::query("SELECT storage_path FROM sessions WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
             .await?;
 
-        Ok(row.map(|r| r.get::<_, String>("storage_path")))
+        Ok(row.map(|r| r.get::<String, _>("storage_path")))
     }
 
     pub async fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
-        let client = self.pool.get().await?;
-
-        let rows = client
-            .query("SELECT * FROM sessions ORDER BY created_at DESC", &[])
+        let rows: Vec<AnyRow> = sqlx::query("SELECT * FROM sessions ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
             .await?;
 
         Ok(rows.iter().map(|r| self.row_to_session_info(r)).collect())
@@ -72,18 +90,30 @@ impl SessionManager {
         status: SessionStatus,
         is_logged_in: bool,
     ) -> anyhow::Result<()> {
-        let client = self.pool.get().await?;
+        let logged_in_val: i32 = if is_logged_in { 1 } else { 0 };
 
-        client
-            .execute(
-                r#"
-                UPDATE sessions
-                SET status = $1, is_logged_in = $2, updated_at = NOW()
-                WHERE id = $3
-                "#,
-                &[&status.as_str(), &is_logged_in, &id],
-            )
-            .await?;
+        match self.backend {
+            DbBackend::SQLite => {
+                sqlx::query(
+                    "UPDATE sessions SET status = ?, is_logged_in = ?, updated_at = datetime('now') WHERE id = ?",
+                )
+                .bind(status.as_str())
+                .bind(logged_in_val)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+            _ => {
+                sqlx::query(
+                    "UPDATE sessions SET status = ?, is_logged_in = ?, updated_at = NOW() WHERE id = ?",
+                )
+                .bind(status.as_str())
+                .bind(logged_in_val)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -94,49 +124,62 @@ impl SessionManager {
         phone_number: Option<&str>,
         push_name: Option<&str>,
     ) -> anyhow::Result<()> {
-        let client = self.pool.get().await?;
-
-        client
-            .execute(
-                r#"
-                UPDATE sessions
-                SET phone_number = COALESCE($1, phone_number),
-                    push_name = COALESCE($2, push_name),
-                    updated_at = NOW()
-                WHERE id = $3
-                "#,
-                &[&phone_number, &push_name, &id],
-            )
-            .await?;
+        match self.backend {
+            DbBackend::SQLite => {
+                sqlx::query(
+                    "UPDATE sessions SET phone_number = COALESCE(?, phone_number), push_name = COALESCE(?, push_name), updated_at = datetime('now') WHERE id = ?",
+                )
+                .bind(phone_number)
+                .bind(push_name)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+            _ => {
+                sqlx::query(
+                    "UPDATE sessions SET phone_number = COALESCE(?, phone_number), push_name = COALESCE(?, push_name), updated_at = NOW() WHERE id = ?",
+                )
+                .bind(phone_number)
+                .bind(push_name)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
 
         Ok(())
     }
 
     pub async fn update_last_connected(&self, id: &str) -> anyhow::Result<()> {
-        let client = self.pool.get().await?;
-
-        client
-            .execute(
-                r#"
-                UPDATE sessions
-                SET last_connected_at = NOW(), updated_at = NOW()
-                WHERE id = $1
-                "#,
-                &[&id],
-            )
-            .await?;
+        match self.backend {
+            DbBackend::SQLite => {
+                sqlx::query(
+                    "UPDATE sessions SET last_connected_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+                )
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+            _ => {
+                sqlx::query(
+                    "UPDATE sessions SET last_connected_at = NOW(), updated_at = NOW() WHERE id = ?",
+                )
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
 
         Ok(())
     }
 
     pub async fn delete_session(&self, id: &str) -> anyhow::Result<bool> {
-        let client = self.pool.get().await?;
-
-        let result = client
-            .execute("DELETE FROM sessions WHERE id = $1", &[&id])
+        let result = sqlx::query("DELETE FROM sessions WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
             .await?;
 
-        Ok(result > 0)
+        Ok(result.rows_affected() > 0)
     }
 
     pub async fn create_webhook(
@@ -145,30 +188,26 @@ impl SessionManager {
         session_id: &str,
         config: &WebhookConfig,
     ) -> anyhow::Result<()> {
-        let client = self.pool.get().await?;
-
-        let events: Vec<String> = config
+        let events_str: String = config
             .events
             .iter()
             .map(|e| e.as_str().to_string())
-            .collect();
+            .collect::<Vec<_>>()
+            .join(",");
 
-        client
-            .execute(
-                r#"
-                INSERT INTO webhooks (id, session_id, url, events, secret, enabled)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                "#,
-                &[
-                    &id,
-                    &session_id,
-                    &config.url,
-                    &events,
-                    &config.secret,
-                    &config.enabled,
-                ],
-            )
-            .await?;
+        let enabled_val: i32 = if config.enabled { 1 } else { 0 };
+
+        sqlx::query(
+            "INSERT INTO webhooks (id, session_id, url, events, secret, enabled) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(session_id)
+        .bind(&config.url)
+        .bind(&events_str)
+        .bind(&config.secret)
+        .bind(enabled_val)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -178,13 +217,9 @@ impl SessionManager {
         &self,
         session_id: &str,
     ) -> anyhow::Result<Vec<(String, WebhookConfig)>> {
-        let client = self.pool.get().await?;
-
-        let rows = client
-            .query(
-                "SELECT * FROM webhooks WHERE session_id = $1",
-                &[&session_id],
-            )
+        let rows: Vec<AnyRow> = sqlx::query("SELECT * FROM webhooks WHERE session_id = ?")
+            .bind(session_id)
+            .fetch_all(&self.pool)
             .await?;
 
         Ok(rows
@@ -192,13 +227,14 @@ impl SessionManager {
             .map(|r| {
                 let id: String = r.get("id");
                 let url: String = r.get("url");
-                let events_raw: Vec<String> = r.get("events");
-                let secret: Option<String> = r.get("secret");
-                let enabled: bool = r.get("enabled");
+                let events_raw: String = r.get("events");
+                let secret: Option<String> = r.try_get("secret").ok().flatten();
+                let enabled: bool = r.try_get::<bool, _>("enabled").unwrap_or(true);
 
                 let events: Vec<WebhookEvent> = events_raw
-                    .iter()
-                    .filter_map(|s| WebhookEvent::from_str(s))
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .filter_map(|s| WebhookEvent::from_str(s.trim()))
                     .collect();
 
                 (
@@ -215,31 +251,77 @@ impl SessionManager {
     }
 
     pub async fn delete_webhook(&self, id: &str) -> anyhow::Result<bool> {
-        let client = self.pool.get().await?;
-
-        let result = client
-            .execute("DELETE FROM webhooks WHERE id = $1", &[&id])
+        let result = sqlx::query("DELETE FROM webhooks WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
             .await?;
 
-        Ok(result > 0)
+        Ok(result.rows_affected() > 0)
     }
 
-    fn row_to_session_info(&self, row: &tokio_postgres::Row) -> SessionInfo {
-        let created_at: DateTime<Utc> = row.get("created_at");
-        let updated_at: DateTime<Utc> = row.get("updated_at");
-        let last_connected_at: Option<DateTime<Utc>> = row.get("last_connected_at");
+    fn row_to_session_info(&self, row: &AnyRow) -> SessionInfo {
         let status_str: String = row.get("status");
+
+        // Handle timestamps - different backends store differently
+        let created_at = self.get_timestamp(row, "created_at").unwrap_or(0);
+        let updated_at = self.get_timestamp(row, "updated_at").unwrap_or(0);
+        let last_connected_at = self.get_timestamp(row, "last_connected_at");
+
+        // Handle bool - SQLite uses integer
+        let is_logged_in: bool = row.try_get::<bool, _>("is_logged_in").unwrap_or_else(|_| {
+            row.try_get::<i32, _>("is_logged_in")
+                .map(|v| v != 0)
+                .unwrap_or(false)
+        });
 
         SessionInfo {
             id: row.get("id"),
-            name: row.get("name"),
-            phone_number: row.get("phone_number"),
-            push_name: row.get("push_name"),
+            name: row.try_get("name").ok(),
+            phone_number: row.try_get("phone_number").ok().flatten(),
+            push_name: row.try_get("push_name").ok().flatten(),
             status: SessionStatus::from_str(&status_str),
-            created_at: created_at.timestamp(),
-            updated_at: updated_at.timestamp(),
-            last_connected_at: last_connected_at.map(|t| t.timestamp()),
-            is_logged_in: row.get("is_logged_in"),
+            created_at,
+            updated_at,
+            last_connected_at,
+            is_logged_in,
         }
+    }
+
+    fn get_timestamp(&self, row: &AnyRow, col: &str) -> Option<i64> {
+        use sqlx::ValueRef;
+
+        // Check if column is null first
+        let raw = row.try_get_raw(col).ok()?;
+        if raw.is_null() {
+            return None;
+        }
+
+        // Try string representation (works for all backends via Display/text)
+        if let Ok(s) = row.try_get::<String, _>(col) {
+            // Try various datetime formats
+            for fmt in &[
+                "%Y-%m-%d %H:%M:%S%.f%:z", // Postgres TIMESTAMPTZ
+                "%Y-%m-%dT%H:%M:%S%.f%:z", // ISO 8601 with tz
+                "%Y-%m-%d %H:%M:%S%.f",    // MySQL/SQLite with fractional
+                "%Y-%m-%d %H:%M:%S",       // Basic datetime
+                "%Y-%m-%dT%H:%M:%S%.f",    // ISO 8601 no tz
+                "%Y-%m-%dT%H:%M:%S",       // ISO 8601 basic
+            ] {
+                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, fmt) {
+                    return Some(dt.and_utc().timestamp());
+                }
+                if let Ok(dt) = chrono::DateTime::parse_from_str(&s, fmt) {
+                    return Some(dt.timestamp());
+                }
+            }
+            return None;
+        }
+
+        // Try i64 directly (epoch)
+        if let Ok(ts) = row.try_get::<i64, _>(col) {
+            return Some(ts);
+        }
+
+        None
     }
 }
