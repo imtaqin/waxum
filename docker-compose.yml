@@ -1,24 +1,4 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: wagateway-postgres
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   nats:
     image: nats:2.10-alpine
     container_name: wagateway-nats
@@ -45,13 +25,10 @@ services:
     ports:
       - "3451:3451"
     depends_on:
-      postgres:
-        condition: service_healthy
       nats:
         condition: service_started
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   whatsapp_sessions:
   nats_data:
