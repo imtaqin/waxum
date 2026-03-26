@@ -59,30 +59,27 @@ impl SessionManager {
     }
 
     pub async fn get_session(&self, id: &str) -> anyhow::Result<Option<SessionInfo>> {
-        let row: Option<AnyRow> =
-            sqlx::query("SELECT * FROM sessions WHERE id = ?")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<AnyRow> = sqlx::query("SELECT * FROM sessions WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| self.row_to_session_info(&r)))
     }
 
     pub async fn get_storage_path(&self, id: &str) -> anyhow::Result<Option<String>> {
-        let row: Option<AnyRow> =
-            sqlx::query("SELECT storage_path FROM sessions WHERE id = ?")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<AnyRow> = sqlx::query("SELECT storage_path FROM sessions WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| r.get::<String, _>("storage_path")))
     }
 
     pub async fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
-        let rows: Vec<AnyRow> =
-            sqlx::query("SELECT * FROM sessions ORDER BY created_at DESC")
-                .fetch_all(&self.pool)
-                .await?;
+        let rows: Vec<AnyRow> = sqlx::query("SELECT * FROM sessions ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(rows.iter().map(|r| self.row_to_session_info(r)).collect())
     }
@@ -220,11 +217,10 @@ impl SessionManager {
         &self,
         session_id: &str,
     ) -> anyhow::Result<Vec<(String, WebhookConfig)>> {
-        let rows: Vec<AnyRow> =
-            sqlx::query("SELECT * FROM webhooks WHERE session_id = ?")
-                .bind(session_id)
-                .fetch_all(&self.pool)
-                .await?;
+        let rows: Vec<AnyRow> = sqlx::query("SELECT * FROM webhooks WHERE session_id = ?")
+            .bind(session_id)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(rows
             .iter()
@@ -272,12 +268,11 @@ impl SessionManager {
         let last_connected_at = self.get_timestamp(row, "last_connected_at");
 
         // Handle bool - SQLite uses integer
-        let is_logged_in: bool = row.try_get::<bool, _>("is_logged_in")
-            .unwrap_or_else(|_| {
-                row.try_get::<i32, _>("is_logged_in")
-                    .map(|v| v != 0)
-                    .unwrap_or(false)
-            });
+        let is_logged_in: bool = row.try_get::<bool, _>("is_logged_in").unwrap_or_else(|_| {
+            row.try_get::<i32, _>("is_logged_in")
+                .map(|v| v != 0)
+                .unwrap_or(false)
+        });
 
         SessionInfo {
             id: row.get("id"),
@@ -308,7 +303,7 @@ impl SessionManager {
                 "%Y-%m-%d %H:%M:%S%.f%:z", // Postgres TIMESTAMPTZ
                 "%Y-%m-%dT%H:%M:%S%.f%:z", // ISO 8601 with tz
                 "%Y-%m-%d %H:%M:%S%.f",    // MySQL/SQLite with fractional
-                "%Y-%m-%d %H:%M:%S",        // Basic datetime
+                "%Y-%m-%d %H:%M:%S",       // Basic datetime
                 "%Y-%m-%dT%H:%M:%S%.f",    // ISO 8601 no tz
                 "%Y-%m-%dT%H:%M:%S",       // ISO 8601 basic
             ] {
