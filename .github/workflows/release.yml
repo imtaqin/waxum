@@ -206,9 +206,12 @@ jobs:
           sha256sum *.tar.gz *.zip 2>/dev/null > checksums.txt || true
           cat checksums.txt
 
-      - name: Generate changelog
-        id: changelog
+      - name: Generate release body
+        id: body
         run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          IMAGE="${{ env.IMAGE_NAME }}"
+
           # Get commits since last tag
           PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
           if [ -n "$PREV_TAG" ]; then
@@ -216,8 +219,43 @@ jobs:
           else
             CHANGES=$(git log --pretty=format:"- %s" --no-merges -20)
           fi
-          # Write to file for multi-line support
-          echo "$CHANGES" > /tmp/changelog.txt
+
+          cat > /tmp/release-body.md << ENDOFBODY
+          ## What's Changed
+
+          ${CHANGES}
+
+          ## Installation
+
+          ### Docker
+          \`\`\`bash
+          docker pull ${IMAGE}:${VERSION}
+          \`\`\`
+
+          ### Binary Downloads
+
+          | Platform | Architecture | Download |
+          |----------|--------------|----------|
+          | Linux | x86_64 | \`wa-rs-${VERSION}-linux-amd64.tar.gz\` |
+          | Linux | ARM64 | \`wa-rs-${VERSION}-linux-arm64.tar.gz\` |
+          | Windows | x86_64 | \`wa-rs-${VERSION}-windows-amd64.zip\` |
+
+          ### Database Support
+          Supports PostgreSQL, MySQL, and SQLite. Set \`DATABASE_URL\` in your \`.env\`:
+          \`\`\`bash
+          # PostgreSQL
+          DATABASE_URL=postgres://user:pass@localhost:5432/wagateway
+          # MySQL
+          DATABASE_URL=mysql://user:pass@localhost:3306/wagateway
+          # SQLite
+          DATABASE_URL=sqlite://wa-rs.db
+          \`\`\`
+
+          ## Verify Checksums
+          \`\`\`bash
+          sha256sum -c checksums.txt
+          \`\`\`
+          ENDOFBODY
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -230,38 +268,4 @@ jobs:
             release/*.tar.gz
             release/*.zip
             release/checksums.txt
-          body: |
-            ## What's Changed
-
-            $(cat /tmp/changelog.txt)
-
-            ## Installation
-
-            ### Docker
-            ```bash
-            docker pull ${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
-            ```
-
-            ### Binary Downloads
-
-            | Platform | Architecture | Download |
-            |----------|--------------|----------|
-            | Linux | x86_64 | `wa-rs-${{ needs.version.outputs.version }}-linux-amd64.tar.gz` |
-            | Linux | ARM64 | `wa-rs-${{ needs.version.outputs.version }}-linux-arm64.tar.gz` |
-            | Windows | x86_64 | `wa-rs-${{ needs.version.outputs.version }}-windows-amd64.zip` |
-
-            ### Database Support
-            Supports PostgreSQL, MySQL, and SQLite. Set `DATABASE_URL` in your `.env`:
-            ```bash
-            # PostgreSQL
-            DATABASE_URL=postgres://user:pass@localhost:5432/wagateway
-            # MySQL
-            DATABASE_URL=mysql://user:pass@localhost:3306/wagateway
-            # SQLite
-            DATABASE_URL=sqlite://wa-rs.db
-            ```
-
-            ## Verify Checksums
-            ```bash
-            sha256sum -c checksums.txt
-            ```
+          body_path: /tmp/release-body.md
