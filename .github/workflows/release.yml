@@ -220,42 +220,42 @@ jobs:
             CHANGES=$(git log --pretty=format:"- %s" --no-merges -20)
           fi
 
-          cat > /tmp/release-body.md << ENDOFBODY
-          ## What's Changed
-
-          ${CHANGES}
-
-          ## Installation
-
-          ### Docker
-          \`\`\`bash
-          docker pull ${IMAGE}:${VERSION}
-          \`\`\`
-
-          ### Binary Downloads
-
-          | Platform | Architecture | Download |
-          |----------|--------------|----------|
-          | Linux | x86_64 | \`wa-rs-${VERSION}-linux-amd64.tar.gz\` |
-          | Linux | ARM64 | \`wa-rs-${VERSION}-linux-arm64.tar.gz\` |
-          | Windows | x86_64 | \`wa-rs-${VERSION}-windows-amd64.zip\` |
-
-          ### Database Support
-          Supports PostgreSQL, MySQL, and SQLite. Set \`DATABASE_URL\` in your \`.env\`:
-          \`\`\`bash
-          # PostgreSQL
-          DATABASE_URL=postgres://user:pass@localhost:5432/wagateway
-          # MySQL
-          DATABASE_URL=mysql://user:pass@localhost:3306/wagateway
-          # SQLite
-          DATABASE_URL=sqlite://wa-rs.db
-          \`\`\`
-
-          ## Verify Checksums
-          \`\`\`bash
-          sha256sum -c checksums.txt
-          \`\`\`
-          ENDOFBODY
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "${CHANGES}"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "### Docker"
+            echo '```bash'
+            echo "docker pull ${IMAGE}:${VERSION}"
+            echo '```'
+            echo ""
+            echo "### Binary Downloads"
+            echo ""
+            echo "| Platform | Architecture | Download |"
+            echo "|----------|--------------|----------|"
+            echo "| Linux | x86_64 | \`wa-rs-${VERSION}-linux-amd64.tar.gz\` |"
+            echo "| Linux | ARM64 | \`wa-rs-${VERSION}-linux-arm64.tar.gz\` |"
+            echo "| Windows | x86_64 | \`wa-rs-${VERSION}-windows-amd64.zip\` |"
+            echo ""
+            echo "### Database Support"
+            echo "Supports PostgreSQL, MySQL, and SQLite. Set \`DATABASE_URL\` in your \`.env\`:"
+            echo '```bash'
+            echo "# PostgreSQL"
+            echo "DATABASE_URL=postgres://user:pass@localhost:5432/wagateway"
+            echo "# MySQL"
+            echo "DATABASE_URL=mysql://user:pass@localhost:3306/wagateway"
+            echo "# SQLite"
+            echo "DATABASE_URL=sqlite://wa-rs.db"
+            echo '```'
+            echo ""
+            echo "## Verify Checksums"
+            echo '```bash'
+            echo "sha256sum -c checksums.txt"
+            echo '```'
+          } > /tmp/release-body.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
