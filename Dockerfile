@@ -55,13 +55,7 @@ COPY --from=rust-builder /app/target/release/wa-rs /app/wa-rs
 # Create directory for WhatsApp session storage
 RUN mkdir -p /app/whatsapp_sessions
 
-# Environment variables
-ENV POSTGRES_HOST=postgres
-ENV POSTGRES_PORT=5432
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=postgres
-ENV POSTGRES_DB=wagateway
-ENV JWT_SECRET=change-this-in-production
+# Environment variables (override via .env or docker-compose)
 ENV WHATSAPP_STORAGE_PATH=/app/whatsapp_sessions
 ENV RUST_LOG=wa_rs=info,tower_http=info
 
