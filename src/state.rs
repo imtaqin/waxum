@@ -1,6 +1,6 @@
 use dashmap::DashMap;
-use deadpool_postgres::Pool;
 use parking_lot::RwLock;
+use sqlx::AnyPool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
@@ -98,7 +98,7 @@ struct AppStateInner {
 }
 
 impl AppState {
-    pub async fn new(pool: Pool, nats: Option<NatsManager>) -> Self {
+    pub async fn new(pool: AnyPool, nats: Option<NatsManager>) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
             .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
 

@@ -1,8 +1,6 @@
 use anyhow::Result;
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
-use tokio_postgres::NoTls;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -351,37 +349,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting WhatsApp REST API server...");
 
-    let db_host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
-    let db_port: u16 = std::env::var("POSTGRES_PORT")
-        .unwrap_or_else(|_| "5432".to_string())
-        .parse()
-        .unwrap_or(5432);
-    let db_user = std::env::var("POSTGRES_USER").unwrap_or_else(|_| "postgres".to_string());
-    let db_password = std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
-    let db_name = std::env::var("POSTGRES_DB").unwrap_or_else(|_| "wagateway".to_string());
-
-    tracing::info!(
-        "Connecting to PostgreSQL at {}:{}/{}",
-        db_host,
-        db_port,
-        db_name
-    );
-
-    let mut pg_config = tokio_postgres::Config::new();
-    pg_config.host(&db_host);
-    pg_config.port(db_port);
-    pg_config.user(&db_user);
-    pg_config.password(&db_password);
-    pg_config.dbname(&db_name);
-
-    let mgr_config = ManagerConfig {
-        recycling_method: RecyclingMethod::Fast,
-    };
-    let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
-    let pool = Pool::builder(mgr).max_size(16).build()?;
-
-    let _ = pool.get().await?;
-    tracing::info!("Connected to PostgreSQL");
+    let pool = db::create_pool().await?;
 
     db::schema::init_schema(&pool).await?;
     tracing::info!("Database schema initialized");
