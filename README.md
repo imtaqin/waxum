@@ -15,8 +15,7 @@
 
 <p align="center">
   <a href="https://wa-rs.imtaqin.id/">Documentation</a> &bull;
-  <a href="https://wa-rs.imtaqin.id/api/nats">NATS JetStream</a> &bull;
-  <a href="https://saweria.co/fdciabdul">Support</a>
+  <a href="https://wa-rs.imtaqin.id/api/nats">NATS JetStream</a>
 </p>
 
 ## Tech Stack
@@ -148,14 +147,6 @@ See the [NATS documentation](https://wa-rs.imtaqin.id/api/nats) for all 16 suppo
 ## Documentation
 
 Full documentation: **[https://wa-rs.imtaqin.id/](https://wa-rs.imtaqin.id/)**
-
-## Support
-
-If WA-RS helps your project, consider supporting the development:
-
-- **Saweria**: [https://saweria.co/fdciabdul](https://saweria.co/fdciabdul)
-- **BNI**: `1882264360` (A/N: Abdul Muttaqin)
-- **Bank Mandiri**: `1330028497212` (A/N: Anisa Septiani Timur)
 
 ## License
 
