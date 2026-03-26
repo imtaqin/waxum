@@ -633,7 +633,7 @@ pub async fn send_buttons(
 
     let header = request
         .header_text
-        .map(|t| waproto::whatsapp::message::buttons_message::Header::Text(t));
+        .map(waproto::whatsapp::message::buttons_message::Header::Text);
 
     let message = waproto::whatsapp::Message {
         buttons_message: Some(Box::new(waproto::whatsapp::message::ButtonsMessage {
