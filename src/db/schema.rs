@@ -107,7 +107,7 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             id VARCHAR(255) PRIMARY KEY,
             session_id VARCHAR(255) NOT NULL,
             url TEXT NOT NULL,
-            events TEXT NOT NULL DEFAULT '',
+            events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
             enabled TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
