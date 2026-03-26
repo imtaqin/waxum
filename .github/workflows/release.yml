@@ -45,7 +45,7 @@ jobs:
 
           # Check if tag already exists
           if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists"
+            echo "Tag $TAG already exists, skipping release"
             echo "should_release=false" >> $GITHUB_OUTPUT
           else
             echo "should_release=true" >> $GITHUB_OUTPUT
@@ -55,9 +55,26 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}, Tag: ${TAG}"
 
+  # Create git tag
+  tag:
+    needs: version
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.version.outputs.tag }}" -m "Release ${{ needs.version.outputs.tag }}"
+          git push origin "${{ needs.version.outputs.tag }}"
+
   # Build binaries for multiple platforms
   build:
-    needs: version
+    needs: [version, tag]
     if: needs.version.outputs.should_release == 'true'
     strategy:
       matrix:
@@ -126,11 +143,12 @@ jobs:
           name: wa-rs-${{ matrix.name }}
           path: dist/*
 
-  # Build and push Docker images
+  # Build and push Docker images (optional — won't block release)
   docker:
-    needs: version
+    needs: [version, tag]
     if: needs.version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -158,15 +176,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Create GitHub release
+  # Create GitHub Release with artifacts
   release:
-    needs: [version, build, docker]
+    needs: [version, build]
     if: needs.version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -186,26 +206,43 @@ jobs:
           sha256sum *.tar.gz *.zip 2>/dev/null > checksums.txt || true
           cat checksums.txt
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges -20)
+          fi
+          # Write to file for multi-line support
+          echo "$CHANGES" > /tmp/changelog.txt
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          name: WA-RS ${{ needs.version.outputs.version }}
+          name: WA-RS v${{ needs.version.outputs.version }}
           draft: false
           prerelease: false
-          generate_release_notes: true
           files: |
             release/*.tar.gz
             release/*.zip
             release/checksums.txt
           body: |
-            ## Docker
+            ## What's Changed
 
+            $(cat /tmp/changelog.txt)
+
+            ## Installation
+
+            ### Docker
             ```bash
             docker pull ${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
             ```
 
-            ## Binary Downloads
+            ### Binary Downloads
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
@@ -213,8 +250,18 @@ jobs:
             | Linux | ARM64 | `wa-rs-${{ needs.version.outputs.version }}-linux-arm64.tar.gz` |
             | Windows | x86_64 | `wa-rs-${{ needs.version.outputs.version }}-windows-amd64.zip` |
 
-            ## Verify Checksums
+            ### Database Support
+            Supports PostgreSQL, MySQL, and SQLite. Set `DATABASE_URL` in your `.env`:
+            ```bash
+            # PostgreSQL
+            DATABASE_URL=postgres://user:pass@localhost:5432/wagateway
+            # MySQL
+            DATABASE_URL=mysql://user:pass@localhost:3306/wagateway
+            # SQLite
+            DATABASE_URL=sqlite://wa-rs.db
+            ```
 
+            ## Verify Checksums
             ```bash
             sha256sum -c checksums.txt
             ```
