@@ -324,10 +324,71 @@ impl utoipa::Modify for SecurityAddon {
     }
 }
 
+fn parse_cli_args(args: &[String]) {
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--token" | "-t" => {
+                if i + 1 < args.len() {
+                    std::env::set_var("SUPERADMIN_TOKEN", &args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --token requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--db" | "-d" => {
+                if i + 1 < args.len() {
+                    std::env::set_var("DATABASE_URL", &args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --db requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--port" | "-p" => {
+                if i + 1 < args.len() {
+                    std::env::set_var("PORT", &args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --port requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--help" | "-h" => {
+                println!("wa-rs - WhatsApp REST API Gateway");
+                println!();
+                println!("Usage: wa-rs [OPTIONS]");
+                println!();
+                println!("Options:");
+                println!("  -t, --token <TOKEN>    Set superadmin token");
+                println!("  -d, --db <URL>         Set database URL (postgres/mysql/sqlite)");
+                println!("  -p, --port <PORT>      Set server port (default: 3451)");
+                println!("  -h, --help             Show this help");
+                println!();
+                println!("Examples:");
+                println!("  wa-rs --token mysecrettoken");
+                println!("  wa-rs --db sqlite://wa-rs.db --token mytoken");
+                println!("  wa-rs --db mysql://user:pass@localhost/wars --port 8080");
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!("Unknown argument: {}", args[i]);
+                eprintln!("Use --help for usage information");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file
     dotenvy::dotenv().ok();
+
+    // Parse CLI arguments
+    let args: Vec<String> = std::env::args().collect();
+    parse_cli_args(&args);
 
     tracing_subscriber::registry()
         .with(
@@ -432,7 +493,11 @@ async fn main() -> Result<()> {
         .layer(cors)
         .with_state(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3451));
+    let port: u16 = std::env::var("PORT")
+        .unwrap_or_else(|_| "3451".to_string())
+        .parse()
+        .unwrap_or(3451);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("\x1b[32m  Server listening on:\x1b[0m");
     println!(
         "    \x1b[90m→\x1b[0m API:       \x1b[94mhttp://{}/api/v1\x1b[0m",
