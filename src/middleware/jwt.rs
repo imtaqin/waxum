@@ -103,6 +103,13 @@ pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response
         }
     };
 
+    // Check if token matches SUPERADMIN_TOKEN (plain string token)
+    if let Ok(superadmin_token) = std::env::var("SUPERADMIN_TOKEN") {
+        if !superadmin_token.is_empty() && token == superadmin_token {
+            return next.run(request).await;
+        }
+    }
+
     match jwt_auth.validate_token(token) {
         Ok(claims) => {
             if !JwtAuth::is_superadmin(&claims) {
