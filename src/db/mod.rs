@@ -15,8 +15,8 @@ pub async fn create_pool() -> anyhow::Result<AnyPool> {
 
     let database_url = if let Ok(url) = std::env::var("DATABASE_URL") {
         url
-    } else {
-        // Fallback: build URL from legacy POSTGRES_* vars
+    } else if std::env::var("POSTGRES_HOST").is_ok() || std::env::var("POSTGRES_USER").is_ok() {
+        // Legacy fallback: only if POSTGRES_* vars are explicitly set
         let host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
         let port = std::env::var("POSTGRES_PORT").unwrap_or_else(|_| "5432".to_string());
         let user = std::env::var("POSTGRES_USER").unwrap_or_else(|_| "postgres".to_string());
@@ -25,6 +25,10 @@ pub async fn create_pool() -> anyhow::Result<AnyPool> {
         let db = std::env::var("POSTGRES_DB").unwrap_or_else(|_| "wagateway".to_string());
 
         format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, db)
+    } else {
+        // Default: SQLite, fully local, no external services needed
+        tracing::info!("No DATABASE_URL set, using local SQLite database");
+        "sqlite://wa-rs.db".to_string()
     };
 
     let backend_name = if database_url.starts_with("postgres") {
