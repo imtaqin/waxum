@@ -44,14 +44,31 @@ impl SessionManager {
     ) -> anyhow::Result<SessionInfo> {
         let name_str = name.unwrap_or("");
 
-        sqlx::query(
-            "INSERT INTO sessions (id, name, storage_path, status, is_logged_in) VALUES (?, ?, ?, 'disconnected', 0)",
-        )
-        .bind(id)
-        .bind(name_str)
-        .bind(storage_path)
-        .execute(&self.pool)
-        .await?;
+        match self.backend {
+            DbBackend::MySQL => {
+                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                sqlx::query(
+                    "INSERT INTO sessions (id, name, storage_path, status, is_logged_in, created_at, updated_at) VALUES (?, ?, ?, 'disconnected', 0, ?, ?)",
+                )
+                .bind(id)
+                .bind(name_str)
+                .bind(storage_path)
+                .bind(&now)
+                .bind(&now)
+                .execute(&self.pool)
+                .await?;
+            }
+            _ => {
+                sqlx::query(
+                    "INSERT INTO sessions (id, name, storage_path, status, is_logged_in) VALUES (?, ?, ?, 'disconnected', 0)",
+                )
+                .bind(id)
+                .bind(name_str)
+                .bind(storage_path)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
 
         // Fetch back
         let session = self.get_session(id).await?;

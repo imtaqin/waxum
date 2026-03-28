@@ -85,14 +85,16 @@ async fn init_postgres(pool: &AnyPool) -> anyhow::Result<()> {
 }
 
 async fn migrate_mysql(pool: &AnyPool) -> anyhow::Result<()> {
-    // SQLx Any driver doesn't support TINYINT or TIMESTAMP — migrate to INT/DATETIME
+    // SQLx Any driver doesn't support TINYINT, TIMESTAMP, or DATETIME — use INT/VARCHAR
     let migrations = [
         "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
-        "ALTER TABLE sessions MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        "ALTER TABLE sessions MODIFY COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-        "ALTER TABLE sessions MODIFY COLUMN last_connected_at DATETIME NULL",
+        "ALTER TABLE sessions MODIFY COLUMN storage_path VARCHAR(500) NOT NULL",
+        "ALTER TABLE sessions MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        "ALTER TABLE sessions MODIFY COLUMN updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        "ALTER TABLE sessions MODIFY COLUMN last_connected_at VARCHAR(30) NULL",
         "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
-        "ALTER TABLE webhooks MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE webhooks MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        "ALTER TABLE webhooks MODIFY COLUMN url VARCHAR(2000) NOT NULL",
     ];
     for sql in &migrations {
         let _ = sqlx::query(sql).execute(pool).await;
@@ -106,14 +108,14 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
         CREATE TABLE IF NOT EXISTS sessions (
             id VARCHAR(255) PRIMARY KEY,
             name VARCHAR(255),
-            storage_path TEXT NOT NULL,
+            storage_path VARCHAR(500) NOT NULL,
             phone_number VARCHAR(50),
             push_name VARCHAR(255),
             status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
             is_logged_in INT NOT NULL DEFAULT 0,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            last_connected_at DATETIME NULL
+            created_at VARCHAR(30) NOT NULL,
+            updated_at VARCHAR(30) NOT NULL,
+            last_connected_at VARCHAR(30) NULL
         )
         "#,
     )
@@ -125,11 +127,11 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
         CREATE TABLE IF NOT EXISTS webhooks (
             id VARCHAR(255) PRIMARY KEY,
             session_id VARCHAR(255) NOT NULL,
-            url TEXT NOT NULL,
+            url VARCHAR(2000) NOT NULL,
             events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
             enabled INT NOT NULL DEFAULT 1,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at VARCHAR(30) NOT NULL,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
         )
