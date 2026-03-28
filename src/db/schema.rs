@@ -85,13 +85,18 @@ async fn init_postgres(pool: &AnyPool) -> anyhow::Result<()> {
 }
 
 async fn migrate_mysql(pool: &AnyPool) -> anyhow::Result<()> {
-    // Migrate TINYINT(1) to INT — SQLx Any driver doesn't support TINYINT
-    let _ = sqlx::query("ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0")
-        .execute(pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1")
-        .execute(pool)
-        .await;
+    // SQLx Any driver doesn't support TINYINT or TIMESTAMP — migrate to INT/DATETIME
+    let migrations = [
+        "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
+        "ALTER TABLE sessions MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE sessions MODIFY COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "ALTER TABLE sessions MODIFY COLUMN last_connected_at DATETIME NULL",
+        "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
+        "ALTER TABLE webhooks MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ];
+    for sql in &migrations {
+        let _ = sqlx::query(sql).execute(pool).await;
+    }
     Ok(())
 }
 
@@ -106,9 +111,9 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             push_name VARCHAR(255),
             status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
             is_logged_in INT NOT NULL DEFAULT 0,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            last_connected_at TIMESTAMP NULL
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            last_connected_at DATETIME NULL
         )
         "#,
     )
@@ -124,7 +129,7 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
             enabled INT NOT NULL DEFAULT 1,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
         )
