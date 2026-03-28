@@ -5,7 +5,10 @@ pub async fn init_schema(pool: &AnyPool) -> anyhow::Result<()> {
 
     match backend {
         DbBackend::Postgres => init_postgres(pool).await,
-        DbBackend::MySQL => init_mysql(pool).await,
+        DbBackend::MySQL => {
+            init_mysql(pool).await?;
+            migrate_mysql(pool).await
+        }
         DbBackend::SQLite => init_sqlite(pool).await,
     }
 }
@@ -81,6 +84,17 @@ async fn init_postgres(pool: &AnyPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn migrate_mysql(pool: &AnyPool) -> anyhow::Result<()> {
+    // Migrate TINYINT(1) to INT — SQLx Any driver doesn't support TINYINT
+    let _ = sqlx::query("ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1")
+        .execute(pool)
+        .await;
+    Ok(())
+}
+
 async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
     sqlx::query(
         r#"
@@ -91,7 +105,7 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             phone_number VARCHAR(50),
             push_name VARCHAR(255),
             status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
-            is_logged_in TINYINT(1) NOT NULL DEFAULT 0,
+            is_logged_in INT NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             last_connected_at TIMESTAMP NULL
@@ -109,7 +123,7 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             url TEXT NOT NULL,
             events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
-            enabled TINYINT(1) NOT NULL DEFAULT 1,
+            enabled INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
