@@ -2,7 +2,65 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
-## [0.3.0] - 2026-02-27
+## [0.3.0] - 2026-04-04
+
+### Breaking Changes
+- SQLite is no longer supported as metadata database (use PostgreSQL or MySQL)
+- Replaced `sqlx` with native `tokio-postgres` + `mysql_async` drivers
+
+### New Features
+
+#### Multi-Database Support
+- [x] PostgreSQL support via `tokio-postgres` + `deadpool-postgres`
+- [x] MySQL support via `mysql_async`
+- [x] `DATABASE_URL` env var — auto-detects backend from URL prefix
+- [x] Legacy `POSTGRES_*` and `MYSQL_*` env vars as fallback
+- [x] Auto-migration for MySQL column types on startup
+
+#### CLI Arguments
+- [x] `--token` / `-t` — set superadmin token from command line
+- [x] `--db` / `-d` — set database URL from command line
+- [x] `--port` / `-p` — set server port from command line
+- [x] `--help` / `-h` — show usage help
+
+#### Authentication
+- [x] `SUPERADMIN_TOKEN` now works as plain string (no JWT required)
+- [x] JWT validation still supported as fallback
+- [x] Configurable server port via `PORT` env var
+
+#### whatsapp-rust Upgrade (v0.2.0 → v0.5.0)
+- [x] Newsletter/channel full CRUD and messaging support
+- [x] Community support — full CRUD, subgroup management
+- [x] Ephemeral message support (send and receive)
+- [x] Sticker pack sending support
+- [x] Album message support
+- [x] Poll creation, voting, and vote decryption
+- [x] Group invite V4 accept
+- [x] Client logout API
+- [x] Pin/unpin messages
+- [x] Mark chat as read, delete chat, delete message for me
+- [x] Presence unsubscribe and re-subscribe on reconnect
+- [x] Media host failover and resumable upload
+- [x] Better reconnection handling and keepalive
+- [x] Signal protocol improvements and session caching
+- [x] Performance optimizations (reduced allocations, SIMD support)
+- [x] Stable Rust support for SIMD fallback
+- [x] 150+ upstream bug fixes and improvements
+
+#### Docker
+- [x] Removed hardcoded credentials from Dockerfile and docker-compose
+- [x] PostgreSQL service optional (separate compose file)
+- [x] All config via `.env` file
+
+#### CI/CD
+- [x] Release workflow auto-creates git tags
+- [x] Docker build optional (won't block release)
+- [x] Auto-generated changelog in release notes
+- [x] Proper release body rendering
+
+---
+
+## [0.2.0] - 2026-02-27
 
 ### New Features
 
@@ -217,25 +275,21 @@ All notable changes to **wa-rs** will be documented in this file.
 
 ---
 
-## TODO - Remaining features from whatsapp-rust
+## TODO - Remaining features
 
 ### Message Types (not yet exposed via REST)
-- [ ] Bot messages (BotDocument, BotFeedback, BotPromotion) — FutureProofMessage wrapper, complex metadata
-- [ ] AI Rich Response message — complex sub-message types (grid images, code, tables, maps, LaTeX)
-- [ ] Sticker Pack message — requires media upload/encryption for pack data
-- [ ] Secret Encrypted message — requires encryption key handling
-- [ ] Marketing message — sync action type, not a direct sendable message
-- [ ] Poll Results snapshot — read-only aggregated poll results
+- [ ] Bot messages (BotDocument, BotFeedback, BotPromotion)
+- [ ] AI Rich Response message
+- [ ] Secret Encrypted message
+- [ ] Marketing message
 
-### Privacy Settings
-- [ ] Set/update individual privacy settings — not available in whatsapp-rust library (read-only)
-
-### Sync Features (handled internally by whatsapp-rust)
-- [ ] App state sync REST endpoints — whatsapp-rust handles internally, could expose state queries
-- [ ] Dirty bits tracking REST endpoints — `clean_dirty_bits()` available but mostly internal
+### New in whatsapp-rust v0.5.0 (not yet exposed)
+- [ ] Newsletter/channel CRUD REST endpoints
+- [ ] Community CRUD REST endpoints
+- [ ] Privacy settings update (now type-safe enums)
+- [ ] Client logout endpoint
+- [ ] Mark chat as read / delete chat endpoints
 
 ### Architecture Improvements
-- [ ] Pluggable storage backends (currently hardcoded SQLite + PostgreSQL)
 - [ ] Pluggable transport layer
 - [ ] Pluggable HTTP client
-- [ ] Device consistency / code verification — not available in whatsapp-rust library
