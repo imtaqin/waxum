@@ -341,19 +341,42 @@ fn pg_row_to_webhook(row: &tokio_postgres::Row) -> (String, WebhookConfig) {
 
 // === MySQL row mapping ===
 
-fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
-    let status_str: String = row.get("status").unwrap_or_default();
-    let is_logged_in: i32 = row.get("is_logged_in").unwrap_or(0);
+fn my_get_string(row: &mysql_async::Row, col: &str) -> Option<String> {
+    use mysql_async::Value;
+    let idx = row.columns_ref().iter().position(|c| c.name_str() == col)?;
+    match row.as_ref(idx)? {
+        Value::NULL => None,
+        Value::Bytes(b) => Some(String::from_utf8_lossy(b).to_string()),
+        v => Some(format!("{:?}", v)),
+    }
+}
 
-    let created_at: Option<String> = row.get("created_at");
-    let updated_at: Option<String> = row.get("updated_at");
-    let last_connected_at: Option<String> = row.get("last_connected_at");
+fn my_get_int(row: &mysql_async::Row, col: &str) -> i32 {
+    use mysql_async::Value;
+    let idx = match row.columns_ref().iter().position(|c| c.name_str() == col) {
+        Some(i) => i,
+        None => return 0,
+    };
+    match row.as_ref(idx) {
+        Some(Value::Int(i)) => *i as i32,
+        Some(Value::UInt(u)) => *u as i32,
+        _ => 0,
+    }
+}
+
+fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
+    let status_str = my_get_string(row, "status").unwrap_or_else(|| "disconnected".to_string());
+    let is_logged_in = my_get_int(row, "is_logged_in");
+
+    let created_at = my_get_string(row, "created_at");
+    let updated_at = my_get_string(row, "updated_at");
+    let last_connected_at = my_get_string(row, "last_connected_at");
 
     SessionInfo {
-        id: row.get("id").unwrap_or_default(),
-        name: row.get("name"),
-        phone_number: row.get("phone_number"),
-        push_name: row.get("push_name"),
+        id: my_get_string(row, "id").unwrap_or_default(),
+        name: my_get_string(row, "name"),
+        phone_number: my_get_string(row, "phone_number"),
+        push_name: my_get_string(row, "push_name"),
         status: SessionStatus::from_str(&status_str),
         created_at: parse_mysql_timestamp(created_at.as_deref()).unwrap_or(0),
         updated_at: parse_mysql_timestamp(updated_at.as_deref()).unwrap_or(0),
@@ -363,11 +386,11 @@ fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
 }
 
 fn my_row_to_webhook(row: &mysql_async::Row) -> (String, WebhookConfig) {
-    let id: String = row.get("id").unwrap_or_default();
-    let url: String = row.get("url").unwrap_or_default();
-    let events_raw: String = row.get("events").unwrap_or_default();
-    let secret: Option<String> = row.get("secret");
-    let enabled: i32 = row.get("enabled").unwrap_or(1);
+    let id = my_get_string(row, "id").unwrap_or_default();
+    let url = my_get_string(row, "url").unwrap_or_default();
+    let events_raw = my_get_string(row, "events").unwrap_or_default();
+    let secret = my_get_string(row, "secret");
+    let enabled = my_get_int(row, "enabled");
 
     let events: Vec<WebhookEvent> = events_raw
         .split(',')
