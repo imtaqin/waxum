@@ -345,10 +345,9 @@ fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
     let status_str: String = row.get("status").unwrap_or_default();
     let is_logged_in: i32 = row.get("is_logged_in").unwrap_or(0);
 
-    let created_at = parse_mysql_timestamp(row.get::<String, _>("created_at").as_deref());
-    let updated_at = parse_mysql_timestamp(row.get::<String, _>("updated_at").as_deref());
-    let last_connected_at =
-        parse_mysql_timestamp(row.get::<String, _>("last_connected_at").as_deref());
+    let created_at: Option<String> = row.get("created_at");
+    let updated_at: Option<String> = row.get("updated_at");
+    let last_connected_at: Option<String> = row.get("last_connected_at");
 
     SessionInfo {
         id: row.get("id").unwrap_or_default(),
@@ -356,9 +355,9 @@ fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
         phone_number: row.get("phone_number"),
         push_name: row.get("push_name"),
         status: SessionStatus::from_str(&status_str),
-        created_at: created_at.unwrap_or(0),
-        updated_at: updated_at.unwrap_or(0),
-        last_connected_at,
+        created_at: parse_mysql_timestamp(created_at.as_deref()).unwrap_or(0),
+        updated_at: parse_mysql_timestamp(updated_at.as_deref()).unwrap_or(0),
+        last_connected_at: parse_mysql_timestamp(last_connected_at.as_deref()),
         is_logged_in: is_logged_in != 0,
     }
 }
