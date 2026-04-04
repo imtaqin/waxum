@@ -410,7 +410,38 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting WhatsApp REST API server...");
 
-    let pool = db::create_pool().await?;
+    let (database_url, backend) = db::resolve_database_url();
+    let masked = db::mask_url(&database_url);
+    let backend_name = match backend {
+        db::DbBackend::Postgres => "PostgreSQL",
+        db::DbBackend::MySQL => "MySQL",
+    };
+    tracing::info!("Connecting to {} ({})", backend_name, masked);
+
+    let pool = match backend {
+        db::DbBackend::Postgres => {
+            use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod};
+            use tokio_postgres::NoTls;
+
+            // Parse postgres URL to config
+            let pg_config: tokio_postgres::Config = database_url.parse()?;
+            let mgr_config = ManagerConfig {
+                recycling_method: RecyclingMethod::Fast,
+            };
+            let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
+            let pg_pool = deadpool_postgres::Pool::builder(mgr).max_size(16).build()?;
+            let _ = pg_pool.get().await?;
+            db::session::DbPool::Postgres(pg_pool)
+        }
+        db::DbBackend::MySQL => {
+            let opts = mysql_async::Opts::from_url(&database_url)?;
+            let my_pool = mysql_async::Pool::new(opts);
+            // Test connection
+            let _conn = my_pool.get_conn().await?;
+            db::session::DbPool::MySQL(my_pool)
+        }
+    };
+    tracing::info!("Connected to {}", backend_name);
 
     db::schema::init_schema(&pool).await?;
     tracing::info!("Database schema initialized");

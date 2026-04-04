@@ -1,10 +1,10 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use sqlx::AnyPool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
 
+use crate::db::session::DbPool;
 use crate::db::SessionManager;
 use crate::models::sessions::SessionStatus;
 use crate::models::webhooks::WebhookConfig;
@@ -98,7 +98,7 @@ struct AppStateInner {
 }
 
 impl AppState {
-    pub async fn new(pool: AnyPool, nats: Option<NatsManager>) -> Self {
+    pub async fn new(pool: DbPool, nats: Option<NatsManager>) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
             .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
 

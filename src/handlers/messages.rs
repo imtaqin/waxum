@@ -44,6 +44,7 @@ pub async fn send_text(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -80,7 +81,11 @@ pub async fn send_image(
     let (data, mimetype) = get_media_data(&request.image).await?;
 
     let upload = client
-        .upload(data.clone(), wacore::download::MediaType::Image)
+        .upload(
+            data.clone(),
+            wacore::download::MediaType::Image,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
@@ -88,9 +93,9 @@ pub async fn send_image(
         image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
-            media_key: Some(upload.media_key),
-            file_sha256: Some(upload.file_sha256),
-            file_enc_sha256: Some(upload.file_enc_sha256),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             caption: request.caption,
@@ -102,6 +107,7 @@ pub async fn send_image(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -138,7 +144,11 @@ pub async fn send_video(
     let (data, mimetype) = get_media_data(&request.video).await?;
 
     let upload = client
-        .upload(data.clone(), wacore::download::MediaType::Video)
+        .upload(
+            data.clone(),
+            wacore::download::MediaType::Video,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
@@ -146,9 +156,9 @@ pub async fn send_video(
         video_message: Some(Box::new(waproto::whatsapp::message::VideoMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
-            media_key: Some(upload.media_key),
-            file_sha256: Some(upload.file_sha256),
-            file_enc_sha256: Some(upload.file_enc_sha256),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             caption: request.caption,
@@ -160,6 +170,7 @@ pub async fn send_video(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -196,7 +207,11 @@ pub async fn send_audio(
     let (data, mimetype) = get_media_data(&request.audio).await?;
 
     let upload = client
-        .upload(data.clone(), wacore::download::MediaType::Audio)
+        .upload(
+            data.clone(),
+            wacore::download::MediaType::Audio,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
@@ -204,9 +219,9 @@ pub async fn send_audio(
         audio_message: Some(Box::new(waproto::whatsapp::message::AudioMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
-            media_key: Some(upload.media_key),
-            file_sha256: Some(upload.file_sha256),
-            file_enc_sha256: Some(upload.file_enc_sha256),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             ptt: Some(request.ptt),
@@ -218,6 +233,7 @@ pub async fn send_audio(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -254,7 +270,11 @@ pub async fn send_document(
     let (data, mimetype) = get_media_data(&request.document).await?;
 
     let upload = client
-        .upload(data.clone(), wacore::download::MediaType::Document)
+        .upload(
+            data.clone(),
+            wacore::download::MediaType::Document,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
@@ -262,9 +282,9 @@ pub async fn send_document(
         document_message: Some(Box::new(waproto::whatsapp::message::DocumentMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
-            media_key: Some(upload.media_key),
-            file_sha256: Some(upload.file_sha256),
-            file_enc_sha256: Some(upload.file_enc_sha256),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             file_name: Some(request.filename),
@@ -277,6 +297,7 @@ pub async fn send_document(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -313,7 +334,11 @@ pub async fn send_sticker(
     let (data, _mimetype) = get_media_data(&request.sticker).await?;
 
     let upload = client
-        .upload(data.clone(), wacore::download::MediaType::Sticker)
+        .upload(
+            data.clone(),
+            wacore::download::MediaType::Sticker,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
@@ -321,9 +346,9 @@ pub async fn send_sticker(
         sticker_message: Some(Box::new(waproto::whatsapp::message::StickerMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
-            media_key: Some(upload.media_key),
-            file_sha256: Some(upload.file_sha256),
-            file_enc_sha256: Some(upload.file_enc_sha256),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some("image/webp".to_string()),
             ..Default::default()
@@ -334,6 +359,7 @@ pub async fn send_sticker(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -381,6 +407,7 @@ pub async fn send_location(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -428,6 +455,7 @@ pub async fn send_contact(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -522,6 +550,7 @@ pub async fn send_reaction(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -581,6 +610,7 @@ pub async fn send_poll(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -650,6 +680,7 @@ pub async fn send_buttons(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -748,6 +779,7 @@ pub async fn send_list(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -825,6 +857,7 @@ pub async fn send_interactive(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -876,6 +909,7 @@ pub async fn send_newsletter_admin_invite(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -926,6 +960,7 @@ pub async fn send_newsletter_follower_invite(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -987,6 +1022,7 @@ pub async fn send_order(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1042,6 +1078,7 @@ pub async fn send_invoice(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1088,6 +1125,7 @@ pub async fn send_payment_invite(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1142,6 +1180,7 @@ pub async fn send_pin_message(
     let message_id = client
         .send_message(chat_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1193,6 +1232,7 @@ pub async fn forward_message(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1260,6 +1300,7 @@ pub async fn send_poll_update(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1319,6 +1360,7 @@ pub async fn send_buttons_response(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1377,6 +1419,7 @@ pub async fn send_list_response(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1445,6 +1488,7 @@ pub async fn send_interactive_response(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1497,6 +1541,7 @@ pub async fn send_highly_structured(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1553,6 +1598,7 @@ pub async fn send_template_button_reply(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1616,6 +1662,7 @@ pub async fn send_comment(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1670,6 +1717,7 @@ pub async fn send_scheduled_call(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1726,6 +1774,7 @@ pub async fn send_scheduled_call_edit(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1795,6 +1844,7 @@ pub async fn send_payment(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1859,6 +1909,7 @@ pub async fn request_payment(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1911,6 +1962,7 @@ pub async fn cancel_payment_request(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -1963,6 +2015,7 @@ pub async fn decline_payment_request(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
@@ -2029,6 +2082,7 @@ pub async fn send_newsletter_forward(
     let message_id = client
         .send_message(to_jid.clone(), message)
         .await
+        .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {

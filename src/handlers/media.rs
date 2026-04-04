@@ -86,17 +86,21 @@ pub async fn upload_media(
     let mimetype = mimetype.unwrap_or_else(|| get_default_mimetype(&media_type));
 
     let upload_result = client
-        .upload(file_data.clone(), media_type.to_wacore_media_type())
+        .upload(
+            file_data.clone(),
+            media_type.to_wacore_media_type(),
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
     Ok(Json(UploadMediaResponse {
         url: upload_result.url,
         direct_path: upload_result.direct_path,
-        media_key: base64::engine::general_purpose::STANDARD.encode(&upload_result.media_key),
-        file_sha256: base64::engine::general_purpose::STANDARD.encode(&upload_result.file_sha256),
+        media_key: base64::engine::general_purpose::STANDARD.encode(upload_result.media_key),
+        file_sha256: base64::engine::general_purpose::STANDARD.encode(upload_result.file_sha256),
         file_enc_sha256: base64::engine::general_purpose::STANDARD
-            .encode(&upload_result.file_enc_sha256),
+            .encode(upload_result.file_enc_sha256),
         file_length: file_data.len() as u64,
         media_type,
         mimetype,

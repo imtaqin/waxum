@@ -512,6 +512,7 @@ pub async fn get_device_info(
 
 async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
+    use whatsapp_rust::TokioRuntime;
     use whatsapp_rust_sqlite_storage::SqliteStore;
     use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
     use whatsapp_rust_ureq_http_client::UreqHttpClient;
@@ -539,6 +540,7 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .with_backend(Arc::new(backend))
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
+        .with_runtime(TokioRuntime)
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -588,6 +590,7 @@ async fn connect_client_with_pair_code(
 ) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust::pair_code::PairCodeOptions;
+    use whatsapp_rust::TokioRuntime;
     use whatsapp_rust_sqlite_storage::SqliteStore;
     use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
     use whatsapp_rust_ureq_http_client::UreqHttpClient;
@@ -623,6 +626,7 @@ async fn connect_client_with_pair_code(
         .with_backend(Arc::new(backend))
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
+        .with_runtime(TokioRuntime)
         .with_pair_code(pair_options)
         .on_event(move |event, client| {
             let state = state_for_events.clone();
@@ -761,7 +765,7 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
         Event::Receipt(_) => "receipt".to_string(),
         Event::Presence(_) => "presence".to_string(),
         Event::ChatPresence(_) => "chat_presence".to_string(),
-        Event::GroupInfoUpdate { .. } => "group_update".to_string(),
+        Event::GroupUpdate(_) => "group_update".to_string(),
         Event::JoinedGroup(_) => "joined_group".to_string(),
         Event::PictureUpdate(_) => "picture_update".to_string(),
         Event::UserAboutUpdate(_) => "user_about_update".to_string(),
@@ -816,16 +820,16 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
                 "state": format!("{:?}", presence.state),
             })
         }
-        Event::GroupInfoUpdate { jid, update } => {
+        Event::GroupUpdate(update) => {
             serde_json::json!({
-                "group": jid.to_string(),
-                "update": format!("{:?}", update),
+                "group": update.group_jid.to_string(),
+                "update": format!("{:?}", update.action),
             })
         }
         Event::PictureUpdate(update) => {
             serde_json::json!({
                 "jid": update.jid.to_string(),
-                "author": update.author.to_string(),
+                "author": update.author.as_ref().map(|j| j.to_string()).unwrap_or_default(),
                 "timestamp": update.timestamp.timestamp(),
             })
         }

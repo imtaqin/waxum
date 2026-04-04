@@ -3,68 +3,53 @@ pub mod session;
 
 pub use session::SessionManager;
 
-use sqlx::AnyPool;
+/// Detect backend from DATABASE_URL or legacy POSTGRES_* vars.
+/// Returns the connection URL and backend type.
+pub fn resolve_database_url() -> (String, DbBackend) {
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        let backend = if url.starts_with("mysql") {
+            DbBackend::MySQL
+        } else {
+            DbBackend::Postgres
+        };
+        return (url, backend);
+    }
 
-/// Create a database pool from DATABASE_URL env var.
-/// Supports: postgres://, mysql://, sqlite://
-///
-/// Falls back to legacy POSTGRES_* env vars if DATABASE_URL is not set.
-pub async fn create_pool() -> anyhow::Result<AnyPool> {
-    // Install all drivers
-    sqlx::any::install_default_drivers();
-
-    let database_url = if let Ok(url) = std::env::var("DATABASE_URL") {
-        url
-    } else if std::env::var("POSTGRES_HOST").is_ok() || std::env::var("POSTGRES_USER").is_ok() {
-        // Legacy fallback: only if POSTGRES_* vars are explicitly set
+    if std::env::var("POSTGRES_HOST").is_ok() || std::env::var("POSTGRES_USER").is_ok() {
         let host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
         let port = std::env::var("POSTGRES_PORT").unwrap_or_else(|_| "5432".to_string());
         let user = std::env::var("POSTGRES_USER").unwrap_or_else(|_| "postgres".to_string());
         let password =
             std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
         let db = std::env::var("POSTGRES_DB").unwrap_or_else(|_| "wagateway".to_string());
+        let url = format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, db);
+        return (url, DbBackend::Postgres);
+    }
 
-        format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, db)
-    } else {
-        // Default: SQLite, fully local, no external services needed
-        tracing::info!("No DATABASE_URL set, using local SQLite database");
-        "sqlite://wa-rs.db".to_string()
-    };
+    if std::env::var("MYSQL_HOST").is_ok() || std::env::var("MYSQL_USER").is_ok() {
+        let host = std::env::var("MYSQL_HOST").unwrap_or_else(|_| "localhost".to_string());
+        let port = std::env::var("MYSQL_PORT").unwrap_or_else(|_| "3306".to_string());
+        let user = std::env::var("MYSQL_USER").unwrap_or_else(|_| "root".to_string());
+        let password = std::env::var("MYSQL_PASSWORD").unwrap_or_else(|_| "".to_string());
+        let db = std::env::var("MYSQL_DB").unwrap_or_else(|_| "wagateway".to_string());
+        let url = format!("mysql://{}:{}@{}:{}/{}", user, password, host, port, db);
+        return (url, DbBackend::MySQL);
+    }
 
-    let backend_name = if database_url.starts_with("postgres") {
-        "PostgreSQL"
-    } else if database_url.starts_with("mysql") {
-        "MySQL"
-    } else if database_url.starts_with("sqlite") {
-        "SQLite"
-    } else {
-        "Unknown"
-    };
-
-    // Mask password in log
-    let masked_url = mask_url(&database_url);
-    tracing::info!("Connecting to {} ({})", backend_name, masked_url);
-
-    // SQLite: ensure create mode is enabled
-    let connect_url = if database_url.starts_with("sqlite") && !database_url.contains("mode=") {
-        if database_url.contains('?') {
-            format!("{}&mode=rwc", database_url)
-        } else {
-            format!("{}?mode=rwc", database_url)
-        }
-    } else {
-        database_url.clone()
-    };
-
-    let pool = AnyPool::connect(&connect_url).await?;
-
-    tracing::info!("Connected to {}", backend_name);
-
-    Ok(pool)
+    // Default: PostgreSQL localhost
+    (
+        "postgres://postgres:postgres@localhost:5432/wagateway".to_string(),
+        DbBackend::Postgres,
+    )
 }
 
-fn mask_url(url: &str) -> String {
-    // Mask password in connection URL for safe logging
+#[derive(Clone, Copy, Debug)]
+pub enum DbBackend {
+    Postgres,
+    MySQL,
+}
+
+pub fn mask_url(url: &str) -> String {
     if let Some(at_pos) = url.find('@') {
         if let Some(colon_pos) = url[..at_pos].rfind(':') {
             if let Some(slash_pos) = url[..colon_pos].rfind('/') {
