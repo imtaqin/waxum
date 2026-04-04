@@ -33,17 +33,10 @@ serde_json = "1"
 utoipa = { version = "5", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 
-# Database (multi-backend: PostgreSQL, MySQL, SQLite)
-sqlx = { version = "0.8", features = [
-    "runtime-tokio",
-    "tls-rustls",
-    "any",
-    "postgres",
-    "mysql",
-    "sqlite",
-    "chrono",
-    "uuid",
-] }
+# Database (multi-backend: PostgreSQL, MySQL)
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"] }
+deadpool-postgres = "0.14"
+mysql_async = { version = "0.35", default-features = false, features = ["default-rustls"] }
 
 # Environment
 dotenvy = "0.15"

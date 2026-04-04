@@ -137,6 +137,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -146,16 +147,20 @@ async fn dispatch_command(
             let to_jid = parse_jid(&to)?;
             let (data, mimetype) = get_media_data(&image).await?;
             let upload = client
-                .upload(data.clone(), wacore::download::MediaType::Image)
+                .upload(
+                    data.clone(),
+                    wacore::download::MediaType::Image,
+                    Default::default(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
-                    media_key: Some(upload.media_key),
-                    file_sha256: Some(upload.file_sha256),
-                    file_enc_sha256: Some(upload.file_enc_sha256),
+                    media_key: Some(upload.media_key.to_vec()),
+                    file_sha256: Some(upload.file_sha256.to_vec()),
+                    file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     caption,
@@ -166,6 +171,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -175,16 +181,20 @@ async fn dispatch_command(
             let to_jid = parse_jid(&to)?;
             let (data, mimetype) = get_media_data(&video).await?;
             let upload = client
-                .upload(data.clone(), wacore::download::MediaType::Video)
+                .upload(
+                    data.clone(),
+                    wacore::download::MediaType::Video,
+                    Default::default(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 video_message: Some(Box::new(waproto::whatsapp::message::VideoMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
-                    media_key: Some(upload.media_key),
-                    file_sha256: Some(upload.file_sha256),
-                    file_enc_sha256: Some(upload.file_enc_sha256),
+                    media_key: Some(upload.media_key.to_vec()),
+                    file_sha256: Some(upload.file_sha256.to_vec()),
+                    file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     caption,
@@ -195,6 +205,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -202,16 +213,20 @@ async fn dispatch_command(
             let to_jid = parse_jid(&to)?;
             let (data, mimetype) = get_media_data(&audio).await?;
             let upload = client
-                .upload(data.clone(), wacore::download::MediaType::Audio)
+                .upload(
+                    data.clone(),
+                    wacore::download::MediaType::Audio,
+                    Default::default(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 audio_message: Some(Box::new(waproto::whatsapp::message::AudioMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
-                    media_key: Some(upload.media_key),
-                    file_sha256: Some(upload.file_sha256),
-                    file_enc_sha256: Some(upload.file_enc_sha256),
+                    media_key: Some(upload.media_key.to_vec()),
+                    file_sha256: Some(upload.file_sha256.to_vec()),
+                    file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     ptt: Some(ptt),
@@ -222,6 +237,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -235,16 +251,20 @@ async fn dispatch_command(
             let to_jid = parse_jid(&to)?;
             let (data, mimetype) = get_media_data(&document).await?;
             let upload = client
-                .upload(data.clone(), wacore::download::MediaType::Document)
+                .upload(
+                    data.clone(),
+                    wacore::download::MediaType::Document,
+                    Default::default(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 document_message: Some(Box::new(waproto::whatsapp::message::DocumentMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
-                    media_key: Some(upload.media_key),
-                    file_sha256: Some(upload.file_sha256),
-                    file_enc_sha256: Some(upload.file_enc_sha256),
+                    media_key: Some(upload.media_key.to_vec()),
+                    file_sha256: Some(upload.file_sha256.to_vec()),
+                    file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     file_name: Some(filename),
@@ -256,6 +276,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -263,16 +284,20 @@ async fn dispatch_command(
             let to_jid = parse_jid(&to)?;
             let (data, mimetype) = get_media_data(&sticker).await?;
             let upload = client
-                .upload(data.clone(), wacore::download::MediaType::Sticker)
+                .upload(
+                    data.clone(),
+                    wacore::download::MediaType::Sticker,
+                    Default::default(),
+                )
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 sticker_message: Some(Box::new(waproto::whatsapp::message::StickerMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
-                    media_key: Some(upload.media_key),
-                    file_sha256: Some(upload.file_sha256),
-                    file_enc_sha256: Some(upload.file_enc_sha256),
+                    media_key: Some(upload.media_key.to_vec()),
+                    file_sha256: Some(upload.file_sha256.to_vec()),
+                    file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     ..Default::default()
@@ -282,6 +307,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -307,6 +333,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -332,6 +359,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -359,6 +387,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -393,6 +422,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -433,6 +463,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -501,6 +532,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 
@@ -546,6 +578,7 @@ async fn dispatch_command(
             client
                 .send_message(to_jid, message)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 

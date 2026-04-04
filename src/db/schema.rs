@@ -1,109 +1,68 @@
-use sqlx::AnyPool;
+use crate::db::session::DbPool;
 
-pub async fn init_schema(pool: &AnyPool) -> anyhow::Result<()> {
-    let backend = detect_backend(pool);
-
-    match backend {
-        DbBackend::Postgres => init_postgres(pool).await,
-        DbBackend::MySQL => {
-            init_mysql(pool).await?;
-            migrate_mysql(pool).await
-        }
-        DbBackend::SQLite => init_sqlite(pool).await,
+pub async fn init_schema(pool: &DbPool) -> anyhow::Result<()> {
+    match pool {
+        DbPool::Postgres(pg) => init_postgres(pg).await,
+        DbPool::MySQL(my) => init_mysql(my).await,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum DbBackend {
-    Postgres,
-    MySQL,
-    SQLite,
-}
+async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
+    let client = pool.get().await?;
 
-fn detect_backend(pool: &AnyPool) -> DbBackend {
-    let url = std::env::var("DATABASE_URL").unwrap_or_default();
-    if url.starts_with("postgres") {
-        DbBackend::Postgres
-    } else if url.starts_with("mysql") {
-        DbBackend::MySQL
-    } else if url.starts_with("sqlite") {
-        DbBackend::SQLite
-    } else {
-        // Fallback: check pool kind name
-        let name = format!("{:?}", pool);
-        if name.contains("Postgres") {
-            DbBackend::Postgres
-        } else if name.contains("MySql") {
-            DbBackend::MySQL
-        } else {
-            DbBackend::SQLite
-        }
-    }
-}
-
-async fn init_postgres(pool: &AnyPool) -> anyhow::Result<()> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS sessions (
-            id VARCHAR(255) PRIMARY KEY,
-            name VARCHAR(255),
-            storage_path TEXT NOT NULL,
-            phone_number VARCHAR(50),
-            push_name VARCHAR(255),
-            status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
-            is_logged_in BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_connected_at TIMESTAMPTZ
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS sessions (
+                id VARCHAR(255) PRIMARY KEY,
+                name VARCHAR(255),
+                storage_path TEXT NOT NULL,
+                phone_number VARCHAR(50),
+                push_name VARCHAR(255),
+                status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
+                is_logged_in BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_connected_at TIMESTAMPTZ
+            )
+            "#,
+            &[],
         )
-        "#,
-    )
-    .execute(pool)
-    .await?;
+        .await?;
 
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS webhooks (
-            id VARCHAR(255) PRIMARY KEY,
-            session_id VARCHAR(255) NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-            url TEXT NOT NULL,
-            events TEXT NOT NULL DEFAULT '',
-            secret VARCHAR(255),
-            enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id VARCHAR(255) PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                url TEXT NOT NULL,
+                events TEXT NOT NULL DEFAULT '',
+                secret VARCHAR(255),
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            "#,
+            &[],
         )
-        "#,
-    )
-    .execute(pool)
-    .await?;
+        .await?;
 
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_webhooks_session_id ON webhooks(session_id)")
-        .execute(pool)
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_webhooks_session_id ON webhooks(session_id)",
+            &[],
+        )
         .await?;
 
     Ok(())
 }
 
-async fn migrate_mysql(pool: &AnyPool) -> anyhow::Result<()> {
-    // SQLx Any driver doesn't support TINYINT, TIMESTAMP, or DATETIME — use INT/VARCHAR
-    let migrations = [
-        "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
-        "ALTER TABLE sessions MODIFY COLUMN storage_path VARCHAR(500) NOT NULL",
-        "ALTER TABLE sessions MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
-        "ALTER TABLE sessions MODIFY COLUMN updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
-        "ALTER TABLE sessions MODIFY COLUMN last_connected_at VARCHAR(30) NULL",
-        "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
-        "ALTER TABLE webhooks MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
-        "ALTER TABLE webhooks MODIFY COLUMN url VARCHAR(2000) NOT NULL",
-    ];
-    for sql in &migrations {
-        let _ = sqlx::query(sql).execute(pool).await;
-    }
-    Ok(())
-}
+async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
+    use mysql_async::prelude::*;
 
-async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
-    sqlx::query(
+    let mut conn = pool.get_conn().await?;
+
+    conn.query_drop(
         r#"
         CREATE TABLE IF NOT EXISTS sessions (
             id VARCHAR(255) PRIMARY KEY,
@@ -113,16 +72,15 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             push_name VARCHAR(255),
             status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
             is_logged_in INT NOT NULL DEFAULT 0,
-            created_at VARCHAR(30) NOT NULL,
-            updated_at VARCHAR(30) NOT NULL,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
             last_connected_at VARCHAR(30) NULL
         )
         "#,
     )
-    .execute(pool)
     .await?;
 
-    sqlx::query(
+    conn.query_drop(
         r#"
         CREATE TABLE IF NOT EXISTS webhooks (
             id VARCHAR(255) PRIMARY KEY,
@@ -131,57 +89,28 @@ async fn init_mysql(pool: &AnyPool) -> anyhow::Result<()> {
             events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
             enabled INT NOT NULL DEFAULT 1,
-            created_at VARCHAR(30) NOT NULL,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
         )
         "#,
     )
-    .execute(pool)
     .await?;
 
-    Ok(())
-}
-
-async fn init_sqlite(pool: &AnyPool) -> anyhow::Result<()> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            storage_path TEXT NOT NULL,
-            phone_number TEXT,
-            push_name TEXT,
-            status TEXT NOT NULL DEFAULT 'disconnected',
-            is_logged_in INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            last_connected_at TEXT
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS webhooks (
-            id TEXT PRIMARY KEY,
-            session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-            url TEXT NOT NULL,
-            events TEXT NOT NULL DEFAULT '',
-            secret TEXT,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_webhooks_session_id ON webhooks(session_id)")
-        .execute(pool)
-        .await?;
+    // Auto-migrate existing tables with incompatible types
+    let migrations = [
+        "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
+        "ALTER TABLE sessions MODIFY COLUMN storage_path VARCHAR(500) NOT NULL",
+        "ALTER TABLE sessions MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        "ALTER TABLE sessions MODIFY COLUMN updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        "ALTER TABLE sessions MODIFY COLUMN last_connected_at VARCHAR(30) NULL",
+        "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
+        "ALTER TABLE webhooks MODIFY COLUMN url VARCHAR(2000) NOT NULL",
+        "ALTER TABLE webhooks MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+    ];
+    for sql in &migrations {
+        let _ = conn.query_drop(*sql).await;
+    }
 
     Ok(())
 }
