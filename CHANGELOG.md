@@ -2,6 +2,41 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.0] - 2026-04-22
+
+### New Features
+
+#### Fake Reply (Anti-Ban Message Wrapping)
+- [x] `fake_reply` field on `POST /sessions/{id}/messages/text` wraps the
+      outgoing text as a reply to a synthesized dummy message
+- [x] 7 reply types: `text`, `product`, `order`, `location`, `video`,
+      `document`, `contact`
+- [x] Indonesian data pools bundled — 29 product names, 12 Jakarta
+      malls/landmarks with real lat/long, 10 contact name templates,
+      realistic IDR price ranges (Rp 15jt - 999jt)
+- [x] Auto-generates participant JID and stanza ID when not provided
+- [x] Takes precedence over `reply_to` when both present
+- [x] New handler module `src/handlers/fake_reply.rs` with
+      `build_fake_reply_context_info()` builder
+
+#### Calls & Status Endpoints (scaffolding)
+- [x] New `src/handlers/calls.rs` + `src/models/calls.rs` for call events
+- [x] New `src/handlers/status.rs` + `src/models/status.rs` for status / story
+
+#### Outbound HTTP Proxy
+- [x] New `src/net.rs` module — reads `WA_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY`
+      env vars for outbound WA media / HTTP calls
+- [x] CLI `--proxy <URL>` flag
+
+### Internal
+- Message `ContextInfo` now wrapped in `Box<>` for the recursive quoted_message type
+- Cargo.toml adds `rand = "0.8"` for data pool selection
+- Version bump 0.2.1 → 0.4.0 (aligns with CHANGELOG which had jumped to 0.3.0)
+
+### Documentation
+- Fake Reply section added to `docs/api/messages.md` with full type
+  reference, field semantics, and cURL examples
+
 ## [0.3.0] - 2026-04-04
 
 ### Breaking Changes
