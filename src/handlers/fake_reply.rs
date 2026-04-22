@@ -182,10 +182,7 @@ fn random_jid() -> String {
 fn random_stanza_id() -> String {
     let mut rng = rand::thread_rng();
     let suffix: String = (0..16)
-        .map(|_| {
-            let c = b"ABCDEF0123456789"[rng.gen_range(0..16)] as char;
-            c
-        })
+        .map(|_| b"ABCDEF0123456789"[rng.gen_range(0..16)] as char)
         .collect();
     format!("FR{}", suffix)
 }
