@@ -24,6 +24,7 @@ mod handlers;
 mod middleware;
 mod models;
 mod nats;
+mod net;
 mod routes;
 mod state;
 
@@ -122,6 +123,10 @@ use state::AppState;
         handlers::blocking::block_contact,
         handlers::blocking::unblock_contact,
         handlers::blocking::is_blocked,
+
+        handlers::calls::reject_call,
+
+        handlers::status::send_status_reaction,
 
         handlers::media::upload_media,
         handlers::media::download_media,
@@ -251,6 +256,10 @@ use state::AppState;
             models::blocking::BlockRequest,
             handlers::blocking::BlockStatusResponse,
 
+            models::calls::RejectCallRequest,
+
+            models::status::StatusReactionRequest,
+
             models::media::UploadMediaResponse,
             models::media::MediaType,
 
@@ -294,6 +303,8 @@ use state::AppState;
         (name = "presence", description = "Online status"),
         (name = "chatstate", description = "Typing indicators"),
         (name = "blocking", description = "Block and unblock contacts"),
+        (name = "calls", description = "Incoming call handling (reject)"),
+        (name = "status", description = "Status/story reactions"),
         (name = "media", description = "Media upload"),
         (name = "webhooks", description = "Webhook registration for events"),
         (name = "privacy", description = "Privacy settings management"),
@@ -355,6 +366,15 @@ fn parse_cli_args(args: &[String]) {
                     std::process::exit(1);
                 }
             }
+            "--proxy" => {
+                if i + 1 < args.len() {
+                    std::env::set_var("WA_PROXY", &args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --proxy requires a value");
+                    std::process::exit(1);
+                }
+            }
             "--help" | "-h" => {
                 println!("wa-rs - WhatsApp REST API Gateway");
                 println!();
@@ -364,6 +384,9 @@ fn parse_cli_args(args: &[String]) {
                 println!("  -t, --token <TOKEN>    Set superadmin token");
                 println!("  -d, --db <URL>         Set database URL (postgres/mysql/sqlite)");
                 println!("  -p, --port <PORT>      Set server port (default: 3451)");
+                println!(
+                    "      --proxy <URL>      HTTP/HTTPS proxy for outbound WA media/http calls"
+                );
                 println!("  -h, --help             Show this help");
                 println!();
                 println!("Examples:");

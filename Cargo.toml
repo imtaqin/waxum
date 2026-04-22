@@ -9,13 +9,14 @@ repository = "https://github.com/fdciabdul/wa-rs"
 
 [dependencies]
 
-whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", default-features = true }
-wacore = { git = "https://github.com/jlucaso1/whatsapp-rust" }
-wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust" }
-waproto = { git = "https://github.com/jlucaso1/whatsapp-rust" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust" }
-whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust" }
-whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust" }
+rand = "0.8"
+whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7", default-features = true }
+wacore = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+waproto = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }
@@ -54,6 +55,7 @@ once_cell = "1"
 parking_lot = "0.12"
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 # Crypto for webhook signatures
 hmac = "0.12"
