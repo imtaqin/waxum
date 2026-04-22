@@ -2119,6 +2119,7 @@ pub async fn send_message(
             to: request.to,
             text: request.text,
             reply_to: None,
+            fake_reply: None,
         }),
     )
     .await
