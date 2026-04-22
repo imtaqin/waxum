@@ -384,7 +384,9 @@ fn parse_cli_args(args: &[String]) {
                 println!("  -t, --token <TOKEN>    Set superadmin token");
                 println!("  -d, --db <URL>         Set database URL (postgres/mysql/sqlite)");
                 println!("  -p, --port <PORT>      Set server port (default: 3451)");
-                println!("      --proxy <URL>      HTTP/HTTPS proxy for outbound WA media/http calls");
+                println!(
+                    "      --proxy <URL>      HTTP/HTTPS proxy for outbound WA media/http calls"
+                );
                 println!("  -h, --help             Show this help");
                 println!();
                 println!("Examples:");

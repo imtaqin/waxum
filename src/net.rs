@@ -21,7 +21,13 @@ pub fn build_http_client() -> UreqHttpClient {
 }
 
 fn proxy_url() -> Option<String> {
-    for key in ["WA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"] {
+    for key in [
+        "WA_PROXY",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ] {
         if let Ok(v) = std::env::var(key) {
             let v = v.trim();
             if !v.is_empty() {

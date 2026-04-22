@@ -146,8 +146,19 @@ const TEXT_MESSAGES: &[&str] = &[
 ];
 
 const IDR_PRICES_1000: &[i64] = &[
-    15_000_000, 25_000_000, 35_000_000, 49_000_000, 75_000_000, 99_000_000, 150_000_000,
-    199_000_000, 250_000_000, 350_000_000, 500_000_000, 750_000_000, 999_000_000,
+    15_000_000,
+    25_000_000,
+    35_000_000,
+    49_000_000,
+    75_000_000,
+    99_000_000,
+    150_000_000,
+    199_000_000,
+    250_000_000,
+    350_000_000,
+    500_000_000,
+    750_000_000,
+    999_000_000,
 ];
 
 fn pick<T: Copy>(arr: &[T]) -> T {
@@ -182,10 +193,7 @@ fn random_stanza_id() -> String {
 /// Build a ContextInfo that turns the outgoing message into a "reply" to a
 /// synthesized quoted message. Returns `None` if type is unknown.
 pub fn build_fake_reply_context_info(cfg: &FakeReplyConfig) -> Option<wa::ContextInfo> {
-    let stanza_id = cfg
-        .stanza_id
-        .clone()
-        .unwrap_or_else(random_stanza_id);
+    let stanza_id = cfg.stanza_id.clone().unwrap_or_else(random_stanza_id);
     let participant = cfg.participant.clone().unwrap_or_else(random_jid);
 
     let quoted = build_quoted_message(&cfg.reply_type, cfg.title.as_deref(), cfg.body.as_deref())?;
@@ -253,11 +261,7 @@ fn build_quoted_message(
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| pick(PRODUCT_NAMES).to_string());
             let msg = body.map(|s| s.to_string()).unwrap_or_else(|| {
-                format!(
-                    "Pesanan {} x{}",
-                    pick(PRODUCT_NAMES),
-                    rng.gen_range(1..=5)
-                )
+                format!("Pesanan {} x{}", pick(PRODUCT_NAMES), rng.gen_range(1..=5))
             });
 
             Some(wa::Message {
@@ -277,7 +281,9 @@ fn build_quoted_message(
 
         "location" => {
             let (loc_name, lat, lng) = pick(LOCATIONS);
-            let name_override = title.map(|s| s.to_string()).unwrap_or_else(|| loc_name.to_string());
+            let name_override = title
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| loc_name.to_string());
             // Small jitter so it doesn't look too uniform
             let lat_jitter = rng.gen_range(-0.005..0.005);
             let lng_jitter = rng.gen_range(-0.005..0.005);
@@ -326,7 +332,9 @@ fn build_quoted_message(
         }
 
         "contact" => {
-            let name = title.map(|s| s.to_string()).unwrap_or_else(|| pick(CONTACT_NAMES).to_string());
+            let name = title
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| pick(CONTACT_NAMES).to_string());
             let phone = pick(CONTACT_PHONES).to_string();
             let vcard = format!(
                 "BEGIN:VCARD\nVERSION:3.0\nFN:{}\nTEL;type=CELL:+{}\nEND:VCARD",
