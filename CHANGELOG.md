@@ -2,6 +2,29 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.2] - 2026-04-23
+
+### New Features
+
+#### Server Info Endpoint
+- [x] `GET /api/v1/info` — public endpoint that returns server version and
+      self-detected geo location (IP, country code/name, city, region, lat,
+      lon, timezone)
+- [x] Location auto-detection via ip-api.com on first request using the
+      server's own outbound public IP — works correctly for Tailscale /
+      overlay-network deployments where the inbound IP is private (100.64/10)
+- [x] Env override support for all fields: `WA_LOCATION_CODE`,
+      `WA_LOCATION_COUNTRY`, `WA_LOCATION_CITY`, `WA_LOCATION_REGION`,
+      `WA_LOCATION_LAT`, `WA_LOCATION_LON`, `WA_LOCATION_TZ`, `WA_LOCATION_IP`
+- [x] Result cached in process memory for the lifetime of the server
+
+### Rationale
+The adonis gateway previously did DNS resolve + ip-api lookup from its own
+side to get server geo. That fails for servers behind Tailscale since
+private IPs in the CGNAT range have no public geo info. Moving geo detection
+into wa-rs itself means the detection uses the server's own outbound public
+IP, which always works.
+
 ## [0.4.1] - 2026-04-23
 
 ### Fixes

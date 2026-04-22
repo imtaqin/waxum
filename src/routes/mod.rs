@@ -10,6 +10,7 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .nest("/api/v1", api_routes())
         .route("/health", get(health_check))
+        .route("/api/v1/info", get(handlers::info::get_info))
 }
 
 fn api_routes() -> Router<AppState> {
