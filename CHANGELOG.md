@@ -2,6 +2,17 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.1] - 2026-04-23
+
+### Fixes
+- `send_message` handler: add missing `fake_reply: None` to `SendTextRequest`
+  initializer (v0.4.0 introduced the field but one call site was missed,
+  breaking compile)
+- Clippy `let_and_return` lint in `random_stanza_id` — return expression
+  directly instead of via `let` binding
+- All `cargo fmt --check` issues flagged by CI (trailing array arg wrapping,
+  method chain breaks, env var array formatting)
+
 ## [0.4.0] - 2026-04-22
 
 ### New Features
