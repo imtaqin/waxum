@@ -33,9 +33,23 @@ pub async fn send_text(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
+    // Build context_info: fake_reply has priority over reply_to.
+    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+        if let Some(ref fake) = request.fake_reply {
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+        } else {
+            request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            })
+        };
+
     let message = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
             text: Some(request.text),
+            context_info,
             ..Default::default()
         })),
         ..Default::default()

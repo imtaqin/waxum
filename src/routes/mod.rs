@@ -278,6 +278,14 @@ fn session_routes() -> Router<AppState> {
             post(handlers::chatstate::send_typing),
         )
         .route(
+            "/{session_id}/calls/reject",
+            post(handlers::calls::reject_call),
+        )
+        .route(
+            "/{session_id}/status/react",
+            post(handlers::status::send_status_reaction),
+        )
+        .route(
             "/{session_id}/blocking/list",
             get(handlers::blocking::get_blocklist),
         )

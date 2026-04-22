@@ -2,6 +2,27 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 
+/// Fake reply config — makes the outgoing message look like it's replying to a
+/// fictional previous message from a random JID. Used for blast to appear more
+/// natural / human-like.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[allow(dead_code)]
+pub struct FakeReplyConfig {
+    /// text | product | order | location | video | document | contact
+    #[serde(rename = "type")]
+    pub reply_type: String,
+
+    pub title: Option<String>,
+
+    pub body: Option<String>,
+
+    /// Override random participant JID (optional). Format: 628xxx@s.whatsapp.net
+    pub participant: Option<String>,
+
+    /// Override random stanza id (optional).
+    pub stanza_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendTextRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -11,6 +32,8 @@ pub struct SendTextRequest {
     pub text: String,
 
     pub reply_to: Option<String>,
+
+    pub fake_reply: Option<FakeReplyConfig>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

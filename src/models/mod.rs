@@ -1,4 +1,5 @@
 pub mod blocking;
+pub mod calls;
 pub mod chatstate;
 pub mod common;
 pub mod contacts;
@@ -9,4 +10,5 @@ pub mod mex;
 pub mod presence;
 pub mod privacy;
 pub mod sessions;
+pub mod status;
 pub mod webhooks;

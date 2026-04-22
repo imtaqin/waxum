@@ -44,8 +44,8 @@ pub async fn list_groups(
                 .into_iter()
                 .map(|p| GroupParticipant {
                     jid: p.jid.to_string(),
-                    phone_number: p.phone_number.map(|j| j.to_string()),
-                    role: if p.is_admin {
+                    phone_number: p.phone_number.as_ref().map(|j| j.to_string()),
+                    role: if p.is_admin() {
                         ParticipantRole::Admin
                     } else {
                         ParticipantRole::Member
@@ -98,8 +98,8 @@ pub async fn get_group(
             .into_iter()
             .map(|p| GroupParticipant {
                 jid: p.jid.to_string(),
-                phone_number: p.phone_number.map(|j| j.to_string()),
-                role: if p.is_admin {
+                phone_number: p.phone_number.as_ref().map(|j| j.to_string()),
+                role: if p.is_admin() {
                     ParticipantRole::Admin
                 } else {
                     ParticipantRole::Member

@@ -515,7 +515,6 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
     use whatsapp_rust::TokioRuntime;
     use whatsapp_rust_sqlite_storage::SqliteStore;
     use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
-    use whatsapp_rust_ureq_http_client::UreqHttpClient;
 
     let storage_path = state
         .session_manager()
@@ -531,7 +530,7 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let transport_factory = TokioWebSocketTransportFactory::new();
-    let http_client = UreqHttpClient::new();
+    let http_client = crate::net::build_http_client();
 
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
@@ -593,7 +592,6 @@ async fn connect_client_with_pair_code(
     use whatsapp_rust::TokioRuntime;
     use whatsapp_rust_sqlite_storage::SqliteStore;
     use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
-    use whatsapp_rust_ureq_http_client::UreqHttpClient;
 
     let storage_path = state
         .session_manager()
@@ -609,7 +607,7 @@ async fn connect_client_with_pair_code(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let transport_factory = TokioWebSocketTransportFactory::new();
-    let http_client = UreqHttpClient::new();
+    let http_client = crate::net::build_http_client();
 
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
@@ -664,7 +662,7 @@ async fn connect_client_with_pair_code(
 }
 
 async fn handle_event(
-    event: wacore::types::events::Event,
+    event: std::sync::Arc<wacore::types::events::Event>,
     state: &AppState,
     session_id: &str,
     client: std::sync::Arc<whatsapp_rust::Client>,
@@ -676,7 +674,7 @@ async fn handle_event(
         None => return,
     };
 
-    match &event {
+    match event.as_ref() {
         Event::PairingQrCode { code, timeout: _ } => {
             tracing::info!("Session {}: QR code received", session_id);
             runtime.set_qr_codes(vec![code.clone()]);
@@ -741,8 +739,8 @@ async fn handle_event(
         _ => {}
     }
 
-    if let Ok(payload) = serde_json::to_string(&event_to_json(&event, session_id)) {
-        let event_type = get_event_type(&event);
+    if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {
+        let event_type = get_event_type(event.as_ref());
         state
             .broadcast_to_webhooks(session_id, &event_type, &payload)
             .await;
@@ -766,7 +764,7 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
         Event::Presence(_) => "presence".to_string(),
         Event::ChatPresence(_) => "chat_presence".to_string(),
         Event::GroupUpdate(_) => "group_update".to_string(),
-        Event::JoinedGroup(_) => "joined_group".to_string(),
+        Event::IncomingCall(_) => "incoming_call".to_string(),
         Event::PictureUpdate(_) => "picture_update".to_string(),
         Event::UserAboutUpdate(_) => "user_about_update".to_string(),
         Event::PushNameUpdate(_) => "push_name_update".to_string(),
@@ -824,6 +822,18 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
             serde_json::json!({
                 "group": update.group_jid.to_string(),
                 "update": format!("{:?}", update.action),
+            })
+        }
+        Event::IncomingCall(call) => {
+            serde_json::json!({
+                "from": call.from.to_string(),
+                "stanza_id": call.stanza_id,
+                "notify": call.notify,
+                "platform": call.platform,
+                "version": call.version,
+                "timestamp": call.timestamp.timestamp(),
+                "offline": call.offline,
+                "action": format!("{:?}", call.action),
             })
         }
         Event::PictureUpdate(update) => {

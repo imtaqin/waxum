@@ -38,7 +38,7 @@ pub async fn check_on_whatsapp(
     let results = results
         .into_iter()
         .map(|r| WhatsAppCheckResult {
-            phone: r.jid.user.clone(),
+            phone: r.jid.user.to_string(),
             jid: Some(r.jid.to_string()),
             is_registered: r.is_registered,
         })
