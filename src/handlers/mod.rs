@@ -5,6 +5,7 @@ pub mod contacts;
 pub mod fake_reply;
 pub mod groups;
 pub mod groups_management;
+pub mod info;
 pub mod media;
 pub mod messages;
 pub mod mex;
