@@ -47,6 +47,8 @@ pub struct SendImageRequest {
     pub caption: Option<String>,
 
     pub reply_to: Option<String>,
+
+    pub fake_reply: Option<FakeReplyConfig>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -60,6 +62,8 @@ pub struct SendVideoRequest {
     pub caption: Option<String>,
 
     pub reply_to: Option<String>,
+
+    pub fake_reply: Option<FakeReplyConfig>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -90,6 +94,8 @@ pub struct SendDocumentRequest {
     pub caption: Option<String>,
 
     pub reply_to: Option<String>,
+
+    pub fake_reply: Option<FakeReplyConfig>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

@@ -2,6 +2,25 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.3] - 2026-04-24
+
+### New Features
+
+#### Fake Reply Support for Media Messages
+- [x] `SendImageRequest`, `SendVideoRequest`, `SendDocumentRequest` now accept
+      an optional `fake_reply: FakeReplyConfig` field (same shape as
+      `send_text`)
+- [x] When `fake_reply` is set, the outgoing media message is wrapped with a
+      synthesized `ContextInfo` so it appears as a reply to a fake product /
+      order / location / video / document / contact / text message — same
+      mechanic already used by `send_text`
+- [x] `fake_reply` takes priority over `reply_to` when both are provided
+
+### Rationale
+Previously only `send_text` could produce the "fake reply" effect used by
+blast to mimic natural conversation. Media sends (image/video/document) now
+support the same trick.
+
 ## [0.4.2] - 2026-04-23
 
 ### New Features

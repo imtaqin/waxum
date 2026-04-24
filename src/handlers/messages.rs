@@ -103,6 +103,18 @@ pub async fn send_image(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
+    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+        if let Some(ref fake) = request.fake_reply {
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+        } else {
+            request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            })
+        };
+
     let message = waproto::whatsapp::Message {
         image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
@@ -113,6 +125,7 @@ pub async fn send_image(
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             caption: request.caption,
+            context_info,
             ..Default::default()
         })),
         ..Default::default()
@@ -166,6 +179,18 @@ pub async fn send_video(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
+    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+        if let Some(ref fake) = request.fake_reply {
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+        } else {
+            request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            })
+        };
+
     let message = waproto::whatsapp::Message {
         video_message: Some(Box::new(waproto::whatsapp::message::VideoMessage {
             url: Some(upload.url),
@@ -176,6 +201,7 @@ pub async fn send_video(
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             caption: request.caption,
+            context_info,
             ..Default::default()
         })),
         ..Default::default()
@@ -292,6 +318,18 @@ pub async fn send_document(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
+    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+        if let Some(ref fake) = request.fake_reply {
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+        } else {
+            request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            })
+        };
+
     let message = waproto::whatsapp::Message {
         document_message: Some(Box::new(waproto::whatsapp::message::DocumentMessage {
             url: Some(upload.url),
@@ -303,6 +341,7 @@ pub async fn send_document(
             mimetype: Some(mimetype),
             file_name: Some(request.filename),
             caption: request.caption,
+            context_info,
             ..Default::default()
         })),
         ..Default::default()
