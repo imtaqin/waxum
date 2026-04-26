@@ -2,6 +2,28 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.4] - 2026-04-26
+
+### New Features
+
+#### Custom device-props at pair time
+- [x] New module `device_props` resolves how each session shows up in
+      WhatsApp's "Linked Devices" list. Default is now `os = "Windows"`
+      and `platform = Chrome` instead of the upstream `"rust"` /
+      `Unknown` defaults.
+- [x] Override globally via env: `WA_DEVICE_OS` (string, e.g. `Windows`,
+      `Mac OS X`, `Ubuntu`) and `WA_DEVICE_PLATFORM` (one of `chrome`,
+      `firefox`, `edge`, `safari`, `opera`, `ie`, `desktop`, `ipad`,
+      `android_phone`, `android_tablet`, `ios_phone`).
+- [x] Both QR-code and pair-code connect paths now call
+      `Bot::builder().with_device_props(...)`. The pair-code
+      `platform_display` string also picks up the resolved OS.
+
+### Rationale
+Previously sessions appeared as "Rust" / "Unknown device" in the
+recipient's linked-devices list, which was both visually off-brand and
+arguably more flagged-prone than mimicking a stock browser pairing.
+
 ## [0.4.3] - 2026-04-24
 
 ### New Features

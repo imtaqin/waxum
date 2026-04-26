@@ -535,11 +535,14 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
+    let dp = crate::device_props::resolve_from_env();
+
     let mut bot = Bot::builder()
         .with_backend(Arc::new(backend))
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
+        .with_device_props(Some(dp.os), None, Some(dp.platform))
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -612,12 +615,13 @@ async fn connect_client_with_pair_code(
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
+    let dp = crate::device_props::resolve_from_env();
     let pair_options = PairCodeOptions {
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
         custom_code: None,
         platform_id: whatsapp_rust::pair_code::PlatformId::Chrome,
-        platform_display: "Chrome (Linux)".to_string(),
+        platform_display: format!("Chrome ({})", dp.os),
     };
 
     let mut bot = Bot::builder()
@@ -626,6 +630,7 @@ async fn connect_client_with_pair_code(
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
         .with_pair_code(pair_options)
+        .with_device_props(Some(dp.os.clone()), None, Some(dp.platform))
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
