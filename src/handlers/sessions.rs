@@ -510,6 +510,69 @@ pub async fn get_device_info(
     }))
 }
 
+/// On engine boot, walk every previously-paired session and start a
+/// reconnect attempt in the background. Sessions that have no stored
+/// credentials (never paired or freshly logged out) are skipped — those
+/// stay disconnected until the user re-pairs from the dashboard.
+pub async fn reconnect_all_on_startup(state: AppState) {
+    let sessions = match state.session_manager().list_sessions().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("[startup] list_sessions failed: {}", e);
+            return;
+        }
+    };
+
+    tracing::info!(
+        "[startup] auto-reconnect: found {} sessions in DB",
+        sessions.len()
+    );
+
+    for session in sessions {
+        // Only auto-reconnect sessions that were previously logged in OR
+        // were already trying to connect. Disconnected/never-paired sessions
+        // require a manual pair from the dashboard.
+        let should_reconnect = matches!(
+            session.status,
+            SessionStatus::LoggedIn | SessionStatus::Connected | SessionStatus::Connecting
+        ) || session.is_logged_in;
+        if !should_reconnect {
+            tracing::debug!(
+                "[startup] skip session {} (status={:?})",
+                session.id,
+                session.status
+            );
+            continue;
+        }
+
+        let storage_path = match state.session_manager().get_storage_path(&session.id).await {
+            Ok(Some(p)) => p,
+            _ => {
+                tracing::warn!("[startup] no storage path for session {}", session.id);
+                continue;
+            }
+        };
+
+        let runtime = state.get_or_create_session(&session.id, &storage_path);
+        runtime.set_status(SessionStatus::Connecting);
+
+        let state_clone = state.clone();
+        let sid = session.id.clone();
+        tokio::spawn(async move {
+            tracing::info!("[startup] reconnecting session {}", sid);
+            if let Err(e) = connect_client(&state_clone, &sid).await {
+                tracing::warn!("[startup] reconnect failed for {}: {}", sid, e);
+                if let Some(runtime) = state_clone.get_session(&sid) {
+                    runtime.set_status(SessionStatus::Disconnected);
+                }
+            }
+        });
+
+        // Stagger to avoid thundering herd on the WhatsApp servers
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
 async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust::TokioRuntime;
@@ -788,6 +851,79 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
     }
 }
 
+/// Build the metadata blob a downstream consumer needs to call
+/// /sessions/:id/media/download for an inbound media message. Returns null
+/// for non-media or text-only messages.
+fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value {
+    use base64::Engine as _;
+    fn b64(b: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(b)
+    }
+
+    if let Some(im) = msg.image_message.as_ref() {
+        return serde_json::json!({
+            "kind": "image",
+            "direct_path": im.direct_path,
+            "media_key": im.media_key.as_ref().map(|b| b64(b)),
+            "file_sha256": im.file_sha256.as_ref().map(|b| b64(b)),
+            "file_enc_sha256": im.file_enc_sha256.as_ref().map(|b| b64(b)),
+            "file_length": im.file_length,
+            "mimetype": im.mimetype,
+            "width": im.width,
+            "height": im.height,
+        });
+    }
+    if let Some(vm) = msg.video_message.as_ref() {
+        return serde_json::json!({
+            "kind": "video",
+            "direct_path": vm.direct_path,
+            "media_key": vm.media_key.as_ref().map(|b| b64(b)),
+            "file_sha256": vm.file_sha256.as_ref().map(|b| b64(b)),
+            "file_enc_sha256": vm.file_enc_sha256.as_ref().map(|b| b64(b)),
+            "file_length": vm.file_length,
+            "mimetype": vm.mimetype,
+            "seconds": vm.seconds,
+        });
+    }
+    if let Some(am) = msg.audio_message.as_ref() {
+        return serde_json::json!({
+            "kind": "audio",
+            "direct_path": am.direct_path,
+            "media_key": am.media_key.as_ref().map(|b| b64(b)),
+            "file_sha256": am.file_sha256.as_ref().map(|b| b64(b)),
+            "file_enc_sha256": am.file_enc_sha256.as_ref().map(|b| b64(b)),
+            "file_length": am.file_length,
+            "mimetype": am.mimetype,
+            "seconds": am.seconds,
+            "ptt": am.ptt,
+        });
+    }
+    if let Some(dm) = msg.document_message.as_ref() {
+        return serde_json::json!({
+            "kind": "document",
+            "direct_path": dm.direct_path,
+            "media_key": dm.media_key.as_ref().map(|b| b64(b)),
+            "file_sha256": dm.file_sha256.as_ref().map(|b| b64(b)),
+            "file_enc_sha256": dm.file_enc_sha256.as_ref().map(|b| b64(b)),
+            "file_length": dm.file_length,
+            "mimetype": dm.mimetype,
+            "file_name": dm.file_name,
+        });
+    }
+    if let Some(sm) = msg.sticker_message.as_ref() {
+        return serde_json::json!({
+            "kind": "sticker",
+            "direct_path": sm.direct_path,
+            "media_key": sm.media_key.as_ref().map(|b| b64(b)),
+            "file_sha256": sm.file_sha256.as_ref().map(|b| b64(b)),
+            "file_enc_sha256": sm.file_enc_sha256.as_ref().map(|b| b64(b)),
+            "file_length": sm.file_length,
+            "mimetype": sm.mimetype,
+        });
+    }
+    serde_json::Value::Null
+}
+
 /// Extracts user-visible content from a protobuf Message: best-effort text,
 /// optional caption, the high-level type slug, and the media mimetype if any.
 fn extract_message_content(
@@ -886,6 +1022,7 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
     let data = match event {
         Event::Message(msg, info) => {
             let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
+            let media_meta = extract_media_metadata(msg);
             serde_json::json!({
                 "from": info.source.sender.to_string(),
                 "chat": info.source.chat.to_string(),
@@ -900,6 +1037,7 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
                 "text": text,
                 "caption": caption,
                 "media_mimetype": media_mimetype,
+                "media": media_meta,
                 "is_group": info.source.chat.to_string().ends_with("@g.us"),
                 "participant": info.source.sender.to_string(),
             })

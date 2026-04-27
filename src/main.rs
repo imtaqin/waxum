@@ -499,6 +499,14 @@ async fn main() -> Result<()> {
     let nats_enabled = nats_manager.is_some();
     let state = AppState::new(pool, nats_manager).await;
 
+    // Auto-reconnect previously-paired sessions in the background. Runs
+    // concurrently with the rest of startup so the HTTP server doesn't
+    // block waiting on WhatsApp socket handshakes.
+    let reconnect_state = state.clone();
+    tokio::spawn(async move {
+        handlers::sessions::reconnect_all_on_startup(reconnect_state).await;
+    });
+
     // Start NATS outbound consumer if enabled
     if nats_enabled {
         if let Some(nats) = state.nats() {

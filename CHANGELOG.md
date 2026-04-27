@@ -2,6 +2,47 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.7] - 2026-04-27
+
+### New Features
+
+#### Media metadata in webhook event payload
+- [x] Inbound `image`, `video`, `audio`, `document`, `sticker` messages
+      now include a `media` object in the webhook payload with
+      `direct_path`, `media_key`, `file_sha256`, `file_enc_sha256`,
+      `file_length`, `mimetype`, plus type-specific fields (width/height
+      for image, seconds + ptt for audio, file_name for document).
+- [x] All binary fields are base64-encoded so the webhook payload is
+      transport-safe JSON.
+- [x] Consumers can take this metadata directly to
+      `POST /sessions/:id/media/download` to fetch the decrypted bytes
+      without an extra metadata round trip.
+
+### Rationale
+Inbox UIs that want to render incoming images / play audio messages
+need the encryption metadata; previously they had to call `/messages`
+or build a chat dump pipeline. With media inline on the event,
+end-to-end render is one round trip away.
+
+## [0.4.6] - 2026-04-27
+
+### New Features
+
+#### Auto-reconnect on engine startup
+- [x] On boot, the engine now walks every session in DB and spawns a
+      background reconnect for any session that was previously logged-in
+      or in a connecting state. Sessions that were never paired (or
+      explicitly logged out) stay disconnected until manually paired.
+- [x] Reconnects are staggered with a 500ms gap between sessions to
+      avoid hammering WhatsApp's connection endpoint after a deploy.
+- [x] Bumped to 0.4.6.
+
+### Rationale
+Engine restarts (deploys, crashes, host reboots) used to leave every
+paired session offline until a human manually clicked "Connect" in the
+dashboard for each one — painful with many sessions and lossy for users
+expecting always-on operation.
+
 ## [0.4.5] - 2026-04-27
 
 ### Fixes
