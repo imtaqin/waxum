@@ -2,6 +2,28 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.7] - 2026-04-27
+
+### New Features
+
+#### Media metadata in webhook event payload
+- [x] Inbound `image`, `video`, `audio`, `document`, `sticker` messages
+      now include a `media` object in the webhook payload with
+      `direct_path`, `media_key`, `file_sha256`, `file_enc_sha256`,
+      `file_length`, `mimetype`, plus type-specific fields (width/height
+      for image, seconds + ptt for audio, file_name for document).
+- [x] All binary fields are base64-encoded so the webhook payload is
+      transport-safe JSON.
+- [x] Consumers can take this metadata directly to
+      `POST /sessions/:id/media/download` to fetch the decrypted bytes
+      without an extra metadata round trip.
+
+### Rationale
+Inbox UIs that want to render incoming images / play audio messages
+need the encryption metadata; previously they had to call `/messages`
+or build a chat dump pipeline. With media inline on the event,
+end-to-end render is one round trip away.
+
 ## [0.4.6] - 2026-04-27
 
 ### New Features
