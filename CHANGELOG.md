@@ -2,6 +2,29 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.5] - 2026-04-27
+
+### Fixes
+
+#### Webhook message events now carry actual content
+- [x] `Event::Message` payload was previously serialized with only the
+      envelope (`from`, `chat`, `message_id`, `timestamp`, `is_from_me`).
+      The actual message body — `conversation`, `extended_text_message.text`,
+      `image_message.caption`, etc. — was discarded entirely, so consumers
+      had to call `/messages` to get content.
+- [x] New helper `extract_message_content` reads the wa::Message protobuf
+      and emits: `text`, `caption`, `message_type` (one of `text`, `image`,
+      `video`, `audio`, `ptt`, `document`, `sticker`, `location`, `contact`,
+      `contacts`, `poll`, `poll_vote`, `reaction`, `buttons`, `list`,
+      `template`, `unknown`), and `media_mimetype`.
+- [x] Event payload also adds `push_name`, `verified_name`, top-level
+      `type`, `media_type`, `is_group`, and `participant`.
+
+### Rationale
+Inbox UIs that listened to webhooks couldn't render text/media without
+re-fetching. With content inline, downstream consumers like MAUBLAST
+can persist a real conversation log on a single round trip.
+
 ## [0.4.4] - 2026-04-26
 
 ### New Features
