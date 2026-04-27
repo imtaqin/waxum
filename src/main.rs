@@ -19,6 +19,7 @@ const BANNER: &str = r#"
 "#;
 
 mod db;
+mod device_props;
 mod error;
 mod handlers;
 mod middleware;

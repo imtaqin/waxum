@@ -2,6 +2,70 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.5] - 2026-04-27
+
+### Fixes
+
+#### Webhook message events now carry actual content
+- [x] `Event::Message` payload was previously serialized with only the
+      envelope (`from`, `chat`, `message_id`, `timestamp`, `is_from_me`).
+      The actual message body — `conversation`, `extended_text_message.text`,
+      `image_message.caption`, etc. — was discarded entirely, so consumers
+      had to call `/messages` to get content.
+- [x] New helper `extract_message_content` reads the wa::Message protobuf
+      and emits: `text`, `caption`, `message_type` (one of `text`, `image`,
+      `video`, `audio`, `ptt`, `document`, `sticker`, `location`, `contact`,
+      `contacts`, `poll`, `poll_vote`, `reaction`, `buttons`, `list`,
+      `template`, `unknown`), and `media_mimetype`.
+- [x] Event payload also adds `push_name`, `verified_name`, top-level
+      `type`, `media_type`, `is_group`, and `participant`.
+
+### Rationale
+Inbox UIs that listened to webhooks couldn't render text/media without
+re-fetching. With content inline, downstream consumers like MAUBLAST
+can persist a real conversation log on a single round trip.
+
+## [0.4.4] - 2026-04-26
+
+### New Features
+
+#### Custom device-props at pair time
+- [x] New module `device_props` resolves how each session shows up in
+      WhatsApp's "Linked Devices" list. Default is now `os = "Windows"`
+      and `platform = Chrome` instead of the upstream `"rust"` /
+      `Unknown` defaults.
+- [x] Override globally via env: `WA_DEVICE_OS` (string, e.g. `Windows`,
+      `Mac OS X`, `Ubuntu`) and `WA_DEVICE_PLATFORM` (one of `chrome`,
+      `firefox`, `edge`, `safari`, `opera`, `ie`, `desktop`, `ipad`,
+      `android_phone`, `android_tablet`, `ios_phone`).
+- [x] Both QR-code and pair-code connect paths now call
+      `Bot::builder().with_device_props(...)`. The pair-code
+      `platform_display` string also picks up the resolved OS.
+
+### Rationale
+Previously sessions appeared as "Rust" / "Unknown device" in the
+recipient's linked-devices list, which was both visually off-brand and
+arguably more flagged-prone than mimicking a stock browser pairing.
+
+## [0.4.3] - 2026-04-24
+
+### New Features
+
+#### Fake Reply Support for Media Messages
+- [x] `SendImageRequest`, `SendVideoRequest`, `SendDocumentRequest` now accept
+      an optional `fake_reply: FakeReplyConfig` field (same shape as
+      `send_text`)
+- [x] When `fake_reply` is set, the outgoing media message is wrapped with a
+      synthesized `ContextInfo` so it appears as a reply to a fake product /
+      order / location / video / document / contact / text message — same
+      mechanic already used by `send_text`
+- [x] `fake_reply` takes priority over `reply_to` when both are provided
+
+### Rationale
+Previously only `send_text` could produce the "fake reply" effect used by
+blast to mimic natural conversation. Media sends (image/video/document) now
+support the same trick.
+
 ## [0.4.2] - 2026-04-23
 
 ### New Features

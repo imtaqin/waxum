@@ -535,11 +535,14 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
+    let dp = crate::device_props::resolve_from_env();
+
     let mut bot = Bot::builder()
         .with_backend(Arc::new(backend))
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
+        .with_device_props(Some(dp.os), None, Some(dp.platform))
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -612,12 +615,13 @@ async fn connect_client_with_pair_code(
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
+    let dp = crate::device_props::resolve_from_env();
     let pair_options = PairCodeOptions {
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
         custom_code: None,
         platform_id: whatsapp_rust::pair_code::PlatformId::Chrome,
-        platform_display: "Chrome (Linux)".to_string(),
+        platform_display: format!("Chrome ({})", dp.os),
     };
 
     let mut bot = Bot::builder()
@@ -626,6 +630,7 @@ async fn connect_client_with_pair_code(
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
         .with_pair_code(pair_options)
+        .with_device_props(Some(dp.os.clone()), None, Some(dp.platform))
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -783,6 +788,95 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
     }
 }
 
+/// Extracts user-visible content from a protobuf Message: best-effort text,
+/// optional caption, the high-level type slug, and the media mimetype if any.
+fn extract_message_content(
+    msg: &waproto::whatsapp::Message,
+) -> (Option<String>, Option<String>, String, Option<String>) {
+    let mut text: Option<String> = None;
+    let mut caption: Option<String> = None;
+    let mut message_type = "unknown".to_string();
+    let mut media_mimetype: Option<String> = None;
+
+    if let Some(t) = &msg.conversation {
+        if !t.is_empty() {
+            text = Some(t.clone());
+            message_type = "text".to_string();
+        }
+    }
+    if message_type == "unknown" {
+        if let Some(e) = msg.extended_text_message.as_ref() {
+            text = e.text.clone();
+            message_type = "text".to_string();
+        } else if let Some(im) = msg.image_message.as_ref() {
+            caption = im.caption.clone();
+            media_mimetype = im.mimetype.clone();
+            message_type = "image".to_string();
+        } else if let Some(vm) = msg.video_message.as_ref() {
+            caption = vm.caption.clone();
+            media_mimetype = vm.mimetype.clone();
+            message_type = "video".to_string();
+        } else if let Some(am) = msg.audio_message.as_ref() {
+            media_mimetype = am.mimetype.clone();
+            message_type = if am.ptt.unwrap_or(false) {
+                "ptt".to_string()
+            } else {
+                "audio".to_string()
+            };
+        } else if let Some(dm) = msg.document_message.as_ref() {
+            caption = dm.caption.clone();
+            text = dm.file_name.clone();
+            media_mimetype = dm.mimetype.clone();
+            message_type = "document".to_string();
+        } else if let Some(sm) = msg.sticker_message.as_ref() {
+            media_mimetype = sm.mimetype.clone();
+            message_type = "sticker".to_string();
+        } else if msg.location_message.is_some() || msg.live_location_message.is_some() {
+            message_type = "location".to_string();
+        } else if msg.contact_message.is_some() {
+            message_type = "contact".to_string();
+            text = msg
+                .contact_message
+                .as_ref()
+                .and_then(|c| c.display_name.clone());
+        } else if msg.contacts_array_message.is_some() {
+            message_type = "contacts".to_string();
+        } else if msg.poll_creation_message.is_some()
+            || msg.poll_creation_message_v2.is_some()
+            || msg.poll_creation_message_v3.is_some()
+        {
+            message_type = "poll".to_string();
+            text = msg
+                .poll_creation_message
+                .as_ref()
+                .and_then(|p| p.name.clone())
+                .or_else(|| {
+                    msg.poll_creation_message_v2
+                        .as_ref()
+                        .and_then(|p| p.name.clone())
+                })
+                .or_else(|| {
+                    msg.poll_creation_message_v3
+                        .as_ref()
+                        .and_then(|p| p.name.clone())
+                });
+        } else if msg.poll_update_message.is_some() {
+            message_type = "poll_vote".to_string();
+        } else if msg.reaction_message.is_some() {
+            message_type = "reaction".to_string();
+            text = msg.reaction_message.as_ref().and_then(|r| r.text.clone());
+        } else if msg.buttons_message.is_some() {
+            message_type = "buttons".to_string();
+        } else if msg.list_message.is_some() {
+            message_type = "list".to_string();
+        } else if msg.template_message.is_some() {
+            message_type = "template".to_string();
+        }
+    }
+
+    (text, caption, message_type, media_mimetype)
+}
+
 fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serde_json::Value {
     use wacore::types::events::Event;
 
@@ -790,13 +884,24 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
     let timestamp = chrono::Utc::now().timestamp();
 
     let data = match event {
-        Event::Message(_msg, info) => {
+        Event::Message(msg, info) => {
+            let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
             serde_json::json!({
                 "from": info.source.sender.to_string(),
                 "chat": info.source.chat.to_string(),
                 "message_id": info.id.to_string(),
                 "timestamp": info.timestamp,
                 "is_from_me": info.source.is_from_me,
+                "push_name": info.push_name,
+                "verified_name": info.verified_name.as_ref().map(|c| format!("{:?}", c)),
+                "type": info.r#type,
+                "media_type": info.media_type,
+                "message_type": message_type,
+                "text": text,
+                "caption": caption,
+                "media_mimetype": media_mimetype,
+                "is_group": info.source.chat.to_string().ends_with("@g.us"),
+                "participant": info.source.sender.to_string(),
             })
         }
         Event::Receipt(receipt) => {
