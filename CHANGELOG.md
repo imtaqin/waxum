@@ -2,6 +2,25 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.4.6] - 2026-04-27
+
+### New Features
+
+#### Auto-reconnect on engine startup
+- [x] On boot, the engine now walks every session in DB and spawns a
+      background reconnect for any session that was previously logged-in
+      or in a connecting state. Sessions that were never paired (or
+      explicitly logged out) stay disconnected until manually paired.
+- [x] Reconnects are staggered with a 500ms gap between sessions to
+      avoid hammering WhatsApp's connection endpoint after a deploy.
+- [x] Bumped to 0.4.6.
+
+### Rationale
+Engine restarts (deploys, crashes, host reboots) used to leave every
+paired session offline until a human manually clicked "Connect" in the
+dashboard for each one — painful with many sessions and lossy for users
+expecting always-on operation.
+
 ## [0.4.5] - 2026-04-27
 
 ### Fixes

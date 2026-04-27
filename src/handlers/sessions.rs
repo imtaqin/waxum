@@ -510,6 +510,69 @@ pub async fn get_device_info(
     }))
 }
 
+/// On engine boot, walk every previously-paired session and start a
+/// reconnect attempt in the background. Sessions that have no stored
+/// credentials (never paired or freshly logged out) are skipped — those
+/// stay disconnected until the user re-pairs from the dashboard.
+pub async fn reconnect_all_on_startup(state: AppState) {
+    let sessions = match state.session_manager().list_sessions().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("[startup] list_sessions failed: {}", e);
+            return;
+        }
+    };
+
+    tracing::info!(
+        "[startup] auto-reconnect: found {} sessions in DB",
+        sessions.len()
+    );
+
+    for session in sessions {
+        // Only auto-reconnect sessions that were previously logged in OR
+        // were already trying to connect. Disconnected/never-paired sessions
+        // require a manual pair from the dashboard.
+        let should_reconnect = matches!(
+            session.status,
+            SessionStatus::LoggedIn | SessionStatus::Connected | SessionStatus::Connecting
+        ) || session.is_logged_in;
+        if !should_reconnect {
+            tracing::debug!(
+                "[startup] skip session {} (status={:?})",
+                session.id,
+                session.status
+            );
+            continue;
+        }
+
+        let storage_path = match state.session_manager().get_storage_path(&session.id).await {
+            Ok(Some(p)) => p,
+            _ => {
+                tracing::warn!("[startup] no storage path for session {}", session.id);
+                continue;
+            }
+        };
+
+        let runtime = state.get_or_create_session(&session.id, &storage_path);
+        runtime.set_status(SessionStatus::Connecting);
+
+        let state_clone = state.clone();
+        let sid = session.id.clone();
+        tokio::spawn(async move {
+            tracing::info!("[startup] reconnecting session {}", sid);
+            if let Err(e) = connect_client(&state_clone, &sid).await {
+                tracing::warn!("[startup] reconnect failed for {}: {}", sid, e);
+                if let Some(runtime) = state_clone.get_session(&sid) {
+                    runtime.set_status(SessionStatus::Disconnected);
+                }
+            }
+        });
+
+        // Stagger to avoid thundering herd on the WhatsApp servers
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
 async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust::TokioRuntime;
