@@ -38,7 +38,11 @@ pub fn resolve_from_env() -> ResolvedDeviceProps {
         .as_deref()
         .and_then(parse_version)
         .unwrap_or_else(default_app_version);
-    ResolvedDeviceProps { os, platform, version }
+    ResolvedDeviceProps {
+        os,
+        platform,
+        version,
+    }
 }
 
 fn parse_platform(s: &str) -> wa::device_props::PlatformType {
