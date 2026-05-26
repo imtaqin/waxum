@@ -34,7 +34,7 @@
 
 - **Multi-session** — Manage multiple WhatsApp accounts simultaneously
 - **QR Code & Pair Code** — Two authentication methods for linking devices
-- **Rich Messages** — Text, images, video, audio, documents, stickers, location, contacts, polls, buttons, lists, interactive messages, payments, and more (30+ message types)
+- **Rich Messages** — Text, images, video, audio, documents, stickers, location, contacts, polls, legacy buttons, lists, native-flow interactive (CTA URL, quick reply), payments, and more (30+ message types)
 - **Webhooks** — Real-time events with HMAC-SHA256 signature verification
 - **NATS JetStream** — Optional durable event streaming and queue-based outbound messaging
 - **Swagger UI** — Interactive API documentation at `/swagger-ui`
@@ -46,13 +46,25 @@
 
 ### Docker Compose (Recommended)
 
+Pulls the prebuilt image from Docker Hub — no compile step, comes up in seconds.
+
 ```bash
 git clone https://github.com/fdciabdul/wa-rs.git
 cd wa-rs
 docker compose up -d
 ```
 
-This starts **PostgreSQL**, **NATS JetStream**, and the **WA-RS API** server.
+Pin a version with `WA_RS_TAG=0.5.0 docker compose up -d`. Default is `latest`.
+
+This starts **NATS JetStream** and the **WA-RS API** server (bring your own MySQL/Postgres in `.env`).
+
+### Docker Compose (build from source)
+
+When iterating on the Rust code, layer the build override on top — compiles the local checkout instead of pulling the image:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
 
 ### Manual
 
@@ -131,7 +143,7 @@ See the [NATS documentation](https://wa-rs.imtaqin.id/api/nats) for all 16 suppo
 | Category | Endpoints |
 |----------|-----------|
 | Sessions | Create, list, connect, disconnect, QR code, pair code, device info |
-| Messages | Text, image, video, audio, document, sticker, location, contact, poll, buttons, list, interactive, reaction, edit, revoke, read, pin, forward, payment, scheduled call, newsletter, and more |
+| Messages | Text, image, video, audio, document, sticker, location, contact, poll, legacy buttons, list, native-flow interactive, CTA URL button, quick reply buttons, reaction, edit, revoke, read, pin, forward, payment, scheduled call, newsletter, and more |
 | Contacts | Check on WhatsApp, get info, profile picture, user info |
 | Groups | Create, list, info, participants, admins, settings, invite link |
 | Presence | Set online status, subscribe to presence |

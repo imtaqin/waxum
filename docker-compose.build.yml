@@ -1,0 +1,15 @@
+# Override: compile wa-rs from source instead of pulling the prebuilt image.
+# Useful when iterating on Rust code locally.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# Compose merges `build` alongside `image` from the base file — the build is
+# used to produce the image, then tagged with the base file's image name.
+# Everything else (NATS, volumes, ports, env) is inherited.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile

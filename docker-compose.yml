@@ -5,15 +5,19 @@ services:
     command: ["--jetstream", "--store_dir=/data"]
     volumes:
       - nats_data:/data
+    # NATS bound to localhost only. WA-RS reaches it via the docker network
+    # (service name `nats`), so the public host doesn't need this open.
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
     restart: unless-stopped
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Pull the prebuilt image from Docker Hub instead of compiling on the
+    # host. Override the tag with WA_RS_TAG=0.5.0 to pin, default `latest`.
+    # For a from-source build, use `docker compose -f docker-compose.yml -f
+    # docker-compose.build.yml up -d` — see docker-compose.build.yml.
+    image: fdciabdul/wa-rs:${WA_RS_TAG:-latest}
     container_name: wagateway-api
     env_file:
       - .env
