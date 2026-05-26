@@ -358,6 +358,60 @@ pub struct NativeFlowButtonItem {
     pub button_params_json: String,
 }
 
+// --- CTA URL button (single call-to-action that opens a URL) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
+pub struct SendCtaUrlRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    /// Body text shown above the button.
+    pub body_text: String,
+
+    /// Optional footer text shown beneath the body.
+    pub footer_text: Option<String>,
+
+    /// Visible label on the button (e.g. "Open website").
+    pub display_text: String,
+
+    /// Public URL the button opens.
+    pub url: String,
+
+    /// Optional merchant URL — falls back to `url` when omitted. Some
+    /// clients show this in the link preview UI.
+    pub merchant_url: Option<String>,
+
+    pub reply_to: Option<String>,
+}
+
+// --- Quick Reply buttons (modern native-flow replacement for legacy ButtonsMessage) ---
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
+pub struct SendQuickReplyRequest {
+    #[schema(example = "559999999999@s.whatsapp.net")]
+    pub to: String,
+
+    pub body_text: String,
+
+    pub footer_text: Option<String>,
+
+    /// 1-3 reply buttons. WhatsApp clients clip beyond 3.
+    pub buttons: Vec<QuickReplyButtonItem>,
+
+    pub reply_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct QuickReplyButtonItem {
+    /// Internal ID returned to your webhook when the user taps the button.
+    pub id: String,
+
+    /// Visible label on the button.
+    pub display_text: String,
+}
+
 // --- Template Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]

@@ -920,6 +920,169 @@ pub async fn send_interactive(
     }))
 }
 
+// --- CTA URL button (single call-to-action that opens a URL) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/cta-url",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendCtaUrlRequest,
+    responses(
+        (status = 200, description = "CTA URL message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_cta_url(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendCtaUrlRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    let merchant_url = request.merchant_url.clone().unwrap_or_else(|| request.url.clone());
+    let params = serde_json::json!({
+        "display_text": request.display_text,
+        "url": request.url,
+        "merchant_url": merchant_url,
+    });
+
+    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+        buttons: vec![
+            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+                name: Some("cta_url".to_string()),
+                button_params_json: Some(params.to_string()),
+            },
+        ],
+        ..Default::default()
+    };
+
+    let message = waproto::whatsapp::Message {
+        interactive_message: Some(Box::new(
+            waproto::whatsapp::message::InteractiveMessage {
+                body: Some(waproto::whatsapp::message::interactive_message::Body {
+                    text: Some(request.body_text),
+                }),
+                footer: request.footer_text.map(|f| {
+                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                        text: Some(f),
+                        ..Default::default()
+                    })
+                }),
+                interactive_message: Some(
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                ),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map(|r| r.message_id)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
+// --- Quick Reply buttons (modern native-flow alternative to ButtonsMessage) ---
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/quick-reply",
+    tag = "messages",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendQuickReplyRequest,
+    responses(
+        (status = 200, description = "Quick reply message sent", body = MessageResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn send_quick_reply(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendQuickReplyRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to_jid = parse_jid(&request.to)?;
+
+    if request.buttons.is_empty() {
+        return Err(ApiError::Internal("buttons must contain 1 to 3 items".into()));
+    }
+
+    let buttons: Vec<
+        waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton,
+    > = request
+        .buttons
+        .into_iter()
+        .map(|b| {
+            let params = serde_json::json!({
+                "display_text": b.display_text,
+                "id": b.id,
+            });
+            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+                name: Some("quick_reply".to_string()),
+                button_params_json: Some(params.to_string()),
+            }
+        })
+        .collect();
+
+    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+        buttons,
+        ..Default::default()
+    };
+
+    let message = waproto::whatsapp::Message {
+        interactive_message: Some(Box::new(
+            waproto::whatsapp::message::InteractiveMessage {
+                body: Some(waproto::whatsapp::message::interactive_message::Body {
+                    text: Some(request.body_text),
+                }),
+                footer: request.footer_text.map(|f| {
+                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                        text: Some(f),
+                        ..Default::default()
+                    })
+                }),
+                interactive_message: Some(
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                ),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+
+    let message_id = client
+        .send_message(to_jid.clone(), message)
+        .await
+        .map(|r| r.message_id)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: to_jid.to_string(),
+    }))
+}
+
 // --- Newsletter Admin Invite ---
 
 #[utoipa::path(

@@ -1,6 +1,6 @@
 [package]
 name = "wa-rs"
-version = "0.4.7"
+version = "0.5.0"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -10,13 +10,13 @@ repository = "https://github.com/fdciabdul/wa-rs"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7", default-features = true }
-wacore = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
-wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
-waproto = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
-whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
-whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "4db92be17310e628c9e46eb43fc041ee5e3fdee7" }
+whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a", default-features = true }
+wacore = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+waproto = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }

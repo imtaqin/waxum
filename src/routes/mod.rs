@@ -121,6 +121,14 @@ fn session_routes() -> Router<AppState> {
             post(handlers::messages::send_interactive),
         )
         .route(
+            "/{session_id}/messages/cta-url",
+            post(handlers::messages::send_cta_url),
+        )
+        .route(
+            "/{session_id}/messages/quick-reply",
+            post(handlers::messages::send_quick_reply),
+        )
+        .route(
             "/{session_id}/messages/newsletter-admin-invite",
             post(handlers::messages::send_newsletter_admin_invite),
         )

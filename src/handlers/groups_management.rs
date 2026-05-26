@@ -83,7 +83,7 @@ pub async fn create_group(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(CreateGroupResponse {
-        group_jid: result.gid.to_string(),
+        group_jid: result.metadata.id.to_string(),
     }))
 }
 
