@@ -46,13 +46,25 @@
 
 ### Docker Compose (Recommended)
 
+Pulls the prebuilt image from Docker Hub — no compile step, comes up in seconds.
+
 ```bash
 git clone https://github.com/fdciabdul/wa-rs.git
 cd wa-rs
 docker compose up -d
 ```
 
-This starts **PostgreSQL**, **NATS JetStream**, and the **WA-RS API** server.
+Pin a version with `WA_RS_TAG=0.5.0 docker compose up -d`. Default is `latest`.
+
+This starts **NATS JetStream** and the **WA-RS API** server (bring your own MySQL/Postgres in `.env`).
+
+### Docker Compose (build from source)
+
+When iterating on the Rust code, layer the build override on top — compiles the local checkout instead of pulling the image:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
 
 ### Manual
 
