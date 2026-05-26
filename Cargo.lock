@@ -1002,7 +1002,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1467,7 +1467,7 @@ dependencies = [
  "displaydoc",
  "potential_utf",
  "utf8_iter",
- "yoke 0.8.2",
+ "yoke",
  "zerofrom",
  "zerovec",
 ]
@@ -1534,7 +1534,7 @@ dependencies = [
  "displaydoc",
  "icu_locale_core",
  "writeable",
- "yoke 0.8.2",
+ "yoke",
  "zerofrom",
  "zerotrie",
  "zerovec",
@@ -1983,7 +1983,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3077,7 +3077,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3825,7 +3825,7 @@ checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "wa-rs"
-version = "0.4.7"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -3871,8 +3871,8 @@ dependencies = [
 
 [[package]]
 name = "wacore"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "aes",
  "anyhow",
@@ -3900,6 +3900,7 @@ dependencies = [
  "serde_json",
  "sha1 0.11.0",
  "sha2 0.11.0",
+ "subtle",
  "thiserror 2.0.18",
  "typed-builder",
  "wacore-appstate",
@@ -3912,8 +3913,8 @@ dependencies = [
 
 [[package]]
 name = "wacore-appstate"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3933,8 +3934,8 @@ dependencies = [
 
 [[package]]
 name = "wacore-binary"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "bytes",
  "compact_str",
@@ -3944,13 +3945,13 @@ dependencies = [
  "serde",
  "serde_json",
  "stable_deref_trait",
- "yoke 0.7.5",
+ "yoke",
 ]
 
 [[package]]
 name = "wacore-derive"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3959,8 +3960,8 @@ dependencies = [
 
 [[package]]
 name = "wacore-libsignal"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "aes",
  "arrayref",
@@ -3991,8 +3992,8 @@ dependencies = [
 
 [[package]]
 name = "wacore-noise"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4028,8 +4029,8 @@ dependencies = [
 
 [[package]]
 name = "waproto"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "prost",
  "serde",
@@ -4216,8 +4217,8 @@ dependencies = [
 
 [[package]]
 name = "whatsapp-rust"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4251,8 +4252,8 @@ dependencies = [
 
 [[package]]
 name = "whatsapp-rust-sqlite-storage"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4268,8 +4269,8 @@ dependencies = [
 
 [[package]]
 name = "whatsapp-rust-tokio-transport"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4288,8 +4289,8 @@ dependencies = [
 
 [[package]]
 name = "whatsapp-rust-ureq-http-client"
-version = "0.5.0"
-source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=4db92be17310e628c9e46eb43fc041ee5e3fdee7#4db92be17310e628c9e46eb43fc041ee5e3fdee7"
+version = "0.6.0"
+source = "git+https://github.com/jlucaso1/whatsapp-rust?rev=0259de875dbd50f6e53bf01a6e1715a67b296e4a#0259de875dbd50f6e53bf01a6e1715a67b296e4a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4333,7 +4334,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4680,37 +4681,13 @@ dependencies = [
 
 [[package]]
 name = "yoke"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "120e6aef9aa629e3d4f52dc8cc43a015c7724194c97dfaf45180d2daf2b77f40"
-dependencies = [
- "serde",
- "stable_deref_trait",
- "yoke-derive 0.7.5",
- "zerofrom",
-]
-
-[[package]]
-name = "yoke"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abe8c5fda708d9ca3df187cae8bfb9ceda00dd96231bed36e445a1a48e66f9ca"
 dependencies = [
  "stable_deref_trait",
- "yoke-derive 0.8.2",
+ "yoke-derive",
  "zerofrom",
-]
-
-[[package]]
-name = "yoke-derive"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2380878cad4ac9aac1e2435f3eb4020e8374b5f13c296cb75b4620ff8e229154"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -4793,7 +4770,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f9152d31db0792fa83f70fb2f83148effb5c1f5b8c7686c3459e361d9bc20bf"
 dependencies = [
  "displaydoc",
- "yoke 0.8.2",
+ "yoke",
  "zerofrom",
 ]
 
@@ -4803,7 +4780,7 @@ version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90f911cbc359ab6af17377d242225f4d75119aec87ea711a880987b18cd7b239"
 dependencies = [
- "yoke 0.8.2",
+ "yoke",
  "zerofrom",
  "zerovec-derive",
 ]

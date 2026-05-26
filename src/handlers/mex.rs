@@ -6,6 +6,20 @@ use axum::{
 use crate::error::ApiError;
 use crate::models::mex::*;
 use crate::state::AppState;
+use wacore::iq::mex::MexDoc;
+
+/// Builds a `MexDoc` from runtime strings. The `whatsapp-rust` lib wants
+/// `&'static str` for both fields (it caches doc descriptors at compile
+/// time); `Box::leak` is fine here because the set of distinct mex docs
+/// per process is bounded by the WA Web doc registry (~50 entries).
+fn build_mex_doc(name: Option<String>, id: String, fallback_name: &'static str) -> MexDoc {
+    let name_str: &'static str = match name {
+        Some(s) if !s.is_empty() => Box::leak(s.into_boxed_str()),
+        _ => fallback_name,
+    };
+    let id_str: &'static str = Box::leak(id.into_boxed_str());
+    MexDoc { name: name_str, id: id_str }
+}
 
 #[utoipa::path(
     post,
@@ -31,7 +45,7 @@ pub async fn mex_query(
     let client = get_client(&state, &session_id)?;
 
     let mex_request = whatsapp_rust::MexRequest {
-        doc_id: &request.doc_id,
+        doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomQuery"),
         variables: request.variables,
     };
 
@@ -82,7 +96,7 @@ pub async fn mex_mutate(
     let client = get_client(&state, &session_id)?;
 
     let mex_request = whatsapp_rust::MexRequest {
-        doc_id: &request.doc_id,
+        doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomMutation"),
         variables: request.variables,
     };
 

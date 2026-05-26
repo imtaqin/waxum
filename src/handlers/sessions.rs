@@ -605,7 +605,11 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
-        .with_device_props(Some(dp.os), None, Some(dp.platform))
+        .with_device_props(
+            wacore::store::DevicePropsOverride::new()
+                .with_os(dp.os)
+                .with_platform_type(dp.platform),
+        )
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -683,8 +687,8 @@ async fn connect_client_with_pair_code(
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
         custom_code: None,
-        platform_id: whatsapp_rust::pair_code::PlatformId::Chrome,
-        platform_display: format!("Chrome ({})", dp.os),
+        // None lets the lib auto-derive from DevicePropsOverride.platform_type below.
+        platform_id: None,
     };
 
     let mut bot = Bot::builder()
@@ -693,7 +697,11 @@ async fn connect_client_with_pair_code(
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
         .with_pair_code(pair_options)
-        .with_device_props(Some(dp.os.clone()), None, Some(dp.platform))
+        .with_device_props(
+            wacore::store::DevicePropsOverride::new()
+                .with_os(dp.os.clone())
+                .with_platform_type(dp.platform),
+        )
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();

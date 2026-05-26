@@ -8,6 +8,13 @@ pub struct MexQueryRequest {
     #[schema(example = "1234567890")]
     pub doc_id: String,
 
+    /// GraphQL document name (e.g. "WAWebMexListSubscribedNewslettersJobQuery").
+    /// Optional — defaults to "WAWebMexCustomQuery" if omitted. WhatsApp's
+    /// server matches on name + id, so set both to a known pair from
+    /// `wacore::iq::mex_ids` when in doubt.
+    #[serde(default)]
+    pub doc_name: Option<String>,
+
     /// Query variables as JSON
     pub variables: Value,
 }
@@ -17,6 +24,10 @@ pub struct MexMutateRequest {
     /// GraphQL document ID
     #[schema(example = "1234567890")]
     pub doc_id: String,
+
+    /// GraphQL document name. Optional — defaults to "WAWebMexCustomMutation".
+    #[serde(default)]
+    pub doc_name: Option<String>,
 
     /// Mutation variables as JSON
     pub variables: Value,
