@@ -946,7 +946,10 @@ pub async fn send_cta_url(
     let client = get_client(&state, &session_id)?;
     let to_jid = parse_jid(&request.to)?;
 
-    let merchant_url = request.merchant_url.clone().unwrap_or_else(|| request.url.clone());
+    let merchant_url = request
+        .merchant_url
+        .clone()
+        .unwrap_or_else(|| request.url.clone());
     let params = serde_json::json!({
         "display_text": request.display_text,
         "url": request.url,
@@ -1024,7 +1027,9 @@ pub async fn send_quick_reply(
     let to_jid = parse_jid(&request.to)?;
 
     if request.buttons.is_empty() {
-        return Err(ApiError::Internal("buttons must contain 1 to 3 items".into()));
+        return Err(ApiError::Internal(
+            "buttons must contain 1 to 3 items".into(),
+        ));
     }
 
     let buttons: Vec<
