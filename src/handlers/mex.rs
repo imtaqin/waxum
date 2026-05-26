@@ -18,7 +18,10 @@ fn build_mex_doc(name: Option<String>, id: String, fallback_name: &'static str) 
         _ => fallback_name,
     };
     let id_str: &'static str = Box::leak(id.into_boxed_str());
-    MexDoc { name: name_str, id: id_str }
+    MexDoc {
+        name: name_str,
+        id: id_str,
+    }
 }
 
 #[utoipa::path(
