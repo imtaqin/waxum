@@ -608,7 +608,8 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
         .with_device_props(
             wacore::store::DevicePropsOverride::new()
                 .with_os(dp.os)
-                .with_platform_type(dp.platform),
+                .with_platform_type(dp.platform)
+                .with_version(dp.version),
         )
         .on_event(move |event, client| {
             let state = state_for_events.clone();
@@ -700,7 +701,8 @@ async fn connect_client_with_pair_code(
         .with_device_props(
             wacore::store::DevicePropsOverride::new()
                 .with_os(dp.os.clone())
-                .with_platform_type(dp.platform),
+                .with_platform_type(dp.platform)
+                .with_version(dp.version.clone()),
         )
         .on_event(move |event, client| {
             let state = state_for_events.clone();
