@@ -167,6 +167,8 @@ use state::AppState;
             models::sessions::SessionListResponse,
             models::sessions::PairCodeRequest,
             models::sessions::PairCodeResponse,
+            models::sessions::ConnectRequest,
+            models::sessions::DevicePropsRequest,
             models::sessions::QrCodeResponse,
             models::sessions::SessionStatusResponse,
             models::sessions::DeviceInfo,

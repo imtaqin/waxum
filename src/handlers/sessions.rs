@@ -7,9 +7,11 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::models::common::SuccessResponse;
+use crate::device_props::ResolvedDeviceProps;
 use crate::models::sessions::{
-    CreateSessionRequest, CreateSessionResponse, DeviceInfo, PairCodeRequest, PairCodeResponse,
-    QrCodeResponse, SessionInfo, SessionListResponse, SessionStatus, SessionStatusResponse,
+    ConnectRequest, CreateSessionRequest, CreateSessionResponse, DeviceInfo, PairCodeRequest,
+    PairCodeResponse, QrCodeResponse, SessionInfo, SessionListResponse, SessionStatus,
+    SessionStatusResponse,
 };
 use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 use crate::state::AppState;
@@ -79,10 +81,18 @@ pub async fn create_session(
     let runtime = state.get_or_create_session(&session_id, &storage_path);
     runtime.set_status(SessionStatus::Connecting);
 
+    let device_override = request.device.as_ref().map(|d| {
+        crate::device_props::resolve_with_override(
+            d.os.as_deref(),
+            d.platform.as_deref(),
+            d.version.as_deref(),
+        )
+    });
+
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
     tokio::spawn(async move {
-        if let Err(e) = connect_client(&state_clone, &session_id_clone).await {
+        if let Err(e) = connect_client(&state_clone, &session_id_clone, device_override).await {
             tracing::error!("Session {} connection failed: {}", session_id_clone, e);
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
@@ -289,6 +299,7 @@ pub async fn get_qr_code(
     params(
         ("session_id" = String, Path, description = "Session ID")
     ),
+    request_body(content = ConnectRequest, description = "Optional device override (first-pair only)"),
     responses(
         (status = 200, description = "Connection initiated", body = SuccessResponse),
         (status = 404, description = "Session not found"),
@@ -298,7 +309,15 @@ pub async fn get_qr_code(
 pub async fn connect_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
+    body: Option<Json<ConnectRequest>>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
+    let device_override = body.and_then(|Json(req)| req.device).map(|d| {
+        crate::device_props::resolve_with_override(
+            d.os.as_deref(),
+            d.platform.as_deref(),
+            d.version.as_deref(),
+        )
+    });
     let _ = state
         .session_manager()
         .get_session(&session_id)
@@ -325,8 +344,9 @@ pub async fn connect_session(
 
     let state_clone = state.clone();
     let session_id_clone = session_id.clone();
+    let dp_override = device_override.clone();
     tokio::spawn(async move {
-        if let Err(e) = connect_client(&state_clone, &session_id_clone).await {
+        if let Err(e) = connect_client(&state_clone, &session_id_clone, dp_override).await {
             tracing::error!("Session {} connection failed: {}", session_id_clone, e);
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
@@ -385,6 +405,13 @@ pub async fn pair_session(
     let session_id_clone = session_id.clone();
     let phone_number = request.phone_number.clone();
     let show_notification = request.show_push_notification;
+    let device_override = request.device.as_ref().map(|d| {
+        crate::device_props::resolve_with_override(
+            d.os.as_deref(),
+            d.platform.as_deref(),
+            d.version.as_deref(),
+        )
+    });
 
     tokio::spawn(async move {
         if let Err(e) = connect_client_with_pair_code(
@@ -392,6 +419,7 @@ pub async fn pair_session(
             &session_id_clone,
             &phone_number,
             show_notification,
+            device_override,
         )
         .await
         {
@@ -560,7 +588,7 @@ pub async fn reconnect_all_on_startup(state: AppState) {
         let sid = session.id.clone();
         tokio::spawn(async move {
             tracing::info!("[startup] reconnecting session {}", sid);
-            if let Err(e) = connect_client(&state_clone, &sid).await {
+            if let Err(e) = connect_client(&state_clone, &sid, None).await {
                 tracing::warn!("[startup] reconnect failed for {}: {}", sid, e);
                 if let Some(runtime) = state_clone.get_session(&sid) {
                     runtime.set_status(SessionStatus::Disconnected);
@@ -573,7 +601,11 @@ pub async fn reconnect_all_on_startup(state: AppState) {
     }
 }
 
-async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiError> {
+async fn connect_client(
+    state: &AppState,
+    session_id: &str,
+    device_props: Option<ResolvedDeviceProps>,
+) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust::TokioRuntime;
     use whatsapp_rust_sqlite_storage::SqliteStore;
@@ -598,19 +630,22 @@ async fn connect_client(state: &AppState, session_id: &str) -> Result<(), ApiErr
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
-    let dp = crate::device_props::resolve_from_env();
+    let dp = device_props.unwrap_or_else(crate::device_props::resolve_from_env);
 
     let mut bot = Bot::builder()
         .with_backend(Arc::new(backend))
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
-        .with_device_props(
-            wacore::store::DevicePropsOverride::new()
+        .with_device_props({
+            let mut o = wacore::store::DevicePropsOverride::new()
                 .with_os(dp.os)
-                .with_platform_type(dp.platform)
-                .with_version(dp.version),
-        )
+                .with_platform_type(dp.platform);
+            if let Some(v) = dp.version {
+                o = o.with_version(v);
+            }
+            o
+        })
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();
@@ -657,6 +692,7 @@ async fn connect_client_with_pair_code(
     session_id: &str,
     phone_number: &str,
     show_notification: bool,
+    device_props: Option<ResolvedDeviceProps>,
 ) -> Result<(), ApiError> {
     use whatsapp_rust::bot::Bot;
     use whatsapp_rust::pair_code::PairCodeOptions;
@@ -683,7 +719,7 @@ async fn connect_client_with_pair_code(
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
-    let dp = crate::device_props::resolve_from_env();
+    let dp = device_props.unwrap_or_else(crate::device_props::resolve_from_env);
     let pair_options = PairCodeOptions {
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
@@ -698,12 +734,15 @@ async fn connect_client_with_pair_code(
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
         .with_pair_code(pair_options)
-        .with_device_props(
-            wacore::store::DevicePropsOverride::new()
+        .with_device_props({
+            let mut o = wacore::store::DevicePropsOverride::new()
                 .with_os(dp.os.clone())
-                .with_platform_type(dp.platform)
-                .with_version(dp.version.clone()),
-        )
+                .with_platform_type(dp.platform);
+            if let Some(v) = dp.version.clone() {
+                o = o.with_version(v);
+            }
+            o
+        })
         .on_event(move |event, client| {
             let state = state_for_events.clone();
             let session_id = session_id_for_events.clone();

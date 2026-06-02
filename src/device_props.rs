@@ -1,17 +1,20 @@
 //! Device props resolver — controls how each session appears in WhatsApp's
-//! "Linked Devices" list at pair time, and what the WA server sees as the
-//! companion's client fingerprint.
+//! "Linked Devices" list at pair time.
 //!
-//! Defaults: `os = "Windows"`, `platform = Chrome`, `version = 2.3000.1023902713`
-//! (a current-ish WA Web build). The version is critical — if it stays at the
-//! upstream lib default of `0.1.0`, WA server can flag the device as a fake
-//! client and silently drop outbound messages.
+//! Defaults: `os = "Windows"`, `platform = Desktop` (shows as "WhatsApp
+//! Desktop" in Linked Devices, not a browser). AppVersion is left at
+//! whatever the upstream lib provides (currently 0.1.0); empirical testing
+//! showed that forcing a "realistic" 2.3000.x build number caused WA's
+//! server to silently drop outbound messages on freshly-paired sessions,
+//! while the upstream default delivers fine. Opt in via env only.
 //!
 //! Override globally via env:
 //!   `WA_DEVICE_OS`        — e.g. "Windows", "Mac OS X", "Ubuntu"
-//!   `WA_DEVICE_PLATFORM`  — one of: chrome, firefox, edge, safari, opera,
-//!                          ie, desktop, ipad, android_phone, android_tablet
-//!   `WA_DEVICE_VERSION`   — dotted version, e.g. "2.3000.1023902713"
+//!   `WA_DEVICE_PLATFORM`  — one of: desktop, uwp, chrome, firefox, edge,
+//!                          safari, opera, ie, ipad, android_phone,
+//!                          android_tablet, ios_phone
+//!   `WA_DEVICE_VERSION`   — dotted version, e.g. "2.3000.1023902713".
+//!                          Unset = lib default (recommended).
 //!
 //! These only take effect at the first pairing — once the device is registered,
 //! whatsapp-rust persists the props in its SQLite store and re-uses them on
@@ -23,7 +26,10 @@ use waproto::whatsapp as wa;
 pub struct ResolvedDeviceProps {
     pub os: String,
     pub platform: wa::device_props::PlatformType,
-    pub version: wa::device_props::AppVersion,
+    /// `None` means "let whatsapp-rust pick the default version" — preferred
+    /// in production. Set only when you have evidence the server expects a
+    /// specific build (set via `WA_DEVICE_VERSION`).
+    pub version: Option<wa::device_props::AppVersion>,
 }
 
 pub fn resolve_from_env() -> ResolvedDeviceProps {
@@ -32,12 +38,11 @@ pub fn resolve_from_env() -> ResolvedDeviceProps {
         .ok()
         .as_deref()
         .map(parse_platform)
-        .unwrap_or(wa::device_props::PlatformType::Chrome);
+        .unwrap_or(wa::device_props::PlatformType::Desktop);
     let version = std::env::var("WA_DEVICE_VERSION")
         .ok()
         .as_deref()
-        .and_then(parse_version)
-        .unwrap_or_else(default_app_version);
+        .and_then(parse_version);
     ResolvedDeviceProps {
         os,
         platform,
@@ -45,21 +50,52 @@ pub fn resolve_from_env() -> ResolvedDeviceProps {
     }
 }
 
+/// Resolve device props with an optional per-request override layered on
+/// top of env defaults. Each field in `override_` only takes effect when
+/// `Some`; missing fields fall back to whatever `resolve_from_env` produced.
+pub fn resolve_with_override(
+    os: Option<&str>,
+    platform: Option<&str>,
+    version: Option<&str>,
+) -> ResolvedDeviceProps {
+    let mut base = resolve_from_env();
+    if let Some(o) = os.and_then(non_empty) {
+        base.os = o.to_string();
+    }
+    if let Some(p) = platform.and_then(non_empty) {
+        base.platform = parse_platform(p);
+    }
+    if let Some(v) = version.and_then(non_empty) {
+        base.version = parse_version(v);
+    }
+    base
+}
+
+fn non_empty(s: &str) -> Option<&str> {
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t)
+    }
+}
+
 fn parse_platform(s: &str) -> wa::device_props::PlatformType {
     use wa::device_props::PlatformType as P;
     match s.trim().to_ascii_lowercase().as_str() {
+        "desktop" => P::Desktop,
+        "uwp" | "windows_store" => P::Uwp,
         "chrome" => P::Chrome,
         "firefox" => P::Firefox,
         "edge" => P::Edge,
         "safari" => P::Safari,
         "opera" => P::Opera,
         "ie" => P::Ie,
-        "desktop" => P::Desktop,
         "ipad" => P::Ipad,
         "android_phone" | "android" => P::AndroidPhone,
         "android_tablet" => P::AndroidTablet,
         "ios_phone" | "iphone" => P::IosPhone,
-        _ => P::Chrome,
+        _ => P::Desktop,
     }
 }
 
@@ -76,17 +112,4 @@ fn parse_version(s: &str) -> Option<wa::device_props::AppVersion> {
         quaternary: parts.get(3).copied(),
         quinary: parts.get(4).copied(),
     })
-}
-
-/// Default version aligned with a recent WA Web build. Bump occasionally
-/// to stay close to the live client — too far behind and the server may
-/// throttle or flag the device.
-pub fn default_app_version() -> wa::device_props::AppVersion {
-    wa::device_props::AppVersion {
-        primary: Some(2),
-        secondary: Some(3000),
-        tertiary: Some(1023902713),
-        quaternary: None,
-        quinary: None,
-    }
 }

@@ -105,6 +105,9 @@ pub struct CreateSessionRequest {
     pub name: Option<String>,
     /// Optional webhook configuration (session will auto-connect after creation)
     pub webhook: Option<WebhookRequest>,
+    /// Optional device props override applied to the auto-spawned QR connect.
+    /// Only honored on the first pair — subsequent connects reuse persisted props.
+    pub device: Option<DevicePropsRequest>,
 }
 
 /// Response after creating a session
@@ -123,6 +126,30 @@ pub struct SessionListResponse {
     pub total: usize,
 }
 
+/// Optional per-session device identity override. Only honored on the
+/// FIRST pair (connect/pair endpoints) — subsequent connects reuse the
+/// props stored by whatsapp-rust at pairing time.
+#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
+pub struct DevicePropsRequest {
+    /// OS string shown in WhatsApp Linked Devices (e.g. "Windows", "Mac OS X")
+    #[schema(example = "Windows")]
+    pub os: Option<String>,
+    /// Platform: desktop, uwp, chrome, firefox, edge, safari, opera, ie,
+    /// ipad, android_phone, android_tablet, ios_phone
+    #[schema(example = "desktop")]
+    pub platform: Option<String>,
+    /// Dotted app version (e.g. "2.3000.1023902713"). Omit to use lib default.
+    #[schema(example = "2.3000.1023902713")]
+    pub version: Option<String>,
+}
+
+/// Request to start QR connect with optional device override
+#[derive(Debug, Default, Deserialize, ToSchema)]
+pub struct ConnectRequest {
+    /// Optional per-session device props override (first-pair only)
+    pub device: Option<DevicePropsRequest>,
+}
+
 /// Request to connect with pair code
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PairCodeRequest {
@@ -132,6 +159,8 @@ pub struct PairCodeRequest {
     /// Whether to show push notification on phone
     #[serde(default)]
     pub show_push_notification: bool,
+    /// Optional per-session device props override (first-pair only)
+    pub device: Option<DevicePropsRequest>,
 }
 
 /// Response with pair code
