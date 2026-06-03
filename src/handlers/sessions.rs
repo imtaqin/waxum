@@ -5,9 +5,9 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::device_props::ResolvedDeviceProps;
 use crate::error::ApiError;
 use crate::models::common::SuccessResponse;
-use crate::device_props::ResolvedDeviceProps;
 use crate::models::sessions::{
     ConnectRequest, CreateSessionRequest, CreateSessionResponse, DeviceInfo, PairCodeRequest,
     PairCodeResponse, QrCodeResponse, SessionInfo, SessionListResponse, SessionStatus,
