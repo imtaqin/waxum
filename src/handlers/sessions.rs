@@ -738,7 +738,7 @@ async fn connect_client_with_pair_code(
             let mut o = wacore::store::DevicePropsOverride::new()
                 .with_os(dp.os.clone())
                 .with_platform_type(dp.platform);
-            if let Some(v) = dp.version.clone() {
+            if let Some(v) = dp.version {
                 o = o.with_version(v);
             }
             o
