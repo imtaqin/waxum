@@ -31,7 +31,7 @@ pub async fn send_text(
     Json(request): Json<SendTextRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     // Build context_info: fake_reply has priority over reply_to.
     let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
@@ -2430,6 +2430,50 @@ pub(crate) fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {
     } else {
         Ok(Jid::pn(jid_str))
     }
+}
+
+/// Resolve a recipient JID to its actual deliverable address.
+///
+/// WhatsApp has migrated most contacts to LID-only privacy mode: sending
+/// to legacy `phone@s.whatsapp.net` is accepted by the server but never
+/// delivered. For any `@s.whatsapp.net` recipient we query the contact
+/// directory and substitute the LID when one exists. Already-resolved
+/// JIDs (`@lid`, `@g.us`, etc.) and unknown contacts pass through
+/// unchanged.
+pub(crate) async fn resolve_recipient_jid(
+    client: std::sync::Arc<whatsapp_rust::Client>,
+    jid: Jid,
+) -> Jid {
+    use wacore_binary::jid::SERVER_JID;
+    if jid.server != SERVER_JID {
+        return jid;
+    }
+    let probe = vec![jid.clone()];
+    match do_get_user_info_lite(client, probe).await {
+        Ok(map) => map
+            .get(&jid)
+            .and_then(|info| info.lid.clone())
+            .unwrap_or(jid),
+        Err(_) => jid,
+    }
+}
+
+async fn do_get_user_info_lite(
+    client: std::sync::Arc<whatsapp_rust::Client>,
+    jids: Vec<Jid>,
+) -> Result<std::collections::HashMap<Jid, whatsapp_rust::UserInfo>, ()> {
+    struct AssertSend<F>(F);
+    unsafe impl<F: std::future::Future> Send for AssertSend<F> {}
+    impl<F: std::future::Future> std::future::Future for AssertSend<F> {
+        type Output = F::Output;
+        fn poll(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Self::Output> {
+            unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+        }
+    }
+    AssertSend(async move { client.contacts().get_user_info(&jids).await.map_err(|_| ()) }).await
 }
 
 pub(crate) async fn get_media_data(media: &MediaData) -> Result<(Vec<u8>, String), ApiError> {
