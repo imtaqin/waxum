@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "wa-rs"
 version = "0.5.2"
 edition = "2021"
@@ -10,13 +10,13 @@ repository = "https://github.com/fdciabdul/wa-rs"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a", default-features = true }
-wacore = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
-wacore-binary = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
-waproto = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
-whatsapp-rust-tokio-transport = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
-whatsapp-rust-ureq-http-client = { git = "https://github.com/jlucaso1/whatsapp-rust", rev = "0259de875dbd50f6e53bf01a6e1715a67b296e4a" }
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69", default-features = true }
+wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
+wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
+waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c9ff69" }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }
