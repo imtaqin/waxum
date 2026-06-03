@@ -1,24 +1,8 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
-
-fn webhook_http_client() -> reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(10))
-                .connect_timeout(Duration::from_secs(5))
-                .pool_idle_timeout(Duration::from_secs(60))
-                .tcp_keepalive(Duration::from_secs(30))
-                .build()
-                .expect("failed to build webhook http client")
-        })
-        .clone()
-}
 
 use crate::db::session::DbPool;
 use crate::db::SessionManager;
@@ -208,7 +192,7 @@ impl AppState {
 
     pub async fn broadcast_to_webhooks(&self, session_id: &str, event: &str, payload: &str) {
         let webhooks = self.get_webhooks(session_id);
-        let client = webhook_http_client();
+        let client = reqwest::Client::new();
 
         for (_, config) in webhooks {
             if !config.enabled {
@@ -225,67 +209,26 @@ impl AppState {
             let client = client.clone();
 
             tokio::spawn(async move {
-                // Retry up to 3 attempts on network error or 5xx; back off 0s/1s/3s.
-                // 4xx is treated as a client config bug — no retry, just log.
-                const DELAYS_MS: [u64; 3] = [0, 1000, 3000];
-                let signature = secret.as_deref().and_then(|s| {
+                let mut req = client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .body(payload.clone());
+
+                if let Some(secret) = secret {
                     use hmac::{Hmac, Mac};
                     use sha2::Sha256;
-                    type HmacSha256 = Hmac<Sha256>;
-                    HmacSha256::new_from_slice(s.as_bytes())
-                        .ok()
-                        .map(|mut mac| {
-                            mac.update(payload.as_bytes());
-                            format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
-                        })
-                });
 
-                let mut last_err: Option<String> = None;
-                for (attempt, delay_ms) in DELAYS_MS.iter().enumerate() {
-                    if *delay_ms > 0 {
-                        tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
+                    type HmacSha256 = Hmac<Sha256>;
+                    if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
+                        mac.update(payload.as_bytes());
+                        let signature = hex::encode(mac.finalize().into_bytes());
+                        req = req.header("X-Webhook-Signature", format!("sha256={}", signature));
                     }
-                    let mut req = client
-                        .post(&url)
-                        .header("Content-Type", "application/json")
-                        .body(payload.clone());
-                    if let Some(ref sig) = signature {
-                        req = req.header("X-Webhook-Signature", sig);
-                    }
-                    match req.send().await {
-                        Ok(resp) => {
-                            let status = resp.status();
-                            if status.is_success() {
-                                return;
-                            }
-                            if status.is_client_error() {
-                                tracing::warn!(
-                                    "Webhook to {} returned client error {}; not retrying",
-                                    url,
-                                    status
-                                );
-                                return;
-                            }
-                            last_err = Some(format!("status {}", status));
-                        }
-                        Err(e) => {
-                            last_err = Some(e.to_string());
-                        }
-                    }
-                    tracing::debug!(
-                        "Webhook to {} attempt {}/{} failed: {}",
-                        url,
-                        attempt + 1,
-                        DELAYS_MS.len(),
-                        last_err.as_deref().unwrap_or("?")
-                    );
                 }
-                tracing::warn!(
-                    "Failed to send webhook to {} after {} attempts: {}",
-                    url,
-                    DELAYS_MS.len(),
-                    last_err.as_deref().unwrap_or("?")
-                );
+
+                if let Err(e) = req.send().await {
+                    tracing::warn!("Failed to send webhook to {}: {}", url, e);
+                }
             });
         }
     }
