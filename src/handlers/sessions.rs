@@ -584,6 +584,25 @@ pub async fn reconnect_all_on_startup(state: AppState) {
         let runtime = state.get_or_create_session(&session.id, &storage_path);
         runtime.set_status(SessionStatus::Connecting);
 
+        // Repopulate the in-memory webhook registry from MySQL — otherwise
+        // the DashMap is empty after restart and broadcast_to_webhooks
+        // silently drops every event even though the rows still exist.
+        match state.session_manager().get_webhooks(&session.id).await {
+            Ok(rows) => {
+                if rows.is_empty() {
+                    tracing::debug!("[startup] no webhooks for session {}", session.id);
+                } else {
+                    for (webhook_id, config) in rows {
+                        state.register_webhook(&session.id, &webhook_id, config);
+                    }
+                    tracing::info!("[startup] reloaded webhooks for session {}", session.id);
+                }
+            }
+            Err(e) => {
+                tracing::warn!("[startup] get_webhooks failed for {}: {}", session.id, e);
+            }
+        }
+
         let state_clone = state.clone();
         let sid = session.id.clone();
         tokio::spawn(async move {
