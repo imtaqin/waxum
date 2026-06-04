@@ -90,7 +90,7 @@ pub async fn send_image(
     Json(request): Json<SendImageRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.image).await?;
 
@@ -166,7 +166,7 @@ pub async fn send_video(
     Json(request): Json<SendVideoRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.video).await?;
 
@@ -242,7 +242,7 @@ pub async fn send_audio(
     Json(request): Json<SendAudioRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.audio).await?;
 
@@ -305,7 +305,7 @@ pub async fn send_document(
     Json(request): Json<SendDocumentRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.document).await?;
 
@@ -382,7 +382,7 @@ pub async fn send_sticker(
     Json(request): Json<SendStickerRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, _mimetype) = get_media_data(&request.sticker).await?;
 
@@ -444,7 +444,7 @@ pub async fn send_location(
     Json(request): Json<SendLocationRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         location_message: Some(Box::new(waproto::whatsapp::message::LocationMessage {
@@ -492,7 +492,7 @@ pub async fn send_contact(
     Json(request): Json<SendContactRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let vcard = build_vcard(&request.contact);
 
@@ -540,7 +540,7 @@ pub async fn edit_message(
     Json(request): Json<EditMessageRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let new_content = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
@@ -584,7 +584,7 @@ pub async fn send_reaction(
     Json(request): Json<SendReactionRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         reaction_message: Some(waproto::whatsapp::message::ReactionMessage {
@@ -637,7 +637,7 @@ pub async fn send_poll(
     Json(request): Json<SendPollRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
         .options
@@ -697,7 +697,7 @@ pub async fn send_buttons(
     Json(request): Json<SendButtonsRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
         .buttons
@@ -767,7 +767,7 @@ pub async fn send_list(
     Json(request): Json<SendListRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     // Build list params JSON for native flow
     let sections_json: Vec<serde_json::Value> = request
@@ -866,7 +866,7 @@ pub async fn send_interactive(
     Json(request): Json<SendInteractiveRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let buttons: Vec<
         waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton,
@@ -944,7 +944,7 @@ pub async fn send_cta_url(
     Json(request): Json<SendCtaUrlRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let merchant_url = request
         .merchant_url
@@ -1024,7 +1024,7 @@ pub async fn send_quick_reply(
     Json(request): Json<SendQuickReplyRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     if request.buttons.is_empty() {
         return Err(ApiError::Internal(
@@ -1112,7 +1112,7 @@ pub async fn send_newsletter_admin_invite(
     Json(request): Json<SendNewsletterAdminInviteRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         newsletter_admin_invite_message: Some(Box::new(
@@ -1164,7 +1164,7 @@ pub async fn send_newsletter_follower_invite(
     Json(request): Json<SendNewsletterFollowerInviteRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         newsletter_follower_invite_message_v2: Some(Box::new(
@@ -1215,7 +1215,7 @@ pub async fn send_order(
     Json(request): Json<SendOrderRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let status = request.status.as_deref().and_then(|s| match s {
         "inquiry" => Some(1),
@@ -1277,7 +1277,7 @@ pub async fn send_invoice(
     Json(request): Json<SendInvoiceRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
         "image" => Some(0),
@@ -1333,7 +1333,7 @@ pub async fn send_payment_invite(
     Json(request): Json<SendPaymentInviteRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         payment_invite_message: Some(waproto::whatsapp::message::PaymentInviteMessage {
@@ -1435,7 +1435,7 @@ pub async fn forward_message(
     Json(request): Json<ForwardMessageRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
@@ -1487,7 +1487,7 @@ pub async fn send_poll_update(
     Json(request): Json<SendPollUpdateRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let enc_payload = request.enc_payload.map(|p| {
         base64::engine::general_purpose::STANDARD
@@ -1555,7 +1555,7 @@ pub async fn send_buttons_response(
     Json(request): Json<SendButtonsResponseRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         buttons_response_message: Some(Box::new(
@@ -1615,7 +1615,7 @@ pub async fn send_list_response(
     Json(request): Json<SendListResponseRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         list_response_message: Some(Box::new(waproto::whatsapp::message::ListResponseMessage {
@@ -1674,7 +1674,7 @@ pub async fn send_interactive_response(
     Json(request): Json<SendInteractiveResponseRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let native_flow =
         waproto::whatsapp::message::interactive_response_message::NativeFlowResponseMessage {
@@ -1743,7 +1743,7 @@ pub async fn send_highly_structured(
     Json(request): Json<SendHighlyStructuredRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         highly_structured_message: Some(Box::new(
@@ -1796,7 +1796,7 @@ pub async fn send_template_button_reply(
     Json(request): Json<SendTemplateButtonReplyRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         template_button_reply_message: Some(Box::new(
@@ -1853,7 +1853,7 @@ pub async fn send_comment(
     Json(request): Json<SendCommentRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let inner_message = waproto::whatsapp::Message {
         extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
@@ -1917,7 +1917,7 @@ pub async fn send_scheduled_call(
     Json(request): Json<SendScheduledCallRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let call_type = match request.call_type.to_lowercase().as_str() {
         "video" => 2,
@@ -1972,7 +1972,7 @@ pub async fn send_scheduled_call_edit(
     Json(request): Json<SendScheduledCallEditRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
         "cancel" => 1,
@@ -2029,7 +2029,7 @@ pub async fn send_payment(
     Json(request): Json<SendPaymentRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let note_message = request.note.map(|text| {
         Box::new(waproto::whatsapp::Message {
@@ -2099,7 +2099,7 @@ pub async fn request_payment(
     Json(request): Json<RequestPaymentRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let note_message = request.note.map(|text| {
         Box::new(waproto::whatsapp::Message {
@@ -2164,7 +2164,7 @@ pub async fn cancel_payment_request(
     Json(request): Json<CancelPaymentRequestRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         cancel_payment_request_message: Some(
@@ -2217,7 +2217,7 @@ pub async fn decline_payment_request(
     Json(request): Json<DeclinePaymentRequestRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
         decline_payment_request_message: Some(
@@ -2270,7 +2270,7 @@ pub async fn send_newsletter_forward(
     Json(request): Json<SendNewsletterForwardRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let content_type = match request.content_type.as_deref() {
         Some("update_card") => Some(2),
@@ -2354,7 +2354,7 @@ pub async fn revoke_message(
     Json(request): Json<RevokeMessageRequest>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to_jid = parse_jid(&request.to)?;
+    let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let revoke_type = match request.original_sender {
         Some(sender) => {
