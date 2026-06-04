@@ -886,25 +886,51 @@ pub async fn send_interactive(
         ..Default::default()
     };
 
-    let message = waproto::whatsapp::Message {
-        interactive_message: Some(Box::new(
-            waproto::whatsapp::message::InteractiveMessage {
-                body: Some(waproto::whatsapp::message::interactive_message::Body {
-                    text: Some(request.body_text),
-                }),
-                footer: request.footer_text.map(|f| {
-                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
-                        text: Some(f),
-                        ..Default::default()
-                    })
-                }),
-                interactive_message: Some(
-                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
-                ),
+    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+        if let Some(ref fake) = request.fake_reply {
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+        } else {
+            request.reply_to.map(|id| {
+                Box::new(waproto::whatsapp::ContextInfo {
+                    stanza_id: Some(id),
+                    ..Default::default()
+                })
+            })
+        };
+
+    let interactive = waproto::whatsapp::message::InteractiveMessage {
+        body: Some(waproto::whatsapp::message::interactive_message::Body {
+            text: Some(request.body_text),
+        }),
+        footer: request.footer_text.map(|f| {
+            Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                text: Some(f),
                 ..Default::default()
-            },
-        )),
+            })
+        }),
+        interactive_message: Some(
+            waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(
+                native_flow,
+            ),
+        ),
+        context_info,
         ..Default::default()
+    };
+
+    let inner = waproto::whatsapp::Message {
+        interactive_message: Some(Box::new(interactive)),
+        ..Default::default()
+    };
+
+    let message = if request.view_once {
+        waproto::whatsapp::Message {
+            view_once_message_v2: Some(Box::new(waproto::whatsapp::message::FutureProofMessage {
+                message: Some(Box::new(inner)),
+            })),
+            ..Default::default()
+        }
+    } else {
+        inner
     };
 
     let message_id = client

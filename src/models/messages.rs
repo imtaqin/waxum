@@ -350,6 +350,21 @@ pub struct SendInteractiveRequest {
     pub buttons: Vec<NativeFlowButtonItem>,
 
     pub reply_to: Option<String>,
+
+    /// Optional fake-reply quoted message context. Adds a fabricated "quoted"
+    /// header above the message — some consumer WhatsApp builds only render
+    /// native_flow buttons as clickable when wrapped in a quoted context.
+    pub fake_reply: Option<FakeReplyConfig>,
+
+    /// Wrap the interactive payload in `viewOnceMessageV2`. Empirically the
+    /// only reliable way to get native_flow quick-reply buttons clickable on
+    /// consumer WhatsApp accounts (unverified business). Defaults to true.
+    #[serde(default = "default_true")]
+    pub view_once: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
