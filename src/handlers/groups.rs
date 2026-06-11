@@ -37,7 +37,7 @@ pub async fn list_groups(
     let groups: Vec<GroupInfo> = groups
         .into_iter()
         .map(|(id, metadata)| GroupInfo {
-            jid: id,
+            jid: id.to_string(),
             subject: metadata.subject,
             participants: metadata
                 .participants
@@ -143,7 +143,7 @@ pub async fn get_group_info(
     Ok(Json(GroupInfoCached {
         participants: info
             .participants
-            .into_iter()
+            .iter()
             .map(|p| GroupParticipant {
                 jid: p.to_string(),
                 phone_number: None,

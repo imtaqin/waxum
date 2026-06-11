@@ -689,17 +689,25 @@ pub struct SendTemplateButtonReplyRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendCommentRequest {
+    /// JID of the channel / community-announce group the comment lives in
+    /// (the same `chat` JID where the parent post was published).
     #[schema(example = "120363000000000000@g.us")]
     pub to: String,
 
     /// The text content of the comment
     pub text: String,
 
-    /// The message ID of the message being commented on
+    /// Message ID of the post being commented on
     pub target_message_id: String,
 
-    /// The JID of the chat containing the target message
+    /// Optional override for the chat JID embedded in the target key. Defaults
+    /// to `to` when omitted.
     pub target_chat_jid: Option<String>,
+
+    /// Optional author JID of the parent post. For encrypted CAG comments the
+    /// receivers key decryption off this field; if omitted the lib resolves
+    /// it from the locally-stored message secret.
+    pub target_participant: Option<String>,
 }
 
 // --- Scheduled Call ---

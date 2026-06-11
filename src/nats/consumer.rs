@@ -638,8 +638,9 @@ async fn dispatch_command(
                 Some(s) => Some(parse_jid(s)?),
                 None => None,
             };
+            let id_refs: Vec<&str> = message_ids.iter().map(|s| s.as_str()).collect();
             client
-                .mark_as_read(&chat, sender_jid.as_ref(), message_ids)
+                .mark_as_read(&chat, sender_jid.as_ref(), &id_refs)
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             Ok("read".to_string())

@@ -162,7 +162,7 @@ pub async fn set_group_description(
 
     client
         .groups()
-        .set_description(&jid, description, request.prev_id)
+        .set_description(&jid, description, request.prev_id.as_deref())
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

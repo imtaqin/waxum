@@ -179,15 +179,16 @@ pub async fn download_media(
         .decode(&request.file_enc_sha256)
         .map_err(|e| ApiError::BadRequest(format!("Invalid file_enc_sha256 base64: {}", e)))?;
 
+    let params = whatsapp_rust::download::DownloadParams::encrypted(
+        request.direct_path.as_str(),
+        &media_key,
+        &file_sha256,
+        &file_enc_sha256,
+        request.file_length,
+        request.media_type.to_wacore_media_type(),
+    );
     let data = client
-        .download_from_params(
-            &request.direct_path,
-            &media_key,
-            &file_sha256,
-            &file_enc_sha256,
-            request.file_length,
-            request.media_type.to_wacore_media_type(),
-        )
+        .download_from_params(&params)
         .await
         .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
 

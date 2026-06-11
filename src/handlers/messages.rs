@@ -586,22 +586,18 @@ pub async fn send_reaction(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let message = waproto::whatsapp::Message {
-        reaction_message: Some(waproto::whatsapp::message::ReactionMessage {
-            key: Some(waproto::whatsapp::MessageKey {
-                remote_jid: Some(request.to.clone()),
-                id: Some(request.message_id),
-                from_me: Some(false),
-                ..Default::default()
-            }),
-            text: Some(request.emoji),
-            ..Default::default()
-        }),
+    // Build the target MessageKey. The upstream send_reaction transparently
+    // picks the right wire shape — encrypted CAG addon for community-announce
+    // / channel chats, regular ReactionMessage otherwise.
+    let key = waproto::whatsapp::MessageKey {
+        remote_jid: Some(request.to.clone()),
+        id: Some(request.message_id),
+        from_me: Some(false),
         ..Default::default()
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_reaction(to_jid.clone(), key, &request.emoji)
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -1881,33 +1877,21 @@ pub async fn send_comment(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let inner_message = waproto::whatsapp::Message {
-        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
-            text: Some(request.text),
-            ..Default::default()
-        })),
-        ..Default::default()
-    };
-
+    // Builds an EncCommentMessage envelope and ships it as a top-level
+    // enc_comment_message; receivers decrypt with the parent's messageSecret.
     let target_jid = request
         .target_chat_jid
         .unwrap_or_else(|| request.to.clone());
-
-    let message = waproto::whatsapp::Message {
-        comment_message: Some(Box::new(waproto::whatsapp::message::CommentMessage {
-            message: Some(Box::new(inner_message)),
-            target_message_key: Some(waproto::whatsapp::MessageKey {
-                remote_jid: Some(target_jid),
-                id: Some(request.target_message_id),
-                from_me: Some(false),
-                ..Default::default()
-            }),
-        })),
-        ..Default::default()
+    let parent_key = waproto::whatsapp::MessageKey {
+        remote_jid: Some(target_jid),
+        id: Some(request.target_message_id),
+        from_me: Some(false),
+        participant: request.target_participant,
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .comments()
+        .send_text(to_jid.clone(), parent_key, &request.text)
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -2429,8 +2413,9 @@ pub async fn mark_as_read(
         None => None,
     };
 
+    let id_refs: Vec<&str> = request.message_ids.iter().map(|s| s.as_str()).collect();
     client
-        .mark_as_read(&chat_jid, sender.as_ref(), request.message_ids)
+        .mark_as_read(&chat_jid, sender.as_ref(), &id_refs)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
