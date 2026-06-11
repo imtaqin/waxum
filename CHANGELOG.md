@@ -2,6 +2,57 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.0] - 2026-06-11
+
+### New Features
+
+#### CAG channel reactions, both directions
+- `/messages/reaction` now routes through `Client::send_reaction` which
+  is CAG-aware: it auto-swaps to the encrypted addon stanza when the
+  chat is a community-announce group and keeps the regular
+  `ReactionMessage` path for 1:1 and standard groups.
+- Inbound encrypted reactions on CAG channels are decrypted by the
+  upstream lib and surfaced as `event=reaction` like every other
+  reaction.
+
+#### CAG channel comments
+- `/messages/comment` rewritten to use `client.comments().send_text()`.
+  Encrypted with the parent post's `messageSecret`, shipped as the
+  top-level `enc_comment_message` envelope per WA Web parity.
+- Each comment carries its own fresh `messageSecret` so it can itself
+  receive reactions / replies.
+- Request body gains an optional `target_participant` field for when
+  the lib can't resolve the parent author from local msg_secret
+  storage (e.g. commenting on someone else's first-seen post).
+- Inbound encrypted comments are dispatched as their decrypted inner
+  body via the normal `message` event with `comment_target` set on the
+  envelope.
+
+### Device props override on session create
+- Already in 0.5.x, restated for the 0.6 release: pass `device` on
+  `POST /sessions`, `/connect`, or `/pair` to override the OS /
+  platform / app version shown in WhatsApp Linked Devices. Honored only
+  on first pair.
+
+### Upstream bump → oxidezap/whatsapp-rust@0aa6cb9
+- Pulls in upstream send-path parity fixes (messageContextInfo hoisting
+  in DeviceSentMessage, groupStatusV2 unwrap, payment-stanza
+  classification, LID resolution clones cut, batched previous-MAC
+  prefetch, libsignal verify-side memoization, group device-list
+  topology memo, history-sync prost gating, ack-id borrowing, binary
+  small-attr inline storage). Most are transparent perf wins.
+
+### Internal / breaking call-site adjustments
+- `Client::get_pn()`, `get_lid()`, `get_push_name()` are now sync — no
+  longer `await`ed.
+- `Client::download_from_params` takes a single `DownloadParams` struct
+  built via `DownloadParams::encrypted(...)`.
+- `Groups::query_info` returns `Arc<...>` — participants iterated by
+  reference.
+- `Groups::set_description` takes `Option<&str>` for `prev_id`.
+- `Receipt::mark_as_read` takes `&[&str]` — handlers slice their owned
+  Vec<String> into `&str`s.
+
 ## [0.4.7] - 2026-04-27
 
 ### New Features
