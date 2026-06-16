@@ -21,6 +21,10 @@ impl SessionManager {
         Self { pool }
     }
 
+    pub fn pool(&self) -> &DbPool {
+        &self.pool
+    }
+
     pub async fn create_session(
         &self,
         id: &str,

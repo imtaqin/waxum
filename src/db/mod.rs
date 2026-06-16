@@ -1,3 +1,4 @@
+pub mod contacts;
 pub mod schema;
 pub mod session;
 

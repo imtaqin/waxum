@@ -101,6 +101,7 @@ use state::AppState;
         handlers::contacts::get_contact_info,
         handlers::contacts::get_profile_picture,
         handlers::contacts::get_user_info,
+        handlers::contacts::list_contacts,
 
         handlers::groups::list_groups,
         handlers::groups::get_group,
@@ -234,6 +235,8 @@ use state::AppState;
             models::contacts::GetUserInfoRequest,
             models::contacts::UserInfoResponse,
             models::contacts::UserInfo,
+            models::contacts::StoredContact,
+            models::contacts::StoredContactListResponse,
 
             models::groups::GroupListResponse,
             models::groups::GroupInfo,

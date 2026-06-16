@@ -54,6 +54,34 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         )
         .await?;
 
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS contacts (
+                session_id VARCHAR(255) NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                jid VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                lid_jid VARCHAR(255),
+                full_name VARCHAR(255),
+                first_name VARCHAR(255),
+                push_name VARCHAR(255),
+                business_name VARCHAR(255),
+                source VARCHAR(40) NOT NULL DEFAULT 'unknown',
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (session_id, jid)
+            )
+            "#,
+            &[],
+        )
+        .await?;
+
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(session_id, phone)",
+            &[],
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -92,6 +120,27 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
+        )
+        "#,
+    )
+    .await?;
+
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS contacts (
+            session_id VARCHAR(255) NOT NULL,
+            jid VARCHAR(255) NOT NULL,
+            phone VARCHAR(50),
+            lid_jid VARCHAR(255),
+            full_name VARCHAR(255),
+            first_name VARCHAR(255),
+            push_name VARCHAR(255),
+            business_name VARCHAR(255),
+            source VARCHAR(40) NOT NULL DEFAULT 'unknown',
+            updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            PRIMARY KEY (session_id, jid),
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            INDEX idx_contacts_phone (session_id, phone)
         )
         "#,
     )

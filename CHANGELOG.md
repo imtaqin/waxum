@@ -2,6 +2,40 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.1] - 2026-06-11
+
+### New Features
+
+#### Locally-cached contact list
+- `GET /sessions/{id}/contacts` — paginated dump of the contacts wa-rs
+  has seen for the session. Supports `?q=` (name / phone / business-name
+  substring), `?limit=` (1-1000, default 100), `?offset=`.
+- New `contacts` table backs the endpoint (PostgreSQL + MySQL). Schema:
+  `(session_id, jid)` PK + `phone`, `lid_jid`, `full_name`,
+  `first_name`, `push_name`, `business_name`, `source`, `updated_at`.
+- Upserts happen automatically on:
+  - `Event::ContactUpdate` (appstate sync mutation) — captures
+    `full_name` / `first_name` / `lid_jid` from the saved address-book
+    entry. `source` = `appstate_sync` on a full sync, `appstate`
+    otherwise.
+  - `Event::PushNameUpdate` — `push_name` refresh on each notification.
+  - `Event::ContactUpdated` (`<notification type="contacts"><update/>`).
+  - `Event::Message` — inbound only, captures `push_name` and the
+    sender JID/phone so the directory fills organically alongside
+    chats.
+
+Filling the table is a side-effect of the existing event pipeline — no
+extra `usync` round trips, no new background jobs.
+
+### Rationale
+
+Upstream `whatsapp-rust` only exposes per-JID lookups (`is_on_whatsapp`,
+`get_user_info`) because WhatsApp itself doesn't return a contact list
+over the socket; contacts come from the phone's address book via
+appstate sync. The new endpoint wraps the appstate stream so callers
+can hand out a directory without writing the persistence layer
+themselves.
+
 ## [0.6.0] - 2026-06-11
 
 ### New Features

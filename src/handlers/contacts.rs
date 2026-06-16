@@ -1,12 +1,84 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
+use serde::Deserialize;
 use wacore_binary::jid::Jid;
 
+use crate::db::contacts::ContactStore;
 use crate::error::ApiError;
 use crate::models::contacts::*;
 use crate::state::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct ListContactsQuery {
+    #[serde(default)]
+    pub q: Option<String>,
+    #[serde(default = "default_limit")]
+    pub limit: u32,
+    #[serde(default)]
+    pub offset: u32,
+}
+
+fn default_limit() -> u32 {
+    100
+}
+
+/// Paginated dump of locally-cached contacts for a session. Contacts are
+/// upserted automatically from appstate sync mutations, push-name updates,
+/// contact-notification stanzas, and inbound messages — no separate sync
+/// call required.
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/contacts",
+    tag = "contacts",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("q" = Option<String>, Query, description = "Search filter (name/phone)"),
+        ("limit" = Option<u32>, Query, description = "Page size (1-1000, default 100)"),
+        ("offset" = Option<u32>, Query, description = "Page offset (default 0)")
+    ),
+    responses(
+        (status = 200, description = "Contact list", body = StoredContactListResponse),
+        (status = 404, description = "Session not found")
+    )
+)]
+pub async fn list_contacts(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Query(query): Query<ListContactsQuery>,
+) -> Result<Json<StoredContactListResponse>, ApiError> {
+    let store = ContactStore::new(state.session_manager().pool());
+    let limit = query.limit.clamp(1, 1000);
+    let rows = store
+        .list(&session_id, query.q.as_deref(), limit, query.offset)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total = store
+        .count(&session_id)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(StoredContactListResponse {
+        contacts: rows
+            .into_iter()
+            .map(|r| StoredContact {
+                jid: r.jid,
+                phone: r.phone,
+                lid_jid: r.lid_jid,
+                full_name: r.full_name,
+                first_name: r.first_name,
+                push_name: r.push_name,
+                business_name: r.business_name,
+                source: r.source,
+                updated_at: r.updated_at,
+            })
+            .collect(),
+        total,
+        limit,
+        offset: query.offset,
+    }))
+}
 
 #[utoipa::path(
     post,

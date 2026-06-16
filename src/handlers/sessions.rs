@@ -875,6 +875,10 @@ async fn handle_event(
         _ => {}
     }
 
+    // Side-channel: persist contact-related events to the contacts table so
+    // we can answer GET /sessions/:id/contacts without a usync roundtrip.
+    persist_contact_event(state, session_id, event.as_ref()).await;
+
     if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {
         let event_type = get_event_type(event.as_ref());
         state
@@ -1079,6 +1083,115 @@ fn extract_message_content(
     }
 
     (text, caption, message_type, media_mimetype)
+}
+
+async fn persist_contact_event(
+    state: &AppState,
+    session_id: &str,
+    event: &wacore::types::events::Event,
+) {
+    use wacore::types::events::Event;
+    let store = crate::db::contacts::ContactStore::new(state.session_manager().pool());
+    let mut upsert = crate::db::contacts::ContactUpsert {
+        session_id,
+        ..Default::default()
+    };
+    let jid_str;
+    let mut phone_str = None::<String>;
+    let mut lid_str = None::<String>;
+    let mut full_name = None::<String>;
+    let mut first_name = None::<String>;
+    let mut push_name = None::<String>;
+    let mut business_name = None::<String>;
+    let source: &str;
+
+    match event {
+        Event::ContactUpdate(u) => {
+            jid_str = u.jid.to_string();
+            if let Some(name) = u.action.full_name.as_deref() {
+                if !name.is_empty() {
+                    full_name = Some(name.to_string());
+                }
+            }
+            if let Some(name) = u.action.first_name.as_deref() {
+                if !name.is_empty() {
+                    first_name = Some(name.to_string());
+                }
+            }
+            if let Some(lid) = u.action.lid_jid.as_deref() {
+                if !lid.is_empty() {
+                    lid_str = Some(lid.to_string());
+                }
+            }
+            // PN/lid resolution: appstate carries PN as the chat key
+            if u.jid.server == wacore_binary::jid::SERVER_JID {
+                phone_str = Some(u.jid.user.to_string());
+            }
+            source = if u.from_full_sync {
+                "appstate_sync"
+            } else {
+                "appstate"
+            };
+        }
+        Event::PushNameUpdate(u) => {
+            jid_str = u.jid.to_string();
+            if !u.new_push_name.is_empty() {
+                push_name = Some(u.new_push_name.clone());
+            }
+            if u.jid.server == wacore_binary::jid::SERVER_JID {
+                phone_str = Some(u.jid.user.to_string());
+            }
+            source = "push_name";
+        }
+        Event::ContactUpdated(u) => {
+            jid_str = u.jid.to_string();
+            if u.jid.server == wacore_binary::jid::SERVER_JID {
+                phone_str = Some(u.jid.user.to_string());
+            }
+            source = "notification";
+        }
+        Event::Message(_msg, info) => {
+            // Capture push_name + JID from any inbound message so the contact
+            // table fills up organically alongside chats.
+            if info.source.is_from_me {
+                return;
+            }
+            let sender = &info.source.sender;
+            jid_str = sender.to_string();
+            if !info.push_name.is_empty() {
+                push_name = Some(info.push_name.clone());
+            }
+            if let Some(vn) = info.verified_name.as_ref() {
+                let s = format!("{:?}", vn);
+                if !s.is_empty() && s != "None" {
+                    business_name = Some(s);
+                }
+            }
+            if sender.server == wacore_binary::jid::SERVER_JID {
+                phone_str = Some(sender.user.to_string());
+            }
+            source = "message";
+        }
+        _ => return,
+    }
+
+    upsert.jid = &jid_str;
+    upsert.phone = phone_str.as_deref();
+    upsert.lid_jid = lid_str.as_deref();
+    upsert.full_name = full_name.as_deref();
+    upsert.first_name = first_name.as_deref();
+    upsert.push_name = push_name.as_deref();
+    upsert.business_name = business_name.as_deref();
+    upsert.source = source;
+
+    if let Err(e) = store.upsert(&upsert).await {
+        tracing::warn!(
+            "contacts: upsert failed for {}/{}: {}",
+            session_id,
+            jid_str,
+            e
+        );
+    }
 }
 
 fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serde_json::Value {

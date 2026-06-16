@@ -229,6 +229,10 @@ fn session_routes() -> Router<AppState> {
             post(handlers::contacts::get_user_info),
         )
         .route(
+            "/{session_id}/contacts",
+            get(handlers::contacts::list_contacts),
+        )
+        .route(
             "/{session_id}/groups",
             get(handlers::groups::list_groups).post(handlers::groups_management::create_group),
         )
