@@ -996,6 +996,35 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
     serde_json::Value::Null
 }
 
+/// Extracts location data (lat/lng + optional name/address/url) from a
+/// LocationMessage / LiveLocationMessage when present. Returns null otherwise.
+fn extract_location(msg: &waproto::whatsapp::Message) -> serde_json::Value {
+    if let Some(loc) = msg.location_message.as_ref() {
+        return serde_json::json!({
+            "latitude": loc.degrees_latitude,
+            "longitude": loc.degrees_longitude,
+            "name": loc.name,
+            "address": loc.address,
+            "url": loc.url,
+            "accuracy_meters": loc.accuracy_in_meters,
+            "speed_mps": loc.speed_in_mps,
+            "is_live": false,
+        });
+    }
+    if let Some(loc) = msg.live_location_message.as_ref() {
+        return serde_json::json!({
+            "latitude": loc.degrees_latitude,
+            "longitude": loc.degrees_longitude,
+            "accuracy_meters": loc.accuracy_in_meters,
+            "speed_mps": loc.speed_in_mps,
+            "sequence_number": loc.sequence_number,
+            "caption": loc.caption,
+            "is_live": true,
+        });
+    }
+    serde_json::Value::Null
+}
+
 /// Extracts user-visible content from a protobuf Message: best-effort text,
 /// optional caption, the high-level type slug, and the media mimetype if any.
 fn extract_message_content(
@@ -1204,6 +1233,7 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
         Event::Message(msg, info) => {
             let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
             let media_meta = extract_media_metadata(msg);
+            let location = extract_location(msg);
             serde_json::json!({
                 "from": info.source.sender.to_string(),
                 "chat": info.source.chat.to_string(),
@@ -1219,6 +1249,7 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
                 "caption": caption,
                 "media_mimetype": media_mimetype,
                 "media": media_meta,
+                "location": location,
                 "is_group": info.source.chat.to_string().ends_with("@g.us"),
                 "participant": info.source.sender.to_string(),
             })
