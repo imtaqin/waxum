@@ -2,6 +2,63 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.2] - 2026-06-25
+
+### Upstream
+
+- Bumped `whatsapp-rust` to oxidezap@302d478. Notable upstream changes
+  picked up:
+  - `feat(groups)`: backfill participant `phone_number` from LID-PN map
+    so group participant listings carry the PN even when WhatsApp
+    handed back only the LID.
+  - `feat(retry)`: WA-Web parity log levels + retry-flow observability
+    counters.
+  - `refactor(error)!`: anyhow → per-domain typed errors in the public
+    API surface.
+  - `fix(atomics)`: portable_atomic for 64-bit atomics (matters on ARM
+    and other non-x86 targets).
+  - Multiple send-path perf wins (shared encode between reporting token
+    and DM/SKMSG plaintext, skip DeviceSentMessage when there is no
+    companion, group SKDM warm-gate one-lookup-per-device, signal
+    cache flush without holding the device read-lock).
+  - `Bot::run()` is now infallible and `Bot::with_backend(...)` takes
+    `impl Backend` directly — `Arc::new(...)` wrappers are dropped at
+    every call site.
+  - Several inner protobuf message variants (Invoice, PaymentInvite,
+    PinInChat, PollUpdate, ScheduledCallCreation/Edit,
+    CancelPaymentRequest, DeclinePaymentRequest, Reaction) are now
+    boxed (`Option<Box<T>>`) — every constructor call now wraps in
+    `Box::new(...)`.
+
+### New Features
+
+#### Location data in webhook payload
+- Inbound `location` and `live_location` messages now include a `location`
+  object in the webhook event with `latitude`, `longitude`, plus optional
+  `name`, `address`, `url`, `accuracy_meters`, `speed_mps`, and
+  `is_live`. Live-location entries also carry `sequence_number` and the
+  optional caption.
+
+### Fixes / Reliability
+
+#### Bounded webhook delivery
+- Replaced the per-broadcast `reqwest::Client::new()` with a shared,
+  `OnceLock`-initialised client carrying `timeout(10s)`,
+  `connect_timeout(5s)`, and a small idle pool. The old setup let
+  tokio tasks queue up against an unreachable webhook until the OS-level
+  TCP timeout (~75 s), so a brief target outage piled threads (we
+  observed ~600 on a quiet process). Each task is now bounded to ~10 s
+  and the connection pool is reused across deliveries.
+
+#### utf8mb4 on `contacts`
+- Auto-`ALTER`s the text columns of the `contacts` table (`jid`,
+  `phone`, `lid_jid`, `full_name`, `first_name`, `push_name`,
+  `business_name`, `source`) to `utf8mb4_general_ci`. WhatsApp push
+  names sometimes carry 4-byte characters (emoji etc); the previous
+  `utf8mb3` setting tripped the upstream MySQL driver's collation
+  conversion check and dropped the upsert. New tables are now created
+  with `DEFAULT CHARSET=utf8mb4`.
+
 ## [0.6.1] - 2026-06-11
 
 ### New Features

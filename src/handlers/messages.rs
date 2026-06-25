@@ -1308,13 +1308,13 @@ pub async fn send_invoice(
     });
 
     let message = waproto::whatsapp::Message {
-        invoice_message: Some(waproto::whatsapp::message::InvoiceMessage {
+        invoice_message: Some(Box::new(waproto::whatsapp::message::InvoiceMessage {
             note: request.note,
             token: request.token,
             attachment_type,
             attachment_mimetype: request.attachment_mimetype,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
     };
 
@@ -1358,10 +1358,10 @@ pub async fn send_payment_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        payment_invite_message: Some(waproto::whatsapp::message::PaymentInviteMessage {
+        payment_invite_message: Some(Box::new(waproto::whatsapp::message::PaymentInviteMessage {
             service_type: request.service_type,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
     };
 
@@ -1407,7 +1407,7 @@ pub async fn send_pin_message(
     let pin_type = if request.duration_seconds > 0 { 1 } else { 2 }; // 1 = PIN, 2 = UNPIN
 
     let message = waproto::whatsapp::Message {
-        pin_in_chat_message: Some(waproto::whatsapp::message::PinInChatMessage {
+        pin_in_chat_message: Some(Box::new(waproto::whatsapp::message::PinInChatMessage {
             key: Some(waproto::whatsapp::MessageKey {
                 remote_jid: Some(request.chat.clone()),
                 id: Some(request.message_id),
@@ -1416,7 +1416,7 @@ pub async fn send_pin_message(
             }),
             r#type: Some(pin_type),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
-        }),
+        })),
         ..Default::default()
     };
 
@@ -1523,7 +1523,7 @@ pub async fn send_poll_update(
     });
 
     let message = waproto::whatsapp::Message {
-        poll_update_message: Some(waproto::whatsapp::message::PollUpdateMessage {
+        poll_update_message: Some(Box::new(waproto::whatsapp::message::PollUpdateMessage {
             poll_creation_message_key: Some(waproto::whatsapp::MessageKey {
                 remote_jid: Some(request.to.clone()),
                 id: Some(request.poll_message_id),
@@ -1536,7 +1536,7 @@ pub async fn send_poll_update(
             }),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
     };
 
@@ -1935,13 +1935,13 @@ pub async fn send_scheduled_call(
     };
 
     let message = waproto::whatsapp::Message {
-        scheduled_call_creation_message: Some(
+        scheduled_call_creation_message: Some(Box::new(
             waproto::whatsapp::message::ScheduledCallCreationMessage {
                 scheduled_timestamp_ms: Some(request.scheduled_timestamp_ms),
                 call_type: Some(call_type),
                 title: request.title,
             },
-        ),
+        )),
         ..Default::default()
     };
 
@@ -1990,15 +1990,17 @@ pub async fn send_scheduled_call_edit(
     };
 
     let message = waproto::whatsapp::Message {
-        scheduled_call_edit_message: Some(waproto::whatsapp::message::ScheduledCallEditMessage {
-            key: Some(waproto::whatsapp::MessageKey {
-                remote_jid: Some(request.to.clone()),
-                id: Some(request.scheduled_call_message_id),
-                from_me: Some(true),
-                ..Default::default()
-            }),
-            edit_type: Some(edit_type),
-        }),
+        scheduled_call_edit_message: Some(Box::new(
+            waproto::whatsapp::message::ScheduledCallEditMessage {
+                key: Some(waproto::whatsapp::MessageKey {
+                    remote_jid: Some(request.to.clone()),
+                    id: Some(request.scheduled_call_message_id),
+                    from_me: Some(true),
+                    ..Default::default()
+                }),
+                edit_type: Some(edit_type),
+            },
+        )),
         ..Default::default()
     };
 
@@ -2177,7 +2179,7 @@ pub async fn cancel_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        cancel_payment_request_message: Some(
+        cancel_payment_request_message: Some(Box::new(
             waproto::whatsapp::message::CancelPaymentRequestMessage {
                 key: Some(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
@@ -2186,7 +2188,7 @@ pub async fn cancel_payment_request(
                     ..Default::default()
                 }),
             },
-        ),
+        )),
         ..Default::default()
     };
 
@@ -2230,7 +2232,7 @@ pub async fn decline_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        decline_payment_request_message: Some(
+        decline_payment_request_message: Some(Box::new(
             waproto::whatsapp::message::DeclinePaymentRequestMessage {
                 key: Some(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
@@ -2239,7 +2241,7 @@ pub async fn decline_payment_request(
                     ..Default::default()
                 }),
             },
-        ),
+        )),
         ..Default::default()
     };
 

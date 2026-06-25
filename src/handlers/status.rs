@@ -41,7 +41,7 @@ pub async fn send_status_reaction(
     let now_ms = chrono::Utc::now().timestamp_millis();
 
     let message = wa::Message {
-        reaction_message: Some(wa::message::ReactionMessage {
+        reaction_message: Some(Box::new(wa::message::ReactionMessage {
             key: Some(wa::MessageKey {
                 remote_jid: Some(status_broadcast.to_string()),
                 from_me: Some(false),
@@ -51,7 +51,7 @@ pub async fn send_status_reaction(
             text: Some(request.reaction.clone()),
             grouping_key: None,
             sender_timestamp_ms: Some(now_ms),
-        }),
+        })),
         ..Default::default()
     };
 

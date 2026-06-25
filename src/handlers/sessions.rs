@@ -2,7 +2,6 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::device_props::ResolvedDeviceProps;
@@ -651,8 +650,8 @@ async fn connect_client(
 
     let dp = device_props.unwrap_or_else(crate::device_props::resolve_from_env);
 
-    let mut bot = Bot::builder()
-        .with_backend(Arc::new(backend))
+    let bot = Bot::builder()
+        .with_backend(backend)
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
@@ -686,12 +685,7 @@ async fn connect_client(
         .update_session_status(session_id, SessionStatus::WaitingForQr, false)
         .await;
 
-    let handle = bot
-        .run()
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let _ = handle.await;
+    bot.run().await;
 
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_status(SessionStatus::Disconnected);
@@ -747,8 +741,8 @@ async fn connect_client_with_pair_code(
         platform_id: None,
     };
 
-    let mut bot = Bot::builder()
-        .with_backend(Arc::new(backend))
+    let bot = Bot::builder()
+        .with_backend(backend)
         .with_transport_factory(transport_factory)
         .with_http_client(http_client)
         .with_runtime(TokioRuntime)
@@ -777,12 +771,7 @@ async fn connect_client_with_pair_code(
         runtime.set_client(Some(bot.client()));
     }
 
-    let handle = bot
-        .run()
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let _ = handle.await;
+    bot.run().await;
 
     if let Some(runtime) = state.get_session(session_id) {
         runtime.set_status(SessionStatus::Disconnected);

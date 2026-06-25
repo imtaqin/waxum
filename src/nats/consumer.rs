@@ -371,7 +371,7 @@ async fn dispatch_command(
         } => {
             let to_jid = parse_jid(&to)?;
             let message = waproto::whatsapp::Message {
-                reaction_message: Some(waproto::whatsapp::message::ReactionMessage {
+                reaction_message: Some(Box::new(waproto::whatsapp::message::ReactionMessage {
                     key: Some(waproto::whatsapp::MessageKey {
                         remote_jid: Some(to.clone()),
                         id: Some(message_id),
@@ -381,7 +381,7 @@ async fn dispatch_command(
                     text: Some(emoji),
                     sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
             };
             client
