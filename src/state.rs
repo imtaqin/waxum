@@ -1,6 +1,7 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
 
@@ -9,6 +10,24 @@ use crate::db::SessionManager;
 use crate::models::sessions::SessionStatus;
 use crate::models::webhooks::WebhookConfig;
 use crate::nats::NatsManager;
+
+/// Shared reqwest client for webhook delivery. Per-call `Client::new()` skips
+/// the connection pool and uses the OS-level TCP timeout (~75 s), so a
+/// downtime on a webhook target piled tokio tasks faster than they could
+/// drain — we observed ~600 threads on a 0 % CPU idle process. A shared
+/// client with explicit timeouts keeps each task bounded to ~10 s.
+fn webhook_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(5))
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(16)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
 
 pub struct SessionState {
     pub client: RwLock<Option<Arc<Client>>>,
@@ -192,7 +211,7 @@ impl AppState {
 
     pub async fn broadcast_to_webhooks(&self, session_id: &str, event: &str, payload: &str) {
         let webhooks = self.get_webhooks(session_id);
-        let client = reqwest::Client::new();
+        let client = webhook_client();
 
         for (_, config) in webhooks {
             if !config.enabled {
