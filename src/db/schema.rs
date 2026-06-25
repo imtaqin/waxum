@@ -141,7 +141,7 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             PRIMARY KEY (session_id, jid),
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_contacts_phone (session_id, phone)
-        )
+        ) DEFAULT CHARSET=utf8mb4
         "#,
     )
     .await?;
@@ -156,6 +156,17 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
         "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
         "ALTER TABLE webhooks MODIFY COLUMN url VARCHAR(2000) NOT NULL",
         "ALTER TABLE webhooks MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
+        // Upgrade text columns on contacts to utf8mb4 so 4-byte chars
+        // (emoji etc) in WhatsApp push_name / business_name don't trip
+        // the utf8mb3 collation conversion error from the upstream driver.
+        "ALTER TABLE contacts MODIFY COLUMN jid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL",
+        "ALTER TABLE contacts MODIFY COLUMN phone VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN lid_jid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN full_name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN first_name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN push_name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN business_name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
+        "ALTER TABLE contacts MODIFY COLUMN source VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'unknown'",
     ];
     for sql in &migrations {
         let _ = conn.query_drop(*sql).await;
