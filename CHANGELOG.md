@@ -2,6 +2,26 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.3] - 2026-06-25
+
+### New Features
+
+#### SQLite default backend
+- When `DATABASE_URL` (and the legacy `POSTGRES_*` / `MYSQL_*` env vars)
+  are unset, wa-rs now defaults to an embedded SQLite file at `./wa-rs.db`
+  instead of trying a Postgres `localhost` URL that almost never matches
+  a clean checkout. Override the path with `SQLITE_PATH=/path/to.db` or
+  set `DATABASE_URL=sqlite:///path/to.db`.
+- `DbBackend::SQLite` joins `Postgres` and `MySQL`; every session,
+  webhook, and contact query has a third match arm. Schema bootstraps
+  itself on first connect (WAL journal, foreign keys on, the same
+  three tables as the other backends).
+- Implemented through a thin `src/db/sqlite_raw.rs` FFI wrapper over
+  the `libsqlite3-sys 0.37` that `whatsapp-rust-sqlite-storage`
+  already brings in — we can't pull `rusqlite` because it pins
+  `libsqlite3-sys ^0.36`, and `links = "sqlite3"` allows only one copy
+  of the native lib in the dep graph.
+
 ## [0.6.2] - 2026-06-25
 
 ### Upstream

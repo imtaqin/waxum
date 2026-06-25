@@ -1,4 +1,5 @@
-use crate::db::session::DbPool;
+use crate::db::session::{sqlite_blocking, DbPool};
+use crate::db::sqlite_raw::{self, Value as SQ};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Default)]
@@ -91,6 +92,27 @@ impl<'a> ContactStore<'a> {
                         c.first_name, c.push_name, c.business_name, c.source, &now,
                     ),
                 ).await?;
+            }
+            DbPool::SQLite(pool) => {
+                let sid = c.session_id.to_string();
+                let jid = c.jid.to_string();
+                let phone = SQ::from_opt_str(c.phone);
+                let lid = SQ::from_opt_str(c.lid_jid);
+                let fname = SQ::from_opt_str(c.full_name);
+                let first = SQ::from_opt_str(c.first_name);
+                let push = SQ::from_opt_str(c.push_name);
+                let biz = SQ::from_opt_str(c.business_name);
+                let src = c.source.to_string();
+                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "INSERT INTO contacts (session_id, jid, phone, lid_jid, full_name, first_name, push_name, business_name, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(session_id, jid) DO UPDATE SET phone = COALESCE(excluded.phone, contacts.phone), lid_jid = COALESCE(excluded.lid_jid, contacts.lid_jid), full_name = COALESCE(excluded.full_name, contacts.full_name), first_name = COALESCE(excluded.first_name, contacts.first_name), push_name = COALESCE(excluded.push_name, contacts.push_name), business_name = COALESCE(excluded.business_name, contacts.business_name), source = excluded.source, updated_at = excluded.updated_at",
+                        &[SQ::Text(sid), SQ::Text(jid), phone, lid, fname, first, push, biz, SQ::Text(src), SQ::Text(now)],
+                    )?;
+                    Ok(())
+                })
+                .await?;
             }
         }
         Ok(())
@@ -185,6 +207,41 @@ impl<'a> ContactStore<'a> {
                     })
                     .collect())
             }
+            DbPool::SQLite(pool) => {
+                let sid = session_id.to_string();
+                let q = search.map(|s| format!("%{}%", s));
+                let limit_i = limit as i64;
+                let offset_i = offset as i64;
+                sqlite_blocking(pool, move |conn| {
+                    let mapper = |r: &sqlite_raw::Row| ContactRecord {
+                        jid: r.get_string(0).unwrap_or_default(),
+                        phone: r.get_string(1),
+                        lid_jid: r.get_string(2),
+                        full_name: r.get_string(3),
+                        first_name: r.get_string(4),
+                        push_name: r.get_string(5),
+                        business_name: r.get_string(6),
+                        source: r.get_string(7).unwrap_or_else(|| "unknown".to_string()),
+                        updated_at: r.get_string(8),
+                    };
+                    if let Some(qq) = q {
+                        sqlite_raw::query(
+                            conn,
+                            "SELECT jid, phone, lid_jid, full_name, first_name, push_name, business_name, source, updated_at FROM contacts WHERE session_id = ? AND (COALESCE(full_name,'') LIKE ? OR COALESCE(first_name,'') LIKE ? OR COALESCE(push_name,'') LIKE ? OR COALESCE(phone,'') LIKE ? OR COALESCE(business_name,'') LIKE ?) ORDER BY COALESCE(full_name, push_name, jid) ASC LIMIT ? OFFSET ?",
+                            &[SQ::Text(sid), SQ::Text(qq.clone()), SQ::Text(qq.clone()), SQ::Text(qq.clone()), SQ::Text(qq.clone()), SQ::Text(qq), SQ::Int(limit_i), SQ::Int(offset_i)],
+                            mapper,
+                        )
+                    } else {
+                        sqlite_raw::query(
+                            conn,
+                            "SELECT jid, phone, lid_jid, full_name, first_name, push_name, business_name, source, updated_at FROM contacts WHERE session_id = ? ORDER BY COALESCE(full_name, push_name, jid) ASC LIMIT ? OFFSET ?",
+                            &[SQ::Text(sid), SQ::Int(limit_i), SQ::Int(offset_i)],
+                            mapper,
+                        )
+                    }
+                })
+                .await
+            }
         }
     }
 
@@ -211,6 +268,19 @@ impl<'a> ContactStore<'a> {
                     )
                     .await?;
                 Ok(row.map(|r| r.0 as u64).unwrap_or(0))
+            }
+            DbPool::SQLite(pool) => {
+                let sid = session_id.to_string();
+                let rows = sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::query(
+                        conn,
+                        "SELECT COUNT(*) FROM contacts WHERE session_id = ?",
+                        &[SQ::Text(sid)],
+                        |r| r.get_int(0),
+                    )
+                })
+                .await?;
+                Ok(rows.first().copied().unwrap_or(0) as u64)
             }
         }
     }

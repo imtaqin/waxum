@@ -449,6 +449,7 @@ async fn main() -> Result<()> {
     let backend_name = match backend {
         db::DbBackend::Postgres => "PostgreSQL",
         db::DbBackend::MySQL => "MySQL",
+        db::DbBackend::SQLite => "SQLite",
     };
     tracing::info!("Connecting to {} ({})", backend_name, masked);
 
@@ -473,6 +474,13 @@ async fn main() -> Result<()> {
             // Test connection
             let _conn = my_pool.get_conn().await?;
             db::session::DbPool::MySQL(my_pool)
+        }
+        db::DbBackend::SQLite => {
+            let path = database_url
+                .strip_prefix("sqlite://")
+                .unwrap_or(&database_url);
+            let handle = db::sqlite_raw::open(path)?;
+            db::session::DbPool::SQLite(handle)
         }
     };
     tracing::info!("Connected to {}", backend_name);

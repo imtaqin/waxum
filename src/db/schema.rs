@@ -1,10 +1,62 @@
-use crate::db::session::DbPool;
+use crate::db::session::{sqlite_blocking, DbPool};
 
 pub async fn init_schema(pool: &DbPool) -> anyhow::Result<()> {
     match pool {
         DbPool::Postgres(pg) => init_postgres(pg).await,
         DbPool::MySQL(my) => init_mysql(my).await,
+        DbPool::SQLite(s) => init_sqlite(s).await,
     }
+}
+
+async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()> {
+    use crate::db::sqlite_raw;
+    sqlite_blocking(pool, |conn| {
+        sqlite_raw::exec_batch(
+            conn,
+            "PRAGMA journal_mode=WAL; \
+             PRAGMA foreign_keys=ON; \
+             CREATE TABLE IF NOT EXISTS sessions ( \
+                id TEXT PRIMARY KEY, \
+                name TEXT, \
+                storage_path TEXT NOT NULL, \
+                phone_number TEXT, \
+                push_name TEXT, \
+                status TEXT NOT NULL DEFAULT 'disconnected', \
+                is_logged_in INTEGER NOT NULL DEFAULT 0, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                last_connected_at TEXT \
+             ); \
+             CREATE TABLE IF NOT EXISTS webhooks ( \
+                id TEXT PRIMARY KEY, \
+                session_id TEXT NOT NULL, \
+                url TEXT NOT NULL, \
+                events TEXT NOT NULL DEFAULT '', \
+                secret TEXT, \
+                enabled INTEGER NOT NULL DEFAULT 1, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_webhooks_session_id ON webhooks(session_id); \
+             CREATE TABLE IF NOT EXISTS contacts ( \
+                session_id TEXT NOT NULL, \
+                jid TEXT NOT NULL, \
+                phone TEXT, \
+                lid_jid TEXT, \
+                full_name TEXT, \
+                first_name TEXT, \
+                push_name TEXT, \
+                business_name TEXT, \
+                source TEXT NOT NULL DEFAULT 'unknown', \
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                PRIMARY KEY (session_id, jid), \
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(session_id, phone);",
+        )?;
+        Ok(())
+    })
+    .await
 }
 
 async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {

@@ -3891,7 +3891,7 @@ checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "wa-rs"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -3907,6 +3907,7 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "jsonwebtoken",
+ "libsqlite3-sys",
  "mysql_async",
  "once_cell",
  "parking_lot",
