@@ -850,16 +850,40 @@ async fn handle_event(
         }
         Event::LoggedOut(logged_out) => {
             tracing::warn!(
-                "Session {}: Logged out: {:?}",
+                "Session {}: Logged out: {:?} — purging session",
                 session_id,
                 logged_out.reason
             );
+            // Tear down the live client so we stop dialing the dead device.
+            if let Some(client) = runtime.get_client() {
+                client.disconnect().await;
+            }
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
-            let _ = state
+
+            // Self-destruct: fetch storage path, drop the in-memory runtime,
+            // wipe the on-disk session, then remove the DB row. We do this
+            // synchronously inside the event handler so the next QR-scan
+            // login from the user starts from a clean slate instead of
+            // colliding with the dead session and bouncing the API into
+            // "database connection error" loops.
+            let storage_path = state
                 .session_manager()
-                .update_session_status(session_id, SessionStatus::Disconnected, false)
-                .await;
+                .get_storage_path(session_id)
+                .await
+                .ok()
+                .flatten();
+            state.remove_session(session_id);
+            if let Some(path) = storage_path {
+                let _ = tokio::fs::remove_dir_all(&path).await;
+            }
+            if let Err(e) = state.session_manager().delete_session(session_id).await {
+                tracing::warn!(
+                    "Session {}: failed to purge after logout: {}",
+                    session_id,
+                    e
+                );
+            }
         }
         _ => {}
     }

@@ -2,6 +2,20 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.4] - 2026-06-26
+
+### Fixes
+
+#### Auto-purge logged-out sessions
+- When the upstream `LoggedOut` event fires, the session now self-destructs:
+  the live client is disconnected, the in-memory runtime is dropped, the
+  on-disk session directory is removed, and the database row is deleted.
+  Previously the session lingered as `Disconnected` and every reconnect
+  attempt kept trying to re-bind a dead device — which in production
+  manifested as repeating `connection failed: database connection error`
+  loops on `user_499_b4e9046e` / `user_9_f6e7fd99` and friends, eventually
+  hanging the gateway. Now the user just rescans a fresh QR.
+
 ## [0.6.3] - 2026-06-25
 
 ### New Features
