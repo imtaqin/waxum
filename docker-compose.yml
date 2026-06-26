@@ -2,9 +2,7 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: wagateway-nats
-    # `--websocket_port=8080` exposes a browser-reachable NATS endpoint so
-    # the admin dashboard can subscribe to wa.events.> directly via nats.ws.
-    command: ["--jetstream", "--store_dir=/data", "--websocket_port=8080", "--websocket_no_tls"]
+    command: ["--jetstream", "--store_dir=/data"]
     volumes:
       - nats_data:/data
     # NATS bound to localhost only. WA-RS reaches it via the docker network
@@ -12,22 +10,6 @@ services:
     ports:
       - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"
-      - "127.0.0.1:8080:8080"
-    restart: unless-stopped
-
-  admin:
-    # Static SPA serving the wa-rs admin dashboard.
-    # Override the tag with WA_RS_ADMIN_TAG=0.1.0 to pin.
-    image: fdciabdul/wa-rs-admin:${WA_RS_ADMIN_TAG:-latest}
-    container_name: wagateway-admin
-    environment:
-      VITE_WA_RS_BASE: ${VITE_WA_RS_BASE:-http://127.0.0.1:3451}
-      VITE_NATS_WS: ${VITE_NATS_WS:-ws://127.0.0.1:8080}
-    ports:
-      - "127.0.0.1:5179:80"
-    depends_on:
-      - api
-      - nats
     restart: unless-stopped
 
   api:
