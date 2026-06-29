@@ -33,7 +33,6 @@ pub async fn send_text(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    // Build context_info: fake_reply has priority over reply_to.
     let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
         if let Some(ref fake) = request.fake_reply {
             crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
@@ -586,9 +585,6 @@ pub async fn send_reaction(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    // Build the target MessageKey. The upstream send_reaction transparently
-    // picks the right wire shape — encrypted CAG addon for community-announce
-    // / channel chats, regular ReactionMessage otherwise.
     let key = waproto::whatsapp::MessageKey {
         remote_jid: Some(request.to.clone()),
         id: Some(request.message_id),
@@ -608,8 +604,6 @@ pub async fn send_reaction(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Poll ---
 
 #[utoipa::path(
     post,
@@ -669,8 +663,6 @@ pub async fn send_poll(
     }))
 }
 
-// --- Buttons ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -705,7 +697,7 @@ pub async fn send_buttons(
                     display_text: Some(b.display_text),
                 },
             ),
-            r#type: Some(1), // RESPONSE type
+            r#type: Some(1),
             ..Default::default()
         })
         .collect();
@@ -719,7 +711,7 @@ pub async fn send_buttons(
             content_text: Some(request.content_text),
             footer_text: request.footer,
             buttons,
-            header_type: header.as_ref().map(|_| 2), // TEXT header type
+            header_type: header.as_ref().map(|_| 2),
             header,
             ..Default::default()
         })),
@@ -738,8 +730,6 @@ pub async fn send_buttons(
         to: to_jid.to_string(),
     }))
 }
-
-// --- List (via Interactive NativeFlow) ---
 
 #[utoipa::path(
     post,
@@ -765,7 +755,6 @@ pub async fn send_list(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    // Build list params JSON for native flow
     let sections_json: Vec<serde_json::Value> = request
         .sections
         .iter()
@@ -837,8 +826,6 @@ pub async fn send_list(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Interactive (Generic Native Flow) ---
 
 #[utoipa::path(
     post,
@@ -942,8 +929,6 @@ pub async fn send_interactive(
     }))
 }
 
-// --- CTA URL button (single call-to-action that opens a URL) ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1021,8 +1006,6 @@ pub async fn send_cta_url(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Quick Reply buttons (modern native-flow alternative to ButtonsMessage) ---
 
 #[utoipa::path(
     post,
@@ -1110,8 +1093,6 @@ pub async fn send_quick_reply(
     }))
 }
 
-// --- Newsletter Admin Invite ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1162,8 +1143,6 @@ pub async fn send_newsletter_admin_invite(
     }))
 }
 
-// --- Newsletter Follower Invite ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1212,8 +1191,6 @@ pub async fn send_newsletter_follower_invite(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Order Message ---
 
 #[utoipa::path(
     post,
@@ -1275,8 +1252,6 @@ pub async fn send_order(
     }))
 }
 
-// --- Invoice Message ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1331,8 +1306,6 @@ pub async fn send_invoice(
     }))
 }
 
-// --- Payment Invite ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1378,8 +1351,6 @@ pub async fn send_payment_invite(
     }))
 }
 
-// --- Pin Message ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1404,7 +1375,7 @@ pub async fn send_pin_message(
     let client = get_client(&state, &session_id)?;
     let chat_jid = parse_jid(&request.chat)?;
 
-    let pin_type = if request.duration_seconds > 0 { 1 } else { 2 }; // 1 = PIN, 2 = UNPIN
+    let pin_type = if request.duration_seconds > 0 { 1 } else { 2 };
 
     let message = waproto::whatsapp::Message {
         pin_in_chat_message: Some(Box::new(waproto::whatsapp::message::PinInChatMessage {
@@ -1432,8 +1403,6 @@ pub async fn send_pin_message(
         to: chat_jid.to_string(),
     }))
 }
-
-// --- Forward Message ---
 
 #[utoipa::path(
     post,
@@ -1484,8 +1453,6 @@ pub async fn forward_message(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Poll Update (Vote) ---
 
 #[utoipa::path(
     post,
@@ -1553,8 +1520,6 @@ pub async fn send_poll_update(
     }))
 }
 
-// --- Buttons Response ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1583,7 +1548,7 @@ pub async fn send_buttons_response(
         buttons_response_message: Some(Box::new(
             waproto::whatsapp::message::ButtonsResponseMessage {
             selected_button_id: Some(request.selected_button_id),
-            r#type: Some(1), // DisplayText
+            r#type: Some(1),
             context_info: request.reply_to.map(|id| {
                 Box::new(waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
@@ -1613,8 +1578,6 @@ pub async fn send_buttons_response(
     }))
 }
 
-// --- List Response ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1642,7 +1605,7 @@ pub async fn send_list_response(
     let message = waproto::whatsapp::Message {
         list_response_message: Some(Box::new(waproto::whatsapp::message::ListResponseMessage {
             title: Some(request.title),
-            list_type: Some(1), // SingleSelect
+            list_type: Some(1),
             single_select_reply: Some(
                 waproto::whatsapp::message::list_response_message::SingleSelectReply {
                     selected_row_id: Some(request.selected_row_id),
@@ -1671,8 +1634,6 @@ pub async fn send_list_response(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Interactive Response ---
 
 #[utoipa::path(
     post,
@@ -1741,8 +1702,6 @@ pub async fn send_interactive_response(
     }))
 }
 
-// --- Highly Structured Message ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1793,8 +1752,6 @@ pub async fn send_highly_structured(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Template Button Reply ---
 
 #[utoipa::path(
     post,
@@ -1851,8 +1808,6 @@ pub async fn send_template_button_reply(
     }))
 }
 
-// --- Comment Message (Groups) ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -1877,8 +1832,6 @@ pub async fn send_comment(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    // Builds an EncCommentMessage envelope and ships it as a top-level
-    // enc_comment_message; receivers decrypt with the parent's messageSecret.
     let target_jid = request
         .target_chat_jid
         .unwrap_or_else(|| request.to.clone());
@@ -1902,8 +1855,6 @@ pub async fn send_comment(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Scheduled Call Creation ---
 
 #[utoipa::path(
     post,
@@ -1931,7 +1882,7 @@ pub async fn send_scheduled_call(
 
     let call_type = match request.call_type.to_lowercase().as_str() {
         "video" => 2,
-        _ => 1, // voice
+        _ => 1,
     };
 
     let message = waproto::whatsapp::Message {
@@ -1957,8 +1908,6 @@ pub async fn send_scheduled_call(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Scheduled Call Edit ---
 
 #[utoipa::path(
     post,
@@ -1986,7 +1935,7 @@ pub async fn send_scheduled_call_edit(
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
         "cancel" => 1,
-        _ => 0, // unknown
+        _ => 0,
     };
 
     let message = waproto::whatsapp::Message {
@@ -2016,8 +1965,6 @@ pub async fn send_scheduled_call_edit(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Send Payment ---
 
 #[utoipa::path(
     post,
@@ -2087,8 +2034,6 @@ pub async fn send_payment(
     }))
 }
 
-// --- Request Payment ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -2152,8 +2097,6 @@ pub async fn request_payment(
     }))
 }
 
-// --- Cancel Payment Request ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -2204,8 +2147,6 @@ pub async fn cancel_payment_request(
         to: to_jid.to_string(),
     }))
 }
-
-// --- Decline Payment Request ---
 
 #[utoipa::path(
     post,
@@ -2258,8 +2199,6 @@ pub async fn decline_payment_request(
     }))
 }
 
-// --- Newsletter Forward ---
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -2287,7 +2226,7 @@ pub async fn send_newsletter_forward(
     let content_type = match request.content_type.as_deref() {
         Some("update_card") => Some(2),
         Some("link_card") => Some(3),
-        _ => Some(1), // update
+        _ => Some(1),
     };
 
     let message = waproto::whatsapp::Message {
@@ -2432,11 +2371,6 @@ pub(crate) fn get_client(
         .get_session(session_id)
         .ok_or(ApiError::NotConnected)?;
 
-    // Use the live-client gate so we don't return a stale Arc whose
-    // socket has already been torn down — that was the root cause of
-    // "send returns 200 but message never leaves the box". The flag the
-    // caller saw on /status must match what we actually try to write
-    // through.
     runtime.get_live_client().ok_or(ApiError::NotConnected)
 }
 

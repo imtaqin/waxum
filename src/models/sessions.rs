@@ -183,6 +183,17 @@ pub struct QrCodeResponse {
     pub status: SessionStatus,
 }
 
+/// Pair-flow telemetry — surfaced through /status so the backend can
+/// render meaningful progress instead of polling /qr blindly.
+#[derive(Debug, Default, Serialize, ToSchema)]
+pub struct PairStatus {
+    pub last_qr_at: Option<i64>,
+    pub last_pair_code_at: Option<i64>,
+    pub pair_code_expires_at: Option<i64>,
+    pub last_error: Option<String>,
+    pub attempts: u32,
+}
+
 /// Session status response
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SessionStatusResponse {
@@ -194,6 +205,8 @@ pub struct SessionStatusResponse {
     pub phone_number: Option<String>,
     /// Display name if available
     pub push_name: Option<String>,
+    /// Pair flow telemetry (always present, fields may be null)
+    pub pair: PairStatus,
 }
 
 /// Device information

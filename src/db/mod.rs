@@ -2,6 +2,7 @@ pub mod contacts;
 pub mod schema;
 pub mod session;
 pub mod sqlite_raw;
+pub mod webhook_dlq;
 
 pub use session::SessionManager;
 
@@ -38,9 +39,6 @@ pub fn resolve_database_url() -> (String, DbBackend) {
         return (url, DbBackend::MySQL);
     }
 
-    // Default: embedded SQLite so a clean checkout boots without any DB
-    // running. Override with DATABASE_URL=postgres://… or mysql://… for
-    // multi-process deployments.
     let path = std::env::var("SQLITE_PATH").unwrap_or_else(|_| "wa-rs.db".to_string());
     (format!("sqlite://{}", path), DbBackend::SQLite)
 }

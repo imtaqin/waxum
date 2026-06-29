@@ -42,6 +42,29 @@ pub struct SessionState {
 
     #[allow(dead_code)]
     pub storage_path: String,
+
+    /// Rolling log of recent LoggedOut event timestamps (unix seconds).
+    /// Used by the auto-purge logic so an unstable upstream that flaps
+    /// once doesn't blow away the on-disk session — we only purge once
+    /// we see N rapid logouts inside a short window. Kept inline so it
+    /// shares the same RwLock discipline as the other session fields.
+    pub logout_history: RwLock<Vec<i64>>,
+
+    /// Pair-flow telemetry. Surfaced through /status so the backend can
+    /// show users meaningful progress and last-error text instead of
+    /// guessing from polling QR codes.
+    pub pair_state: RwLock<PairState>,
+}
+
+/// Snapshot of the latest pair attempt for a session. Lives entirely in
+/// memory — cleared on connect_client start, populated as events arrive.
+#[derive(Clone, Debug, Default)]
+pub struct PairState {
+    pub last_qr_at: Option<i64>,
+    pub last_pair_code_at: Option<i64>,
+    pub pair_code_expires_at: Option<i64>,
+    pub last_error: Option<String>,
+    pub attempts: u32,
 }
 
 impl SessionState {
@@ -54,7 +77,36 @@ impl SessionState {
             status: RwLock::new(SessionStatus::Disconnected),
             event_tx,
             storage_path,
+            logout_history: RwLock::new(Vec::new()),
+            pair_state: RwLock::new(PairState::default()),
         }
+    }
+
+    /// Record a LoggedOut event and return whether the session has crossed
+    /// the auto-purge threshold (N events inside WINDOW seconds). The
+    /// caller — the LoggedOut event handler — uses the return value to
+    /// decide whether to wipe the storage row or just mark the session
+    /// disconnected and let the user retry.
+    pub fn record_logout_and_should_purge(&self) -> bool {
+        const WINDOW_SECS: i64 = 600;
+        const THRESHOLD: usize = 3;
+        let now = chrono::Utc::now().timestamp();
+        let mut hist = self.logout_history.write();
+        hist.retain(|t| now - *t < WINDOW_SECS);
+        hist.push(now);
+        hist.len() >= THRESHOLD
+    }
+
+    pub fn get_pair_state(&self) -> PairState {
+        self.pair_state.read().clone()
+    }
+
+    pub fn update_pair_state(&self, f: impl FnOnce(&mut PairState)) {
+        f(&mut self.pair_state.write());
+    }
+
+    pub fn clear_pair_state(&self) {
+        *self.pair_state.write() = PairState::default();
     }
 
     pub fn get_client(&self) -> Option<Arc<Client>> {
@@ -234,6 +286,9 @@ impl AppState {
     pub async fn broadcast_to_webhooks(&self, session_id: &str, event: &str, payload: &str) {
         let webhooks = self.get_webhooks(session_id);
         let client = webhook_client();
+        let pool = self.session_manager().pool().clone();
+        let session_id_owned = session_id.to_string();
+        let event_owned = event.to_string();
 
         for (_, config) in webhooks {
             if !config.enabled {
@@ -248,13 +303,11 @@ impl AppState {
             let payload = payload.to_string();
             let secret = config.secret.clone();
             let client = client.clone();
+            let pool = pool.clone();
+            let session_id_owned = session_id_owned.clone();
+            let event_owned = event_owned.clone();
 
             tokio::spawn(async move {
-                // Retry with exponential backoff: 0 s, 1 s, 3 s, 7 s. A
-                // 1-2 s backend restart no longer drops the event on the
-                // floor. We cap at 4 attempts (1 + 3 retries) and short
-                // total wall-clock (~11 s including per-attempt timeout)
-                // so a permanently-down receiver doesn't pile tasks up.
                 let backoff_ms = [0u64, 1000, 3000, 7000];
                 let mut last_err: Option<String> = None;
                 for (i, delay) in backoff_ms.iter().enumerate() {
@@ -286,10 +339,8 @@ impl AppState {
                             if status.is_success() {
                                 return;
                             }
-                            // Don't burn retries on a permanent 4xx —
-                            // those are wedge bugs in the receiver, not
-                            // transient outages.
-                            if status.is_client_error() && status.as_u16() != 408
+                            if status.is_client_error()
+                                && status.as_u16() != 408
                                 && status.as_u16() != 429
                             {
                                 tracing::warn!(
@@ -314,6 +365,16 @@ impl AppState {
                         backoff_ms.len(),
                         err
                     );
+                    crate::db::webhook_dlq::record_failure(
+                        &pool,
+                        &session_id_owned,
+                        &url,
+                        &event_owned,
+                        &payload,
+                        &err,
+                        backoff_ms.len() as i32,
+                    )
+                    .await;
                 }
             });
         }

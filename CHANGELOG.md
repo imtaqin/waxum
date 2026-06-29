@@ -2,6 +2,28 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.6] - 2026-06-29
+
+### Operability
+
+- **MySQL pool tuning.** Default mysql_async pool capped at 10 conns and
+  never rotated; under burst it starved sessions on remote MySQL
+  (Jakarta ↔ AWS-SG, ~30–60 ms RTT). Pool now constrained 4–64 (override
+  via `WA_RS_MYSQL_MAX_POOL`) with 5 min inactive TTL and a 60 s TTL
+  check sweep, so stale idle conns rotate before MySQL's wait_timeout
+  kills them silently.
+- **LoggedOut auto-purge backoff.** v0.6.4 wiped storage on the first
+  `LoggedOut` event, which spun infinite QR-rescan loops when WhatsApp
+  flapped a session briefly. Purge now requires 3 logouts within 10 min;
+  a single transient flap keeps the storage row and lets the user retry.
+- **Pair flow telemetry.** `/status` now returns a `pair` object with
+  `last_qr_at`, `last_pair_code_at`, `pair_code_expires_at`, `attempts`,
+  and `last_error` so backends can render meaningful pair progress
+  instead of polling `/qr` blindly.
+- **Webhook DLQ.** Failed webhooks that exhaust retry now land in a
+  `webhook_dlq` table (Postgres / MySQL / SQLite) with payload,
+  last_error, and attempt count, so operators can replay them.
+
 ## [0.6.5] - 2026-06-26
 
 ### Fixes

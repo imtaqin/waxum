@@ -52,7 +52,19 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 PRIMARY KEY (session_id, jid), \
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE \
              ); \
-             CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(session_id, phone);",
+             CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(session_id, phone); \
+             CREATE TABLE IF NOT EXISTS webhook_dlq ( \
+                id INTEGER PRIMARY KEY AUTOINCREMENT, \
+                session_id TEXT NOT NULL, \
+                webhook_url TEXT NOT NULL, \
+                event_type TEXT NOT NULL, \
+                payload TEXT NOT NULL, \
+                last_error TEXT, \
+                attempts INTEGER NOT NULL DEFAULT 0, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                last_attempt_at TEXT \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_webhook_dlq_session ON webhook_dlq(session_id);",
         )?;
         Ok(())
     })
@@ -134,6 +146,31 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         )
         .await?;
 
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS webhook_dlq (
+                id BIGSERIAL PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                webhook_url TEXT NOT NULL,
+                event_type VARCHAR(64) NOT NULL,
+                payload TEXT NOT NULL,
+                last_error TEXT,
+                attempts INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_attempt_at TIMESTAMPTZ
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_webhook_dlq_session ON webhook_dlq(session_id)",
+            &[],
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -198,7 +235,24 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
     )
     .await?;
 
-    // Auto-migrate existing tables with incompatible types
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS webhook_dlq (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(255) NOT NULL,
+            webhook_url VARCHAR(2000) NOT NULL,
+            event_type VARCHAR(64) NOT NULL,
+            payload LONGTEXT NOT NULL,
+            last_error TEXT,
+            attempts INT NOT NULL DEFAULT 0,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            last_attempt_at VARCHAR(30) NULL,
+            INDEX idx_webhook_dlq_session (session_id)
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+
     let migrations = [
         "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
         "ALTER TABLE sessions MODIFY COLUMN storage_path VARCHAR(500) NOT NULL",
@@ -208,9 +262,6 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
         "ALTER TABLE webhooks MODIFY COLUMN enabled INT NOT NULL DEFAULT 1",
         "ALTER TABLE webhooks MODIFY COLUMN url VARCHAR(2000) NOT NULL",
         "ALTER TABLE webhooks MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",
-        // Upgrade text columns on contacts to utf8mb4 so 4-byte chars
-        // (emoji etc) in WhatsApp push_name / business_name don't trip
-        // the utf8mb3 collation conversion error from the upstream driver.
         "ALTER TABLE contacts MODIFY COLUMN jid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL",
         "ALTER TABLE contacts MODIFY COLUMN phone VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",
         "ALTER TABLE contacts MODIFY COLUMN lid_jid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL",

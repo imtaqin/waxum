@@ -239,14 +239,17 @@ pub async fn get_session_status(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // Truth: the cached SessionStatus is decorative — the only state that
-    // matters to a caller asking "can I send right now?" is whether the
-    // live client agrees it's connected AND authenticated. If those two
-    // line up we report LoggedIn; if not we downgrade to Disconnected so
-    // /status never disagrees with the next send attempt.
-    let (status, is_logged_in) = if let Some(runtime) = state.get_session(&session_id) {
+    let (status, is_logged_in, pair) = if let Some(runtime) = state.get_session(&session_id) {
+        let ps = runtime.get_pair_state();
+        let pair = crate::models::sessions::PairStatus {
+            last_qr_at: ps.last_qr_at,
+            last_pair_code_at: ps.last_pair_code_at,
+            pair_code_expires_at: ps.pair_code_expires_at,
+            last_error: ps.last_error,
+            attempts: ps.attempts,
+        };
         if runtime.is_alive() {
-            (SessionStatus::LoggedIn, true)
+            (SessionStatus::LoggedIn, true, pair)
         } else {
             let s = runtime.get_status();
             let downgraded = if s == SessionStatus::LoggedIn {
@@ -254,10 +257,14 @@ pub async fn get_session_status(
             } else {
                 s
             };
-            (downgraded, false)
+            (downgraded, false, pair)
         }
     } else {
-        (session.status, session.is_logged_in)
+        (
+            session.status,
+            session.is_logged_in,
+            crate::models::sessions::PairStatus::default(),
+        )
     };
 
     Ok(Json(SessionStatusResponse {
@@ -265,6 +272,7 @@ pub async fn get_session_status(
         is_logged_in,
         phone_number: session.phone_number,
         push_name: session.push_name,
+        pair,
     }))
 }
 
@@ -338,14 +346,10 @@ pub async fn connect_session(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    // 409 only when a real live socket exists — if the cached client is
-    // dead (silent disconnect, server-restarted upstream, etc.) let the
-    // caller re-bootstrap instead of locking them out.
     if let Some(runtime) = state.get_session(&session_id) {
         if runtime.is_alive() {
             return Err(ApiError::AlreadyConnected);
         }
-        // Clean up stale runtime so connect_client can rebuild cleanly.
         runtime.set_client(None);
         runtime.set_status(SessionStatus::Disconnected);
     }
@@ -366,9 +370,11 @@ pub async fn connect_session(
     tokio::spawn(async move {
         if let Err(e) = connect_client(&state_clone, &session_id_clone, dp_override).await {
             tracing::error!("Session {} connection failed: {}", session_id_clone, e);
+            let msg = e.to_string();
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
                 runtime.set_client(None);
+                runtime.update_pair_state(|ps| ps.last_error = Some(msg));
             }
         }
     });
@@ -576,9 +582,6 @@ pub async fn reconnect_all_on_startup(state: AppState) {
     );
 
     for session in sessions {
-        // Only auto-reconnect sessions that were previously logged in OR
-        // were already trying to connect. Disconnected/never-paired sessions
-        // require a manual pair from the dashboard.
         let should_reconnect = matches!(
             session.status,
             SessionStatus::LoggedIn | SessionStatus::Connected | SessionStatus::Connecting
@@ -603,9 +606,6 @@ pub async fn reconnect_all_on_startup(state: AppState) {
         let runtime = state.get_or_create_session(&session.id, &storage_path);
         runtime.set_status(SessionStatus::Connecting);
 
-        // Repopulate the in-memory webhook registry from MySQL — otherwise
-        // the DashMap is empty after restart and broadcast_to_webhooks
-        // silently drops every event even though the rows still exist.
         match state.session_manager().get_webhooks(&session.id).await {
             Ok(rows) => {
                 if rows.is_empty() {
@@ -634,7 +634,6 @@ pub async fn reconnect_all_on_startup(state: AppState) {
             }
         });
 
-        // Stagger to avoid thundering herd on the WhatsApp servers
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 }
@@ -757,7 +756,6 @@ async fn connect_client_with_pair_code(
         phone_number: phone_number.to_string(),
         show_push_notification: show_notification,
         custom_code: None,
-        // None lets the lib auto-derive from DevicePropsOverride.platform_type below.
         platform_id: None,
     };
 
@@ -824,20 +822,34 @@ async fn handle_event(
             tracing::info!("Session {}: QR code received", session_id);
             runtime.set_qr_codes(vec![code.clone()]);
             runtime.set_status(SessionStatus::WaitingForQr);
+            let now = chrono::Utc::now().timestamp();
+            runtime.update_pair_state(|ps| {
+                ps.last_qr_at = Some(now);
+                ps.attempts = ps.attempts.saturating_add(1);
+                ps.last_error = None;
+            });
             let _ = state
                 .session_manager()
                 .update_session_status(session_id, SessionStatus::WaitingForQr, false)
                 .await;
         }
-        Event::PairingCode { code, timeout: _ } => {
+        Event::PairingCode { code, timeout } => {
             tracing::info!("Session {}: Pair code received: {}", session_id, code);
             runtime.set_pair_code(Some(code.clone()));
+            let now = chrono::Utc::now().timestamp();
+            let expires_at = now + timeout.as_secs() as i64;
+            runtime.update_pair_state(|ps| {
+                ps.last_pair_code_at = Some(now);
+                ps.pair_code_expires_at = Some(expires_at);
+                ps.last_error = None;
+            });
         }
         Event::Connected(_) => {
             tracing::info!("Session {}: Connected", session_id);
             runtime.set_status(SessionStatus::LoggedIn);
             runtime.set_qr_codes(vec![]);
             runtime.set_pair_code(None);
+            runtime.clear_pair_state();
 
             let push_name_str = client.get_push_name();
             let push_name = if push_name_str.is_empty() {
@@ -862,11 +874,6 @@ async fn handle_event(
         }
         Event::Disconnected(_) => {
             tracing::warn!("Session {}: Disconnected", session_id);
-            // Clear the cached client alongside the status flag. If we
-            // leave the Arc cached, `get_client()` returns Some pointing
-            // at a dead socket and the next send pretends to succeed —
-            // that's exactly the "Terkirim padahal chat gak masuk" bug
-            // backend operators reported. is_alive() now matches reality.
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
             let _ = state
@@ -875,24 +882,31 @@ async fn handle_event(
                 .await;
         }
         Event::LoggedOut(logged_out) => {
-            tracing::warn!(
-                "Session {}: Logged out: {:?} — purging session",
-                session_id,
-                logged_out.reason
-            );
-            // Tear down the live client so we stop dialing the dead device.
             if let Some(client) = runtime.get_client() {
                 client.disconnect().await;
             }
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
+            let _ = state
+                .session_manager()
+                .update_session_status(session_id, SessionStatus::Disconnected, false)
+                .await;
 
-            // Self-destruct: fetch storage path, drop the in-memory runtime,
-            // wipe the on-disk session, then remove the DB row. We do this
-            // synchronously inside the event handler so the next QR-scan
-            // login from the user starts from a clean slate instead of
-            // colliding with the dead session and bouncing the API into
-            // "database connection error" loops.
+            let should_purge = runtime.record_logout_and_should_purge();
+            if !should_purge {
+                tracing::warn!(
+                    "Session {}: Logged out: {:?} — keeping storage (transient flap)",
+                    session_id,
+                    logged_out.reason
+                );
+                return;
+            }
+
+            tracing::warn!(
+                "Session {}: Logged out: {:?} — purging after repeated flaps",
+                session_id,
+                logged_out.reason
+            );
             let storage_path = state
                 .session_manager()
                 .get_storage_path(session_id)
@@ -914,8 +928,6 @@ async fn handle_event(
         _ => {}
     }
 
-    // Side-channel: persist contact-related events to the contacts table so
-    // we can answer GET /sessions/:id/contacts without a usync roundtrip.
     persist_contact_event(state, session_id, event.as_ref()).await;
 
     if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {
@@ -1191,7 +1203,6 @@ async fn persist_contact_event(
                     lid_str = Some(lid.to_string());
                 }
             }
-            // PN/lid resolution: appstate carries PN as the chat key
             if u.jid.server == wacore_binary::jid::SERVER_JID {
                 phone_str = Some(u.jid.user.to_string());
             }
@@ -1219,8 +1230,6 @@ async fn persist_contact_event(
             source = "notification";
         }
         Event::Message(_msg, info) => {
-            // Capture push_name + JID from any inbound message so the contact
-            // table fills up organically alongside chats.
             if info.source.is_from_me {
                 return;
             }

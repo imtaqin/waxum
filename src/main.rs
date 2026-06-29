@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -417,10 +418,8 @@ fn parse_cli_args(args: &[String]) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load .env file
     dotenvy::dotenv().ok();
 
-    // Parse CLI arguments
     let args: Vec<String> = std::env::args().collect();
     parse_cli_args(&args);
 
@@ -432,7 +431,6 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Print banner
     println!("\x1b[96m{}\x1b[0m", BANNER);
     println!("\x1b[97m  WhatsApp Gateway REST API\x1b[0m");
     println!("\x1b[37m  Version: \x1b[96m{}\x1b[0m", VERSION);
@@ -458,7 +456,6 @@ async fn main() -> Result<()> {
             use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod};
             use tokio_postgres::NoTls;
 
-            // Parse postgres URL to config
             let pg_config: tokio_postgres::Config = database_url.parse()?;
             let mgr_config = ManagerConfig {
                 recycling_method: RecyclingMethod::Fast,
@@ -470,8 +467,19 @@ async fn main() -> Result<()> {
         }
         db::DbBackend::MySQL => {
             let opts = mysql_async::Opts::from_url(&database_url)?;
+            let max_pool: usize = std::env::var("WA_RS_MYSQL_MAX_POOL")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(64);
+            let constraints = mysql_async::PoolConstraints::new(4, max_pool).unwrap_or_else(|| {
+                mysql_async::PoolConstraints::new(2, 10).expect("safe defaults")
+            });
+            let pool_opts = mysql_async::PoolOpts::default()
+                .with_constraints(constraints)
+                .with_inactive_connection_ttl(Duration::from_secs(300))
+                .with_ttl_check_interval(Duration::from_secs(60));
+            let opts = mysql_async::OptsBuilder::from_opts(opts).pool_opts(pool_opts);
             let my_pool = mysql_async::Pool::new(opts);
-            // Test connection
             let _conn = my_pool.get_conn().await?;
             db::session::DbPool::MySQL(my_pool)
         }
@@ -488,7 +496,6 @@ async fn main() -> Result<()> {
     db::schema::init_schema(&pool).await?;
     tracing::info!("Database schema initialized");
 
-    // Initialize NATS if configured
     let nats_manager = match nats::config::NatsConfig::from_env() {
         Some(config) => {
             tracing::info!("Connecting to NATS at {}", config.url);
@@ -517,15 +524,11 @@ async fn main() -> Result<()> {
     let nats_enabled = nats_manager.is_some();
     let state = AppState::new(pool, nats_manager).await;
 
-    // Auto-reconnect previously-paired sessions in the background. Runs
-    // concurrently with the rest of startup so the HTTP server doesn't
-    // block waiting on WhatsApp socket handshakes.
     let reconnect_state = state.clone();
     tokio::spawn(async move {
         handlers::sessions::reconnect_all_on_startup(reconnect_state).await;
     });
 
-    // Start NATS outbound consumer if enabled
     if nats_enabled {
         if let Some(nats) = state.nats() {
             match nats::consumer::start_consumer(nats.jetstream().clone(), state.clone()).await {
