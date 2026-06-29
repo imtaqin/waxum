@@ -77,7 +77,7 @@ impl JwtAuth {
 }
 
 pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response {
-    if request.uri().path() == "/health" {
+    if request.uri().path() == "/health" || request.uri().path() == "/metrics" {
         return next.run(request).await;
     }
 
@@ -103,7 +103,6 @@ pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response
         }
     };
 
-    // Check if token matches SUPERADMIN_TOKEN (plain string token)
     if let Ok(superadmin_token) = std::env::var("SUPERADMIN_TOKEN") {
         if !superadmin_token.is_empty() && token == superadmin_token {
             return next.run(request).await;

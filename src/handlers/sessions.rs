@@ -350,6 +350,15 @@ pub async fn connect_session(
         if runtime.is_alive() {
             return Err(ApiError::AlreadyConnected);
         }
+        let s = runtime.get_status();
+        if matches!(
+            s,
+            SessionStatus::Connecting
+                | SessionStatus::WaitingForQr
+                | SessionStatus::WaitingForPairCode
+        ) {
+            return Err(ApiError::AlreadyConnected);
+        }
         runtime.set_client(None);
         runtime.set_status(SessionStatus::Disconnected);
     }

@@ -23,6 +23,7 @@ mod db;
 mod device_props;
 mod error;
 mod handlers;
+mod metrics;
 mod middleware;
 mod models;
 mod nats;
@@ -416,8 +417,32 @@ fn parse_cli_args(args: &[String]) {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    let worker_threads = std::env::var("WA_RS_WORKER_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or_else(|| num_cpus_or(4));
+    let max_blocking = std::env::var("WA_RS_BLOCKING_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(2048);
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .max_blocking_threads(max_blocking)
+        .thread_name("wa-rs")
+        .enable_all()
+        .build()?;
+    runtime.block_on(async_main(worker_threads, max_blocking))
+}
+
+fn num_cpus_or(fallback: usize) -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(fallback)
+}
+
+async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()> {
     dotenvy::dotenv().ok();
 
     let args: Vec<String> = std::env::args().collect();
@@ -440,7 +465,11 @@ async fn main() -> Result<()> {
     println!("\x1b[37m  Docs:    \x1b[96mhttps://wa-rs.imtaqin.id/\x1b[0m");
     println!();
 
-    tracing::info!("Starting WhatsApp REST API server...");
+    tracing::info!(
+        worker_threads,
+        blocking_threads,
+        "Starting WhatsApp REST API server..."
+    );
 
     let (database_url, backend) = db::resolve_database_url();
     let masked = db::mask_url(&database_url);

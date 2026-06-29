@@ -2,6 +2,29 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.7] - 2026-06-29
+
+### Scale
+
+- **Tokio runtime tuning.** Replaced `#[tokio::main]` with a manual
+  `Builder::new_multi_thread()`, exposing `WA_RS_WORKER_THREADS` (default
+  CPU count) and `WA_RS_BLOCKING_THREADS` (default 2048, up from tokio's
+  512). 200+ active WhatsApp sessions doing SQLite + MySQL writes
+  saturated the default blocking pool — now we have 4× headroom.
+- **Prometheus `/metrics`.** New endpoint exposes
+  `wa_rs_sessions_total`, `wa_rs_sessions_live`,
+  `wa_rs_process_threads`, `wa_rs_process_open_fds`. Bypasses the JWT
+  middleware so a scraper can hit it without a token.
+
+### Fixes
+
+- **Duplicate `connect_client` spawn.** `/connect` previously only
+  short-circuited when `is_alive()` was true. When the runtime was mid-
+  bootstrap (`Connecting` / `WaitingForQr` / `WaitingForPairCode`), a
+  second `/connect` call spawned a second bot — leading to the
+  `Connected → QR → Connected → QR` flap seen on `user_585_c786d4d6`.
+  Now any in-progress state also returns 409.
+
 ## [0.6.6] - 2026-06-29
 
 ### Operability

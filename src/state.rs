@@ -251,6 +251,14 @@ impl AppState {
         self.inner.sessions.remove(session_id).map(|(_, v)| v)
     }
 
+    pub fn session_iter(&self) -> Vec<Arc<SessionState>> {
+        self.inner
+            .sessions
+            .iter()
+            .map(|r| r.value().clone())
+            .collect()
+    }
+
     #[allow(dead_code)]
     pub fn has_session(&self, session_id: &str) -> bool {
         self.inner.sessions.contains_key(session_id)

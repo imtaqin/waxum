@@ -1,0 +1,95 @@
+use axum::{extract::State, http::StatusCode, response::IntoResponse};
+use prometheus::{Encoder, IntGauge, Registry, TextEncoder};
+use std::sync::OnceLock;
+
+use crate::state::AppState;
+
+static REGISTRY: OnceLock<Registry> = OnceLock::new();
+static SESSIONS_TOTAL: OnceLock<IntGauge> = OnceLock::new();
+static SESSIONS_LIVE: OnceLock<IntGauge> = OnceLock::new();
+static PROCESS_THREADS: OnceLock<IntGauge> = OnceLock::new();
+static PROCESS_OPEN_FDS: OnceLock<IntGauge> = OnceLock::new();
+
+fn registry() -> &'static Registry {
+    REGISTRY.get_or_init(|| {
+        let r = Registry::new();
+        let sessions_total = IntGauge::new(
+            "wa_rs_sessions_total",
+            "Total session runtimes resident in the gateway",
+        )
+        .unwrap();
+        let sessions_live = IntGauge::new(
+            "wa_rs_sessions_live",
+            "Sessions whose underlying client reports connected + logged in",
+        )
+        .unwrap();
+        let process_threads = IntGauge::new(
+            "wa_rs_process_threads",
+            "Thread count for the wa-rs process (from /proc/self/status)",
+        )
+        .unwrap();
+        let process_open_fds = IntGauge::new(
+            "wa_rs_process_open_fds",
+            "Open file descriptor count for the wa-rs process",
+        )
+        .unwrap();
+        r.register(Box::new(sessions_total.clone())).unwrap();
+        r.register(Box::new(sessions_live.clone())).unwrap();
+        r.register(Box::new(process_threads.clone())).unwrap();
+        r.register(Box::new(process_open_fds.clone())).unwrap();
+        SESSIONS_TOTAL.set(sessions_total).ok();
+        SESSIONS_LIVE.set(sessions_live).ok();
+        PROCESS_THREADS.set(process_threads).ok();
+        PROCESS_OPEN_FDS.set(process_open_fds).ok();
+        r
+    })
+}
+
+fn read_proc_threads() -> Option<i64> {
+    let s = std::fs::read_to_string("/proc/self/status").ok()?;
+    for line in s.lines() {
+        if let Some(rest) = line.strip_prefix("Threads:") {
+            return rest.trim().parse().ok();
+        }
+    }
+    None
+}
+
+fn read_proc_open_fds() -> Option<i64> {
+    let entries = std::fs::read_dir("/proc/self/fd").ok()?;
+    Some(entries.count() as i64)
+}
+
+pub async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let reg = registry();
+
+    let mut total = 0i64;
+    let mut live = 0i64;
+    for s in state.session_iter() {
+        total += 1;
+        if s.is_alive() {
+            live += 1;
+        }
+    }
+    SESSIONS_TOTAL.get().unwrap().set(total);
+    SESSIONS_LIVE.get().unwrap().set(live);
+    if let Some(t) = read_proc_threads() {
+        PROCESS_THREADS.get().unwrap().set(t);
+    }
+    if let Some(f) = read_proc_open_fds() {
+        PROCESS_OPEN_FDS.get().unwrap().set(f);
+    }
+
+    let encoder = TextEncoder::new();
+    let metric_families = reg.gather();
+    let mut buf = Vec::new();
+    match encoder.encode(&metric_families, &mut buf) {
+        Ok(()) => (
+            StatusCode::OK,
+            [("Content-Type", encoder.format_type().to_string())],
+            buf,
+        )
+            .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}

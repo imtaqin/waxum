@@ -1,6 +1,6 @@
 ﻿[package]
 name = "wa-rs"
-version = "0.6.6"
+version = "0.6.7"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -73,6 +73,8 @@ jsonwebtoken = "9"
 async-nats = "0.38"
 bytes = "1"
 futures = "0.3"
+
+prometheus = { version = "0.13", default-features = false }
 
 [profile.release]
 opt-level = "z"
