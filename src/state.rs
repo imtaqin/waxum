@@ -61,6 +61,28 @@ impl SessionState {
         self.client.read().clone()
     }
 
+    /// Return the client only if the underlying socket is actually alive and
+    /// the device is logged in. Send handlers should use this instead of
+    /// `get_client` so a stale Arc left over from a silent disconnect
+    /// doesn't accept a write that will never leave the socket.
+    pub fn get_live_client(&self) -> Option<Arc<Client>> {
+        let c = self.client.read().clone()?;
+        if c.is_connected() && c.is_logged_in() {
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    /// Single source of truth used by /status and /sessions: only "logged in"
+    /// when the cached client agrees it's connected AND authenticated.
+    pub fn is_alive(&self) -> bool {
+        match self.client.read().as_ref() {
+            Some(c) => c.is_connected() && c.is_logged_in(),
+            None => false,
+        }
+    }
+
     pub fn set_client(&self, client: Option<Arc<Client>>) {
         *self.client.write() = client;
     }
@@ -228,25 +250,70 @@ impl AppState {
             let client = client.clone();
 
             tokio::spawn(async move {
-                let mut req = client
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .body(payload.clone());
-
-                if let Some(secret) = secret {
-                    use hmac::{Hmac, Mac};
-                    use sha2::Sha256;
-
-                    type HmacSha256 = Hmac<Sha256>;
-                    if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
-                        mac.update(payload.as_bytes());
-                        let signature = hex::encode(mac.finalize().into_bytes());
-                        req = req.header("X-Webhook-Signature", format!("sha256={}", signature));
+                // Retry with exponential backoff: 0 s, 1 s, 3 s, 7 s. A
+                // 1-2 s backend restart no longer drops the event on the
+                // floor. We cap at 4 attempts (1 + 3 retries) and short
+                // total wall-clock (~11 s including per-attempt timeout)
+                // so a permanently-down receiver doesn't pile tasks up.
+                let backoff_ms = [0u64, 1000, 3000, 7000];
+                let mut last_err: Option<String> = None;
+                for (i, delay) in backoff_ms.iter().enumerate() {
+                    if *delay > 0 {
+                        tokio::time::sleep(Duration::from_millis(*delay)).await;
                     }
-                }
 
-                if let Err(e) = req.send().await {
-                    tracing::warn!("Failed to send webhook to {}: {}", url, e);
+                    let mut req = client
+                        .post(&url)
+                        .header("Content-Type", "application/json")
+                        .body(payload.clone());
+
+                    if let Some(secret) = &secret {
+                        use hmac::{Hmac, Mac};
+                        use sha2::Sha256;
+
+                        type HmacSha256 = Hmac<Sha256>;
+                        if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
+                            mac.update(payload.as_bytes());
+                            let signature = hex::encode(mac.finalize().into_bytes());
+                            req =
+                                req.header("X-Webhook-Signature", format!("sha256={}", signature));
+                        }
+                    }
+
+                    match req.send().await {
+                        Ok(resp) => {
+                            let status = resp.status();
+                            if status.is_success() {
+                                return;
+                            }
+                            // Don't burn retries on a permanent 4xx —
+                            // those are wedge bugs in the receiver, not
+                            // transient outages.
+                            if status.is_client_error() && status.as_u16() != 408
+                                && status.as_u16() != 429
+                            {
+                                tracing::warn!(
+                                    "Webhook {} rejected with {} — not retrying",
+                                    url,
+                                    status
+                                );
+                                return;
+                            }
+                            last_err = Some(format!("HTTP {}", status));
+                        }
+                        Err(e) => {
+                            last_err = Some(e.to_string());
+                        }
+                    }
+                    let _ = i;
+                }
+                if let Some(err) = last_err {
+                    tracing::warn!(
+                        "Failed to send webhook to {} after {} attempts: {}",
+                        url,
+                        backoff_ms.len(),
+                        err
+                    );
                 }
             });
         }

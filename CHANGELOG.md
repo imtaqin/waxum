@@ -2,6 +2,41 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.5] - 2026-06-26
+
+### Fixes
+
+#### State desync between /status and send handlers (P0)
+- `/status` and `/messages/text` could disagree about the same session:
+  status would say `logged_in: true` while the next send returned 503
+  "Client not connected" — the symptom backend operators saw as
+  "Terkirim padahal pesan gak nyampe". Root cause: the cached `Arc<Client>`
+  was never cleared on `Event::Disconnected`, so the live-connection
+  check on the send path returned `Some` of a dead handle, while the
+  status flag separately stayed `LoggedIn`.
+- Introduced `SessionState::is_alive()` and `get_live_client()` that
+  consult the upstream `Client::is_connected()` + `Client::is_logged_in()`
+  flags as a single source of truth.
+- Every send / contact / chatstate / media / presence / group / op
+  handler now resolves its client through `get_live_client()`. /status
+  reports `logged_in` only when the live client agrees.
+- `Event::Disconnected` now also calls `set_client(None)` so the cached
+  handle and the socket state stop disagreeing within the same process.
+- `/connect` 409 only fires for sessions that are actually alive — a
+  dead cache lets the caller re-bootstrap instead of locking them out.
+
+#### Docker HEALTHCHECK (P0)
+- Dockerfile now ships a HEALTHCHECK probing `/health` every 30 s. The
+  `/health` handler is a static-string endpoint that bypasses the DB
+  pool, so docker can recycle a container whose tokio executor has
+  stalled even when the PID is still alive. Covers the "31 hours
+  online, every request times out" failure mode.
+
+#### Webhook delivery retry (P1)
+- Webhook dispatch now retries with exponential backoff (0 s, 1 s, 3 s,
+  7 s, max 4 attempts). 4xx responses other than 408/429 short-circuit
+  to avoid burning retries on permanent wedge bugs in the receiver.
+
 ## [0.6.4] - 2026-06-26
 
 ### Fixes

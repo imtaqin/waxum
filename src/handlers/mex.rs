@@ -134,5 +134,5 @@ fn get_client(
         .get_session(session_id)
         .ok_or(ApiError::NotConnected)?;
 
-    runtime.get_client().ok_or(ApiError::NotConnected)
+    runtime.get_live_client().ok_or(ApiError::NotConnected)
 }

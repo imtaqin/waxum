@@ -41,11 +41,13 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install runtime dependencies only. `curl` is added so the docker
+# HEALTHCHECK below can probe /health without shipping wget separately.
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
     libsqlite3-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
@@ -60,5 +62,13 @@ ENV WHATSAPP_STORAGE_PATH=/app/whatsapp_sessions
 ENV RUST_LOG=wa_rs=info,tower_http=info
 
 EXPOSE 3451
+
+# Auto-restart guard: probe /health (DB-free, static-string handler) every
+# 30 s. If three consecutive probes time out, docker marks the container
+# unhealthy and `restart: unless-stopped` recycles it — covers the "31 h
+# online but every request stalls" failure mode that PID-only restart
+# policies can't see.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS --max-time 4 http://127.0.0.1:3451/health || exit 1
 
 CMD ["/app/wa-rs"]

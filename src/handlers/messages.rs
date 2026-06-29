@@ -2432,7 +2432,12 @@ pub(crate) fn get_client(
         .get_session(session_id)
         .ok_or(ApiError::NotConnected)?;
 
-    runtime.get_client().ok_or(ApiError::NotConnected)
+    // Use the live-client gate so we don't return a stale Arc whose
+    // socket has already been torn down — that was the root cause of
+    // "send returns 200 but message never leaves the box". The flag the
+    // caller saw on /status must match what we actually try to write
+    // through.
+    runtime.get_live_client().ok_or(ApiError::NotConnected)
 }
 
 pub(crate) fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {

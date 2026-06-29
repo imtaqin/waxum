@@ -239,9 +239,23 @@ pub async fn get_session_status(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
+    // Truth: the cached SessionStatus is decorative — the only state that
+    // matters to a caller asking "can I send right now?" is whether the
+    // live client agrees it's connected AND authenticated. If those two
+    // line up we report LoggedIn; if not we downgrade to Disconnected so
+    // /status never disagrees with the next send attempt.
     let (status, is_logged_in) = if let Some(runtime) = state.get_session(&session_id) {
-        let s = runtime.get_status();
-        (s, s == SessionStatus::LoggedIn)
+        if runtime.is_alive() {
+            (SessionStatus::LoggedIn, true)
+        } else {
+            let s = runtime.get_status();
+            let downgraded = if s == SessionStatus::LoggedIn {
+                SessionStatus::Disconnected
+            } else {
+                s
+            };
+            (downgraded, false)
+        }
     } else {
         (session.status, session.is_logged_in)
     };
@@ -324,11 +338,16 @@ pub async fn connect_session(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
+    // 409 only when a real live socket exists — if the cached client is
+    // dead (silent disconnect, server-restarted upstream, etc.) let the
+    // caller re-bootstrap instead of locking them out.
     if let Some(runtime) = state.get_session(&session_id) {
-        let status = runtime.get_status();
-        if status != SessionStatus::Disconnected {
+        if runtime.is_alive() {
             return Err(ApiError::AlreadyConnected);
         }
+        // Clean up stale runtime so connect_client can rebuild cleanly.
+        runtime.set_client(None);
+        runtime.set_status(SessionStatus::Disconnected);
     }
 
     let storage_path = state
@@ -349,6 +368,7 @@ pub async fn connect_session(
             tracing::error!("Session {} connection failed: {}", session_id_clone, e);
             if let Some(runtime) = state_clone.get_session(&session_id_clone) {
                 runtime.set_status(SessionStatus::Disconnected);
+                runtime.set_client(None);
             }
         }
     });
@@ -842,7 +862,13 @@ async fn handle_event(
         }
         Event::Disconnected(_) => {
             tracing::warn!("Session {}: Disconnected", session_id);
+            // Clear the cached client alongside the status flag. If we
+            // leave the Arc cached, `get_client()` returns Some pointing
+            // at a dead socket and the next send pretends to succeed —
+            // that's exactly the "Terkirim padahal chat gak masuk" bug
+            // backend operators reported. is_alive() now matches reality.
             runtime.set_status(SessionStatus::Disconnected);
+            runtime.set_client(None);
             let _ = state
                 .session_manager()
                 .update_session_status(session_id, SessionStatus::Disconnected, false)
