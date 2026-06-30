@@ -188,6 +188,25 @@ struct AppStateInner {
     pub base_storage_path: String,
 
     pub nats: Option<NatsManager>,
+
+    pub webhook_circuits: DashMap<String, CircuitState>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CircuitState {
+    pub failures: u32,
+    pub opened_until: Option<std::time::Instant>,
+    pub last_event: std::time::Instant,
+}
+
+impl Default for CircuitState {
+    fn default() -> Self {
+        Self {
+            failures: 0,
+            opened_until: None,
+            last_event: std::time::Instant::now(),
+        }
+    }
 }
 
 impl AppState {
@@ -206,8 +225,56 @@ impl AppState {
                 webhooks: DashMap::new(),
                 base_storage_path,
                 nats,
+                webhook_circuits: DashMap::new(),
             }),
         }
+    }
+
+    /// Should we still attempt this webhook URL right now?
+    pub fn webhook_circuit_allows(&self, url: &str) -> bool {
+        let now = std::time::Instant::now();
+        let map = &self.inner.webhook_circuits;
+        let entry = map.get(url);
+        match entry.as_deref() {
+            Some(c) => match c.opened_until {
+                Some(until) => now >= until,
+                None => true,
+            },
+            None => true,
+        }
+    }
+
+    pub fn webhook_circuits_open_count(&self) -> usize {
+        let now = std::time::Instant::now();
+        self.inner
+            .webhook_circuits
+            .iter()
+            .filter(|c| c.value().opened_until.map(|u| now < u).unwrap_or(false))
+            .count()
+    }
+
+    pub fn webhook_record_success(&self, url: &str) {
+        let map = &self.inner.webhook_circuits;
+        if let Some(mut c) = map.get_mut(url) {
+            c.failures = 0;
+            c.opened_until = None;
+            c.last_event = std::time::Instant::now();
+        }
+    }
+
+    /// Returns true if the circuit just transitioned to OPEN.
+    pub fn webhook_record_failure(&self, url: &str) -> bool {
+        const THRESHOLD: u32 = 25;
+        const COOLDOWN: std::time::Duration = std::time::Duration::from_secs(300);
+        let map = &self.inner.webhook_circuits;
+        let mut entry = map.entry(url.to_string()).or_default();
+        entry.last_event = std::time::Instant::now();
+        entry.failures = entry.failures.saturating_add(1);
+        if entry.failures >= THRESHOLD && entry.opened_until.is_none() {
+            entry.opened_until = Some(std::time::Instant::now() + COOLDOWN);
+            return true;
+        }
+        false
     }
 
     pub fn nats(&self) -> Option<&NatsManager> {
@@ -307,6 +374,10 @@ impl AppState {
                 continue;
             }
 
+            if !self.webhook_circuit_allows(&config.url) {
+                continue;
+            }
+
             let url = config.url.clone();
             let payload = payload.to_string();
             let secret = config.secret.clone();
@@ -314,6 +385,7 @@ impl AppState {
             let pool = pool.clone();
             let session_id_owned = session_id_owned.clone();
             let event_owned = event_owned.clone();
+            let state_for_task = self.clone();
 
             tokio::spawn(async move {
                 let backoff_ms = [0u64, 1000, 3000, 7000];
@@ -345,6 +417,7 @@ impl AppState {
                         Ok(resp) => {
                             let status = resp.status();
                             if status.is_success() {
+                                state_for_task.webhook_record_success(&url);
                                 return;
                             }
                             if status.is_client_error()
@@ -367,12 +440,21 @@ impl AppState {
                     let _ = i;
                 }
                 if let Some(err) = last_err {
-                    tracing::warn!(
-                        "Failed to send webhook to {} after {} attempts: {}",
-                        url,
-                        backoff_ms.len(),
-                        err
-                    );
+                    let opened = state_for_task.webhook_record_failure(&url);
+                    if opened {
+                        tracing::warn!(
+                            "Webhook {} circuit OPEN after {} consecutive failures — will skip dispatch for 5 min",
+                            url,
+                            25
+                        );
+                    } else {
+                        tracing::warn!(
+                            "Failed to send webhook to {} after {} attempts: {}",
+                            url,
+                            backoff_ms.len(),
+                            err
+                        );
+                    }
                     crate::db::webhook_dlq::record_failure(
                         &pool,
                         &session_id_owned,

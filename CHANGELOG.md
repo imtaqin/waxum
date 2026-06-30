@@ -2,6 +2,20 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.8] - 2026-06-30
+
+### Resilience
+
+- **Webhook circuit breaker.** Each target URL now tracks consecutive
+  failures across all sessions. After 25 consecutive failed deliveries
+  the URL's circuit opens for 5 minutes — incoming events skip dispatch
+  entirely (still recorded to DLQ) until the cooldown expires. A single
+  successful response resets the counter. Stops the gateway from
+  saturating its tokio task queue when a webhook receiver is dead
+  (RENTALWA :8862 incident bled hundreds of retry tasks per minute).
+- **/metrics gains `wa_rs_webhook_circuits_open`** — scrape this to alert
+  when a destination has been declared dead.
+
 ## [0.6.7] - 2026-06-29
 
 ### Scale

@@ -9,6 +9,7 @@ static SESSIONS_TOTAL: OnceLock<IntGauge> = OnceLock::new();
 static SESSIONS_LIVE: OnceLock<IntGauge> = OnceLock::new();
 static PROCESS_THREADS: OnceLock<IntGauge> = OnceLock::new();
 static PROCESS_OPEN_FDS: OnceLock<IntGauge> = OnceLock::new();
+static WEBHOOK_CIRCUITS_OPEN: OnceLock<IntGauge> = OnceLock::new();
 
 fn registry() -> &'static Registry {
     REGISTRY.get_or_init(|| {
@@ -33,14 +34,21 @@ fn registry() -> &'static Registry {
             "Open file descriptor count for the wa-rs process",
         )
         .unwrap();
+        let webhook_circuits_open = IntGauge::new(
+            "wa_rs_webhook_circuits_open",
+            "Webhook target URLs currently in open-circuit state (skipped)",
+        )
+        .unwrap();
         r.register(Box::new(sessions_total.clone())).unwrap();
         r.register(Box::new(sessions_live.clone())).unwrap();
         r.register(Box::new(process_threads.clone())).unwrap();
         r.register(Box::new(process_open_fds.clone())).unwrap();
+        r.register(Box::new(webhook_circuits_open.clone())).unwrap();
         SESSIONS_TOTAL.set(sessions_total).ok();
         SESSIONS_LIVE.set(sessions_live).ok();
         PROCESS_THREADS.set(process_threads).ok();
         PROCESS_OPEN_FDS.set(process_open_fds).ok();
+        WEBHOOK_CIRCUITS_OPEN.set(webhook_circuits_open).ok();
         r
     })
 }
@@ -79,6 +87,10 @@ pub async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse
     if let Some(f) = read_proc_open_fds() {
         PROCESS_OPEN_FDS.get().unwrap().set(f);
     }
+    WEBHOOK_CIRCUITS_OPEN
+        .get()
+        .unwrap()
+        .set(state.webhook_circuits_open_count() as i64);
 
     let encoder = TextEncoder::new();
     let metric_families = reg.gather();
