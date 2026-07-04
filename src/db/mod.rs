@@ -32,6 +32,8 @@ pub fn resolve_database_url() -> (String, DbBackend) {
     if let Ok(url) = std::env::var("DATABASE_URL") {
         let backend = if url.starts_with("mysql") {
             DbBackend::MySQL
+        } else if url.starts_with("sqlite") || url.starts_with("file:") {
+            DbBackend::SQLite
         } else {
             DbBackend::Postgres
         };
