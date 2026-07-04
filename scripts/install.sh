@@ -195,7 +195,30 @@ ask_yesno() {
     local q="$1" default="${2:-n}" ans
     local suffix
     if [[ "$default" == "y" ]]; then suffix="[Y/n]"; else suffix="[y/N]"; fi
-    read -r -p "$(echo -e "${CYAN}?${RESET} ${q} ${suffix} ")" ans || ans=""
+    # `curl | sudo bash` closes stdin so `read` would EOF and, with
+    # `set -e`, kill the installer. When there's no TTY we silently
+    # accept the default. Overrides available via env:
+    #   WA_RS_YES=1                  → accept every prompt
+    #   WA_RS_AUTO_UPDATE=y/n        → answer auto-update prompt
+    #   WA_RS_START=y/n              → answer "start now?"
+    #   WA_RS_UNINSTALL_CONFIRM=y/n  → answer uninstall confirm
+    if [[ "${WA_RS_YES:-}" == "1" ]]; then
+        [[ "$default" == "y" ]] || return 1
+        return 0
+    fi
+    case "$q" in
+        *auto-update*)  [[ -n "${WA_RS_AUTO_UPDATE:-}" ]] && ans="${WA_RS_AUTO_UPDATE}" ;;
+        *start*)        [[ -n "${WA_RS_START:-}" ]]       && ans="${WA_RS_START}" ;;
+        *remove*|*uninstall*) [[ -n "${WA_RS_UNINSTALL_CONFIRM:-}" ]] && ans="${WA_RS_UNINSTALL_CONFIRM}" ;;
+    esac
+    if [[ -z "${ans:-}" ]]; then
+        if [[ -t 0 ]]; then
+            read -r -p "$(echo -e "${CYAN}?${RESET} ${q} ${suffix} ")" ans || ans=""
+        else
+            warn "no TTY — using default '$default' for: $q"
+            ans="$default"
+        fi
+    fi
     ans="${ans:-$default}"
     [[ "${ans,,}" == "y" ]]
 }
