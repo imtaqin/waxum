@@ -2,6 +2,16 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.11] - 2026-07-04
+
+### Fixes
+
+- **`DATABASE_URL=sqlite://…` was routed to the Postgres client.** The
+  detector only recognised `mysql://` and fell through to Postgres for
+  everything else, so a fresh install with the default SQLite path
+  exited with `invalid connection string / unexpected EOF`. SQLite and
+  `file:` prefixes now map to the SQLite backend.
+
 ## [0.6.10] - 2026-07-04
 
 ### New
