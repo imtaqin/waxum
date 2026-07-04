@@ -1,0 +1,51 @@
+language: en
+model: kimi-for-coding
+
+review:
+  auto:
+    enabled: true
+    onOpen: true
+    onPush: true
+    drafts: false
+  aspects:
+    bugs: true
+    security: true
+    performance: true
+    style: true
+    bestPractices: true
+    documentation: false
+    testing: false
+  minSeverity: warning
+  maxAnnotations: 30
+  failOn: critical
+
+files:
+  include:
+    - "**/*"
+  exclude:
+    - "**/target/**"
+    - "**/node_modules/**"
+    - "**/dist/**"
+    - "**/*.lock"
+    - "**/*.min.*"
+    - "CHANGELOG.md"
+    - "wa-rs-doc/**"
+  maxFileSize: 200000
+
+rules:
+  - name: no-narrative-line-comments
+    description: "Do not add // narrative comments — use /// or //! doc-comments instead. Existing // comments are fine to leave in place."
+    severity: warning
+    filePattern: "src/**/*.rs"
+  - name: session-live-client-only-in-send
+    description: "Send/write handlers must resolve their client through SessionState::get_live_client, never get_client, so /status and the send path stay in sync."
+    severity: critical
+    filePattern: "src/handlers/**/*.rs"
+
+prompt:
+  systemAppend: "This is a Rust axum service. Pay attention to Send + Sync bounds, RwLock hold time, DashMap iteration invariants, and lifetime pitfalls."
+  reviewFocus: "Focus on correctness bugs, API input validation, error handling, and consistency between /status and the send path (must both resolve through SessionState::get_live_client)."
+
+cache:
+  enabled: true
+  ttl: 3600

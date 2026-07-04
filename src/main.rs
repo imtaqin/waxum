@@ -1,3 +1,43 @@
+//! # wa-rs
+//!
+//! Multi-session REST + WebSocket gateway around the `whatsapp-rust` client
+//! library. One process fronts N WhatsApp Web sessions and exposes them
+//! through a single HTTP API, a NATS JetStream event bus, and outbound HMAC
+//! webhooks.
+//!
+//! ## Architecture at a glance
+//!
+//! - [`state`] — process-wide [`AppState`] with the session registry,
+//!   webhook table, NATS handle, and per-session runtime state (client
+//!   handle, QR queue, pair code, status, pair telemetry, logout history,
+//!   circuit-breaker state).
+//! - [`routes`] — axum router. Builds `/health`, `/metrics`, the versioned
+//!   `/api/v1/*` tree, and the Swagger UI (`/swagger-ui`, `/api-docs`).
+//! - [`handlers`] — one module per REST domain (sessions, messages, groups,
+//!   contacts, presence, chatstate, media, webhooks, NATS, operations, …).
+//! - [`db`] — three-backend DB layer (Postgres, MySQL, and a hand-rolled
+//!   SQLite wrapper over `libsqlite3-sys` 0.37 that shares the copy shipped
+//!   by `whatsapp-rust-sqlite-storage`).
+//! - [`nats`] — JetStream publisher + outbound `wa.send.>` consumer.
+//! - [`metrics`] — Prometheus exposition for `/metrics`.
+//! - [`middleware::jwt`] — bearer-token gate with a superadmin bypass.
+//!
+//! ## Runtime tuning
+//!
+//! Overridable via environment (or `.env`):
+//!
+//! - `WA_RS_WORKER_THREADS` — tokio worker threads (default: CPU count).
+//! - `WA_RS_BLOCKING_THREADS` — tokio blocking pool (default 2048).
+//! - `WA_RS_MYSQL_MAX_POOL` — MySQL connections (default 64).
+//! - `WA_RS_PORT` / `WA_RS_HOST` — bind address (default `0.0.0.0:3451`).
+//!
+//! ## Storage
+//!
+//! - Session storage dirs live at `WHATSAPP_STORAGE_PATH` (default
+//!   `./whatsapp_sessions`), one directory per session id containing the
+//!   upstream `whatsapp.db` SQLite store.
+//! - Registry (`sessions`, `webhooks`, `contacts`, `webhook_dlq`) lives in
+//!   whichever DB `DATABASE_URL` points at.
 use anyhow::Result;
 use std::net::SocketAddr;
 use std::time::Duration;

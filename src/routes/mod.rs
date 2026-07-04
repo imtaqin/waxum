@@ -1,3 +1,15 @@
+//! Axum router assembly.
+//!
+//! [`create_router`] wires:
+//!
+//! - `/health` — DB-free static probe used by the Docker HEALTHCHECK.
+//! - `/metrics` — Prometheus text exposition (JWT bypass).
+//! - `/api/v1/info` — build info + version.
+//! - `/api/v1/sessions/*` — session lifecycle, pair, connect, disconnect,
+//!   QR, status, delete, contacts, groups, messages, presence, chatstate,
+//!   media, mex, operations, webhooks, and everything else.
+//! - `/api/v1/nats/*` — NATS stream ops.
+
 use axum::{
     routing::{delete, get, post, put},
     Router,
@@ -6,6 +18,7 @@ use axum::{
 use crate::handlers;
 use crate::state::AppState;
 
+/// Build the fully-wired axum router used by [`crate::main`].
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .nest("/api/v1", api_routes())

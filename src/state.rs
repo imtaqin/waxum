@@ -1,3 +1,19 @@
+//! Process-wide shared state.
+//!
+//! [`AppState`] is cloned into every axum handler. It owns:
+//!
+//! - the `SessionManager` from [`crate::db`] (DB access),
+//! - the in-memory [`DashMap`] of per-session runtimes ([`SessionState`]),
+//! - the webhook registry,
+//! - the optional NATS handle, and
+//! - the per-URL webhook [`CircuitState`] table.
+//!
+//! [`SessionState`] tracks everything about one live WhatsApp session that
+//! doesn't belong on disk: the cached `whatsapp_rust::Client`, current QR
+//! frames, pair code, [`SessionStatus`], pair telemetry, rolling logout
+//! history (used to decide when to auto-purge), and an event broadcast
+//! channel other handlers can subscribe to.
+
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::sync::{Arc, OnceLock};

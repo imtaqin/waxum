@@ -1,3 +1,17 @@
+//! NATS JetStream integration.
+//!
+//! Two subject trees are used:
+//!
+//! - `wa.events.{session_id}.{event_type}` — every event fired by the
+//!   upstream client is published here for external consumers (dashboards,
+//!   analytics, downstream apps).
+//! - `wa.send.{session_id}` — inbound queue for send requests posted by
+//!   external producers; the [`consumer`] drains it and forwards the
+//!   payload through the normal handler path.
+//!
+//! NATS is optional: the gateway boots with `NATS: Disabled` when the
+//! connection URL is unset or unreachable; publishing then becomes a no-op.
+
 pub mod config;
 pub mod consumer;
 pub mod models;

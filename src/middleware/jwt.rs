@@ -1,3 +1,15 @@
+//! Bearer-token authentication middleware.
+//!
+//! Every request through `/api/v1/*` passes through [`jwt_auth_middleware`].
+//! It accepts either:
+//!
+//! - the plain-string `SUPERADMIN_TOKEN` (env), or
+//! - a JWT signed with `JWT_SECRET` whose `role` claim is `superadmin`.
+//!
+//! `/health` and `/metrics` are always allowed through so probes and
+//! scrapers don't need credentials. `/swagger-ui` and `/api-docs` are also
+//! exempt so the interactive docs can render without auth.
+
 use axum::{
     body::Body,
     extract::Request,

@@ -1,3 +1,10 @@
+//! Unified API error type.
+//!
+//! [`ApiError`] centralises every failure surfaced by a handler and maps
+//! it to an HTTP status code + JSON body. Handlers `?`-propagate the
+//! variant they need; the middleware never has to build a response by
+//! hand.
+
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},

@@ -1,3 +1,23 @@
+//! Multi-backend database layer.
+//!
+//! The gateway supports three backends selected from `DATABASE_URL`:
+//!
+//! - **Postgres** (`postgres://…`) — via `deadpool_postgres`.
+//! - **MySQL** (`mysql://…`) — via `mysql_async` with a tuned pool.
+//! - **SQLite** — the zero-config default when no URL is provided.
+//!   Uses a thin FFI wrapper in [`sqlite_raw`] over `libsqlite3-sys` 0.37,
+//!   because we ride on the same shared library that
+//!   `whatsapp-rust-sqlite-storage` already brings in and cannot pull a
+//!   second `rusqlite`-owned copy.
+//!
+//! Submodules:
+//!
+//! - [`schema`] — idempotent DDL that runs at startup.
+//! - [`session`] — session/webhook registry (the [`SessionManager`] type).
+//! - [`contacts`] — WhatsApp contact directory store.
+//! - [`webhook_dlq`] — dead-letter queue for failed webhook deliveries.
+//! - [`sqlite_raw`] — hand-rolled safe wrapper over `libsqlite3-sys`.
+
 pub mod contacts;
 pub mod schema;
 pub mod session;

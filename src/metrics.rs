@@ -1,3 +1,19 @@
+//! Prometheus text-exposition on `GET /metrics`.
+//!
+//! Bypasses the JWT middleware so a scraper can poll without a token; put
+//! the endpoint behind a network ACL if that's a concern.
+//!
+//! Gauges:
+//!
+//! - `wa_rs_sessions_total` — number of session runtimes resident in
+//!   memory.
+//! - `wa_rs_sessions_live` — sessions whose upstream client agrees it's
+//!   connected AND logged in (source of truth for /status).
+//! - `wa_rs_process_threads` — thread count from `/proc/self/status`.
+//! - `wa_rs_process_open_fds` — FD count from `/proc/self/fd`.
+//! - `wa_rs_webhook_circuits_open` — webhook target URLs currently in the
+//!   OPEN circuit-breaker state; alert when this is non-zero for long.
+
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
 use prometheus::{Encoder, IntGauge, Registry, TextEncoder};
 use std::sync::OnceLock;
