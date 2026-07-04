@@ -44,7 +44,44 @@
 
 ## Quick Start
 
-### Docker Compose (Recommended)
+### One-liner install (Linux / macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.sh | sudo bash
+```
+
+Fetches the latest GitHub Release binary, drops it in `/usr/local/bin`,
+writes a systemd unit at `/etc/systemd/system/wa-rs.service`, generates
+`/etc/wa-rs.env` with a random JWT + superadmin token, and offers to
+enable a nightly auto-update cron. Same script handles `update` and
+`uninstall`:
+
+```bash
+sudo /usr/local/bin/wa-rs-update       # pull latest release + restart
+sudo bash install.sh uninstall         # remove service + binary (data kept)
+```
+
+### One-liner install (Windows, elevated PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.ps1 | iex
+```
+
+Downloads the latest release, installs into
+`C:\ProgramData\wa-rs`, registers a Windows service (`wa-rs`) that
+auto-starts on boot, and — if you say yes — installs a scheduled task
+for nightly auto-update at 03:15. Subcommands:
+
+```powershell
+.\install.ps1 update      # check + apply latest release
+.\install.ps1 uninstall   # remove service (data kept)
+```
+
+Both installers ship the same interactive banner and remember whether
+you opted into auto-update, so the update path is a single `Enter` on
+subsequent runs.
+
+### Docker Compose
 
 Pulls the prebuilt image from Docker Hub — no compile step, comes up in seconds.
 
