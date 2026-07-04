@@ -82,11 +82,18 @@ pub async fn ring_call(
     let call_creator = client
         .get_pn()
         .ok_or_else(|| ApiError::Internal("session has no phone JID yet".to_string()))?;
+    let push_name = client.get_push_name();
+    let notify = if push_name.is_empty() {
+        "wa-rs".to_string()
+    } else {
+        push_name
+    };
 
     let call_id = request
         .call_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string().to_uppercase());
     let stanza_id = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
+    let now_ts = chrono::Utc::now().timestamp().to_string();
 
     let audio_16k = NodeBuilder::new("audio")
         .attr("enc", "opus")
@@ -100,12 +107,21 @@ pub async fn ring_call(
     let offer = NodeBuilder::new("offer")
         .attr("call-id", call_id.as_str())
         .attr("call-creator", &call_creator)
+        .attr("caller_pn", &call_creator)
+        .attr("device_class", "2016")
+        .attr("joinable", "1")
         .children([audio_16k, audio_8k])
         .build();
 
     let stanza = NodeBuilder::new("call")
         .attr("to", &to)
         .attr("id", stanza_id.as_str())
+        .attr("from", &call_creator)
+        .attr("version", "2.25.37.76")
+        .attr("platform", "android")
+        .attr("notify", notify.as_str())
+        .attr("t", now_ts.as_str())
+        .attr("e", "0")
         .children([offer])
         .build();
 
