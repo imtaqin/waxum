@@ -171,6 +171,7 @@ use state::AppState;
         handlers::blocking::is_blocked,
 
         handlers::calls::reject_call,
+        handlers::calls::ring_call,
 
         handlers::status::send_status_reaction,
 
@@ -310,6 +311,8 @@ use state::AppState;
             handlers::blocking::BlockStatusResponse,
 
             models::calls::RejectCallRequest,
+            models::calls::RingCallRequest,
+            models::calls::RingCallResponse,
 
             models::status::StatusReactionRequest,
 

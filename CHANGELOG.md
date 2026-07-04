@@ -2,6 +2,18 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.9] - 2026-07-04
+
+### New
+
+- **`POST /calls/ring`** — signalling-only outbound ring. Builds the
+  `<call><offer>` stanza (opus 16k + 8k audio codecs, generated call-id)
+  and pushes it through `Client::send_node`. The recipient's phone
+  rings until WhatsApp times out, since the upstream `whatsapp-rust`
+  crate has no RTP media stack yet. Useful for number verification and
+  attention pings. Returns the `call_id` so the caller can later
+  `/calls/reject` if needed.
+
 ## [0.6.8] - 2026-06-30
 
 ### Resilience
