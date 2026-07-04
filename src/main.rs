@@ -172,6 +172,8 @@ use state::AppState;
 
         handlers::calls::reject_call,
         handlers::calls::ring_call,
+        handlers::calls::accept_call,
+        handlers::calls::terminate_call,
 
         handlers::status::send_status_reaction,
 
@@ -313,6 +315,8 @@ use state::AppState;
             models::calls::RejectCallRequest,
             models::calls::RingCallRequest,
             models::calls::RingCallResponse,
+            models::calls::AcceptCallRequest,
+            models::calls::TerminateCallRequest,
 
             models::status::StatusReactionRequest,
 
@@ -339,6 +343,7 @@ use state::AppState;
             handlers::operations::HistorySyncResponse,
 
             models::webhooks::WebhookConfig,
+            models::webhooks::WebhookConfigWithId,
             models::webhooks::WebhookEvent,
             models::webhooks::RegisterWebhookRequest,
             models::webhooks::WebhookListResponse,

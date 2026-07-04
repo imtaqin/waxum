@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::models::common::SuccessResponse;
-use crate::models::webhooks::{RegisterWebhookRequest, WebhookConfig, WebhookListResponse};
+use crate::models::webhooks::{
+    RegisterWebhookRequest, WebhookConfig, WebhookConfigWithId, WebhookListResponse,
+};
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -33,10 +35,10 @@ pub async fn list_webhooks(
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
-    let webhooks: Vec<WebhookConfig> = state
+    let webhooks: Vec<WebhookConfigWithId> = state
         .get_webhooks(&session_id)
         .into_iter()
-        .map(|(_, v)| v)
+        .map(WebhookConfigWithId::from)
         .collect();
     let count = webhooks.len();
 

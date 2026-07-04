@@ -310,6 +310,14 @@ fn session_routes() -> Router<AppState> {
         )
         .route("/{session_id}/calls/ring", post(handlers::calls::ring_call))
         .route(
+            "/{session_id}/calls/accept",
+            post(handlers::calls::accept_call),
+        )
+        .route(
+            "/{session_id}/calls/terminate",
+            post(handlers::calls::terminate_call),
+        )
+        .route(
             "/{session_id}/status/react",
             post(handlers::status::send_status_reaction),
         )

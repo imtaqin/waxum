@@ -6,7 +6,9 @@ use wacore_binary::builder::NodeBuilder;
 use wacore_binary::jid::Jid;
 
 use crate::error::ApiError;
-use crate::models::calls::{RejectCallRequest, RingCallRequest, RingCallResponse};
+use crate::models::calls::{
+    AcceptCallRequest, RejectCallRequest, RingCallRequest, RingCallResponse, TerminateCallRequest,
+};
 use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 
@@ -116,6 +118,112 @@ pub async fn ring_call(
         call_id,
         to: to.to_string(),
     }))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/calls/accept",
+    tag = "calls",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = AcceptCallRequest,
+    responses(
+        (status = 200, description = "Accept signal sent", body = SuccessResponse),
+        (status = 400, description = "Invalid caller JID or empty call_id"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn accept_call(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<AcceptCallRequest>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    if request.call_id.is_empty() {
+        return Err(ApiError::BadRequest("call_id is empty".to_string()));
+    }
+    let client = get_client(&state, &session_id)?;
+    let from: Jid = request
+        .from
+        .parse()
+        .map_err(|_| ApiError::InvalidJid(request.from.clone()))?;
+
+    let accept = NodeBuilder::new("accept")
+        .attr("call-id", request.call_id.as_str())
+        .attr("call-creator", &from)
+        .build();
+
+    let stanza = NodeBuilder::new("call")
+        .attr("to", &from)
+        .attr(
+            "id",
+            uuid::Uuid::new_v4().simple().to_string().to_uppercase(),
+        )
+        .children([accept])
+        .build();
+
+    client
+        .send_node(stanza)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(SuccessResponse::with_message("Call accepted")))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/calls/terminate",
+    tag = "calls",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = TerminateCallRequest,
+    responses(
+        (status = 200, description = "Terminate signal sent", body = SuccessResponse),
+        (status = 400, description = "Invalid peer JID or empty call_id"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn terminate_call(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<TerminateCallRequest>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    if request.call_id.is_empty() {
+        return Err(ApiError::BadRequest("call_id is empty".to_string()));
+    }
+    let client = get_client(&state, &session_id)?;
+    let peer: Jid = request
+        .peer
+        .parse()
+        .map_err(|_| ApiError::InvalidJid(request.peer.clone()))?;
+    let reason = request.reason.as_deref().unwrap_or("hangup");
+
+    let terminate = NodeBuilder::new("terminate")
+        .attr("call-id", request.call_id.as_str())
+        .attr("call-creator", &peer)
+        .attr("reason", reason)
+        .build();
+
+    let stanza = NodeBuilder::new("call")
+        .attr("to", &peer)
+        .attr(
+            "id",
+            uuid::Uuid::new_v4().simple().to_string().to_uppercase(),
+        )
+        .children([terminate])
+        .build();
+
+    client
+        .send_node(stanza)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    Ok(Json(SuccessResponse::with_message("Call terminated")))
 }
 
 fn get_client(

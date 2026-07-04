@@ -34,3 +34,32 @@ pub struct RingCallResponse {
     pub call_id: String,
     pub to: String,
 }
+
+/// Accept an incoming call by writing back the `<call><accept/>` stanza.
+/// Signalling only — no media stack, so audio will not flow. Pair with
+/// `terminate` immediately if you just want the call to show up in the
+/// recipient's call log as "answered".
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AcceptCallRequest {
+    /// Caller JID as reported in `IncomingCall.from`.
+    #[schema(example = "6285117822731@s.whatsapp.net")]
+    pub from: String,
+    /// Call id from `IncomingCall.action.call_id()`.
+    #[schema(example = "2E3F4A5B6C7D")]
+    pub call_id: String,
+}
+
+/// End a call the session is currently in.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TerminateCallRequest {
+    /// Peer JID (caller for incoming, callee for outgoing).
+    #[schema(example = "6285117822731@s.whatsapp.net")]
+    pub peer: String,
+    #[schema(example = "2E3F4A5B6C7D")]
+    pub call_id: String,
+    /// Optional termination reason string (e.g. "hangup", "busy"). Sent as
+    /// the `reason` attr on the `<terminate>` child. Defaults to
+    /// `"hangup"` when omitted.
+    #[serde(default)]
+    pub reason: Option<String>,
+}

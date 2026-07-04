@@ -2,6 +2,21 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.10] - 2026-07-04
+
+### New
+
+- **`POST /calls/accept`** and **`POST /calls/terminate`** — write the
+  `<call><accept/>` and `<call><terminate reason="…"/>` signalling
+  stanzas via `Client::send_node`. Still signalling only (no RTP media
+  stack), so accept then terminate is the useful pair — the call
+  becomes "answered" in the recipient's log without any audio flowing.
+- **`GET /webhooks` returns IDs.** Payload switched from
+  `Vec<WebhookConfig>` to `Vec<WebhookConfigWithId>` so clients can
+  drive `DELETE /webhooks/{id}` off the response directly — no more
+  round-tripping through the local cache to look the id up. New
+  `WebhookConfigWithId` schema is registered on OpenAPI.
+
 ## [0.6.9] - 2026-07-04
 
 ### New

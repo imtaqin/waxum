@@ -190,11 +190,34 @@ fn default_events() -> Vec<WebhookEvent> {
     vec![WebhookEvent::All]
 }
 
+/// A webhook config bundled with its runtime ID so clients can call the
+/// `DELETE /webhooks/{webhook_id}` endpoint.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct WebhookConfigWithId {
+    pub id: String,
+    pub url: String,
+    pub events: Vec<WebhookEvent>,
+    pub secret: Option<String>,
+    pub enabled: bool,
+}
+
+impl From<(String, WebhookConfig)> for WebhookConfigWithId {
+    fn from((id, cfg): (String, WebhookConfig)) -> Self {
+        Self {
+            id,
+            url: cfg.url,
+            events: cfg.events,
+            secret: cfg.secret,
+            enabled: cfg.enabled,
+        }
+    }
+}
+
 /// Response with list of webhooks
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WebhookListResponse {
-    /// List of webhooks
-    pub webhooks: Vec<WebhookConfig>,
+    /// List of webhooks, each with its ID so clients can DELETE by ID.
+    pub webhooks: Vec<WebhookConfigWithId>,
     /// Total count
     pub count: usize,
 }
