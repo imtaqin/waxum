@@ -261,7 +261,68 @@ do_install() {
         warn "not started — enable later with: systemctl enable --now wa-rs"
     fi
 
-    ok "done. edit ${ENV_FILE} and 'systemctl restart wa-rs' after changes."
+    print_summary "$tag"
+}
+
+# Read the value of an env key from $ENV_FILE.
+env_val() {
+    local key="$1"
+    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -n1 | sed -E "s/^${key}=//"
+}
+
+# Best-effort guess for the public host so the summary URL is useful. Falls
+# back to `localhost` when nothing better is discoverable.
+detect_host() {
+    local h
+    h="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ -z "$h" ]]; then
+        h="$(hostname -f 2>/dev/null || hostname)"
+    fi
+    [[ -n "$h" ]] || h="localhost"
+    echo "$h"
+}
+
+print_summary() {
+    local tag="$1"
+    local token url_local url_public host
+    token="$(env_val SUPERADMIN_TOKEN)"
+    host="$(detect_host)"
+    url_local="http://127.0.0.1:3451"
+    url_public="http://${host}:3451"
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}║${RESET}  ${CYAN}wa-rs installed — save this info${RESET}                              ${GREEN}║${RESET}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    echo -e "  ${DIM}version${RESET}         : ${tag}"
+    echo -e "  ${DIM}binary${RESET}          : ${BIN_PATH}"
+    echo -e "  ${DIM}env file${RESET}        : ${ENV_FILE}"
+    echo -e "  ${DIM}data dir${RESET}        : ${DATA_DIR}"
+    echo -e "  ${DIM}service${RESET}         : ${SERVICE_FILE}"
+    echo -e "  ${DIM}update helper${RESET}   : ${UPDATE_HELPER}"
+    if [[ -f "$CRON_FILE" ]]; then
+        echo -e "  ${DIM}auto-update${RESET}     : ${GREEN}nightly 03:15${RESET} (${CRON_FILE})"
+    else
+        echo -e "  ${DIM}auto-update${RESET}     : ${YELLOW}disabled${RESET} — run '${UPDATE_HELPER}' to upgrade manually"
+    fi
+    echo ""
+    echo -e "  ${CYAN}Endpoints${RESET}"
+    echo -e "    local           : ${url_local}"
+    echo -e "    LAN             : ${url_public}"
+    echo -e "    health          : ${url_local}/health"
+    echo -e "    swagger UI      : ${url_local}/swagger-ui"
+    echo ""
+    echo -e "  ${CYAN}Credentials${RESET} ${YELLOW}(auto-generated — treat as secret)${RESET}"
+    echo -e "    SUPERADMIN_TOKEN: ${token:-<missing — check ${ENV_FILE}>}"
+    echo ""
+    echo -e "  ${CYAN}Smoke test${RESET}"
+    echo -e "    curl -s ${url_local}/health"
+    echo -e "    curl -s -H 'Authorization: Bearer ${token}' ${url_local}/api/v1/sessions"
+    echo ""
+    echo -e "  ${DIM}logs:${RESET}    journalctl -fu wa-rs"
+    echo -e "  ${DIM}restart:${RESET} systemctl restart wa-rs"
+    echo ""
 }
 
 do_update() {
