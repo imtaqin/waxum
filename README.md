@@ -42,6 +42,41 @@
 - **Privacy & Blocking** — Privacy settings, block/unblock contacts
 - **Advanced Ops** — Spam reporting, TCToken, auto-reconnect, history sync, GraphQL/MEX
 
+## Premium (Pro / Enterprise)
+
+Everything above is MIT-free forever. On top of it wa-rs offers a paid
+tier that activates through a signed license key — no source access
+required, drop the key into the environment and the runtime unlocks the
+extra features.
+
+| Capability | Free | Pro | Enterprise |
+|---|:-:|:-:|:-:|
+| Multi-session gateway, all message types, webhooks, NATS | ✓ | ✓ | ✓ |
+| Prometheus `/metrics`, DLQ, circuit breaker | ✓ | ✓ | ✓ |
+| **Anti-ban shield** (adaptive throttle, typing simulation, burst cool-off) | — | ✓ | ✓ |
+| **Webhook DLQ replay UI + admin API** | — | ✓ | ✓ |
+| **Encrypted backup** (AES-256-GCM tar.zst → S3 or local) | — | ✓ | ✓ |
+| **AI auto-reply** (OpenAI-compatible: OpenAI, Kimi, Claude via proxy, Ollama) | — | — | ✓ |
+| **Multi-node cluster** (session sharding across N wa-rs instances) | — | — | ✓ |
+| Priority support (private Slack, response SLA) | — | community | ✓ |
+
+**How to activate**
+
+1. Grab a license key at [wa-rs.imtaqin.id/pricing](https://wa-rs.imtaqin.id/pricing) — currently invite-only, DM to onboard.
+2. Set two env vars and restart:
+   ```
+   WA_RS_LICENSE_KEY=<your license>
+   # WA_RS_LICENSE_PUBKEY=<optional issuer pubkey to enforce signed keys>
+   ```
+3. Startup log confirms activation:
+   ```
+   premium: tier=pro features=[anti_ban,dlq_replay,backup] (signed)
+   ```
+
+Everything premium is compiled into the binary released on this repo —
+the source stays closed under a commercial licence. Free-tier binaries
+run identically, they just log `premium: free tier` at boot.
+
 ## Quick Start
 
 ### One-liner install (Linux / macOS)
