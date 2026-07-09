@@ -328,7 +328,7 @@ pub async fn set_auto_reconnect(
         .enable_auto_reconnect
         .store(request.enabled, Ordering::Relaxed);
 
-    let error_count = client.auto_reconnect_errors.load(Ordering::Relaxed);
+    let error_count = client.stats().reconnect_errors;
 
     Ok(Json(AutoReconnectResponse {
         enabled: request.enabled,
@@ -357,7 +357,7 @@ pub async fn get_auto_reconnect(
     let client = get_client(&state, &session_id)?;
 
     let enabled = client.enable_auto_reconnect.load(Ordering::Relaxed);
-    let error_count = client.auto_reconnect_errors.load(Ordering::Relaxed);
+    let error_count = client.stats().reconnect_errors;
 
     Ok(Json(AutoReconnectResponse {
         enabled,

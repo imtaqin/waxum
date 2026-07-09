@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use async_nats::jetstream::{self, consumer::PullConsumer, AckKind};
 use futures::StreamExt;
+use waproto::buffa::{Enumeration, MessageField};
 
 use crate::handlers::messages::{get_client, get_media_data, parse_jid};
 use crate::state::AppState;
@@ -126,12 +127,12 @@ async fn dispatch_command(
         OutboundCommand::Text { to, text, .. } => {
             let to_jid = parse_jid(&to)?;
             let message = waproto::whatsapp::Message {
-                extended_text_message: Some(Box::new(
+                extended_text_message: MessageField::some(
                     waproto::whatsapp::message::ExtendedTextMessage {
                         text: Some(text),
                         ..Default::default()
                     },
-                )),
+                ),
                 ..Default::default()
             };
             client
@@ -155,7 +156,7 @@ async fn dispatch_command(
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
-                image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
+                image_message: MessageField::some(waproto::whatsapp::message::ImageMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
                     media_key: Some(upload.media_key.to_vec()),
@@ -165,7 +166,7 @@ async fn dispatch_command(
                     mimetype: Some(mimetype),
                     caption,
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -189,7 +190,7 @@ async fn dispatch_command(
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
-                video_message: Some(Box::new(waproto::whatsapp::message::VideoMessage {
+                video_message: MessageField::some(waproto::whatsapp::message::VideoMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
                     media_key: Some(upload.media_key.to_vec()),
@@ -199,7 +200,7 @@ async fn dispatch_command(
                     mimetype: Some(mimetype),
                     caption,
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -221,7 +222,7 @@ async fn dispatch_command(
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
-                audio_message: Some(Box::new(waproto::whatsapp::message::AudioMessage {
+                audio_message: MessageField::some(waproto::whatsapp::message::AudioMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
                     media_key: Some(upload.media_key.to_vec()),
@@ -231,7 +232,7 @@ async fn dispatch_command(
                     mimetype: Some(mimetype),
                     ptt: Some(ptt),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -259,7 +260,7 @@ async fn dispatch_command(
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
-                document_message: Some(Box::new(waproto::whatsapp::message::DocumentMessage {
+                document_message: MessageField::some(waproto::whatsapp::message::DocumentMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
                     media_key: Some(upload.media_key.to_vec()),
@@ -270,7 +271,7 @@ async fn dispatch_command(
                     file_name: Some(filename),
                     caption,
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -292,7 +293,7 @@ async fn dispatch_command(
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
-                sticker_message: Some(Box::new(waproto::whatsapp::message::StickerMessage {
+                sticker_message: MessageField::some(waproto::whatsapp::message::StickerMessage {
                     url: Some(upload.url),
                     direct_path: Some(upload.direct_path),
                     media_key: Some(upload.media_key.to_vec()),
@@ -301,7 +302,7 @@ async fn dispatch_command(
                     file_length: Some(data.len() as u64),
                     mimetype: Some(mimetype),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -321,13 +322,13 @@ async fn dispatch_command(
         } => {
             let to_jid = parse_jid(&to)?;
             let message = waproto::whatsapp::Message {
-                location_message: Some(Box::new(waproto::whatsapp::message::LocationMessage {
+                location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
                     degrees_latitude: Some(latitude),
                     degrees_longitude: Some(longitude),
                     name,
                     address,
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -349,11 +350,11 @@ async fn dispatch_command(
                     .collect::<String>()
             );
             let message = waproto::whatsapp::Message {
-                contact_message: Some(Box::new(waproto::whatsapp::message::ContactMessage {
+                contact_message: MessageField::some(waproto::whatsapp::message::ContactMessage {
                     display_name: Some(contact.display_name),
                     vcard: Some(vcard),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -371,17 +372,18 @@ async fn dispatch_command(
         } => {
             let to_jid = parse_jid(&to)?;
             let message = waproto::whatsapp::Message {
-                reaction_message: Some(Box::new(waproto::whatsapp::message::ReactionMessage {
+                reaction_message: MessageField::some(waproto::whatsapp::message::ReactionMessage {
                     key: Some(waproto::whatsapp::MessageKey {
                         remote_jid: Some(to.clone()),
                         id: Some(message_id),
                         from_me: Some(false),
                         ..Default::default()
-                    }),
+                    })
+                    .into(),
                     text: Some(emoji),
                     sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -409,14 +411,14 @@ async fn dispatch_command(
                 )
                 .collect();
             let message = waproto::whatsapp::Message {
-                poll_creation_message: Some(Box::new(
+                poll_creation_message: MessageField::some(
                     waproto::whatsapp::message::PollCreationMessage {
                         name: Some(name),
                         options: opts,
                         selectable_options_count: Some(selectable_count),
                         ..Default::default()
                     },
-                )),
+                ),
                 ..Default::default()
             };
             client
@@ -443,21 +445,28 @@ async fn dispatch_command(
                         waproto::whatsapp::message::buttons_message::button::ButtonText {
                             display_text: Some(b.display_text),
                         },
+                    )
+                    .into(),
+                    r#type: Some(
+                        waproto::whatsapp::message::buttons_message::button::Type::from_i32(1)
+                            .unwrap_or_default(),
                     ),
-                    r#type: Some(1),
                     ..Default::default()
                 })
                 .collect();
             let header = header_text.map(waproto::whatsapp::message::buttons_message::Header::Text);
             let message = waproto::whatsapp::Message {
-                buttons_message: Some(Box::new(waproto::whatsapp::message::ButtonsMessage {
+                buttons_message: MessageField::some(waproto::whatsapp::message::ButtonsMessage {
                     content_text: Some(content_text),
                     footer_text: footer,
                     buttons: btns,
-                    header_type: header.as_ref().map(|_| 2),
+                    header_type: header.as_ref().map(|_| {
+                        waproto::whatsapp::message::buttons_message::HeaderType::from_i32(2)
+                            .unwrap_or_default()
+                    }),
                     header,
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             };
             client
@@ -510,23 +519,23 @@ async fn dispatch_command(
                     ..Default::default()
                 };
             let message = waproto::whatsapp::Message {
-                interactive_message: Some(Box::new(
+                interactive_message: MessageField::some(
                     waproto::whatsapp::message::InteractiveMessage {
                         body: Some(waproto::whatsapp::message::interactive_message::Body {
                             text: Some(description),
-                        }),
+                        }).into(),
                         footer: footer.map(|f| {
-                            Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                            waproto::whatsapp::message::interactive_message::Footer {
                                 text: Some(f),
                                 ..Default::default()
-                            })
-                        }),
+                            }
+                        }).into(),
                         interactive_message: Some(
-                            waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                            waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                         ),
                         ..Default::default()
                     },
-                )),
+                ),
                 ..Default::default()
             };
             client
@@ -556,23 +565,23 @@ async fn dispatch_command(
                 ..Default::default()
             };
             let message = waproto::whatsapp::Message {
-                interactive_message: Some(Box::new(
+                interactive_message: MessageField::some(
                     waproto::whatsapp::message::InteractiveMessage {
                         body: Some(waproto::whatsapp::message::interactive_message::Body {
                             text: Some(body_text),
-                        }),
+                        }).into(),
                         footer: footer_text.map(|f| {
-                            Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                            waproto::whatsapp::message::interactive_message::Footer {
                                 text: Some(f),
                                 ..Default::default()
-                            })
-                        }),
+                            }
+                        }).into(),
                         interactive_message: Some(
-                            waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                            waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                         ),
                         ..Default::default()
                     },
-                )),
+                ),
                 ..Default::default()
             };
             client
@@ -613,12 +622,12 @@ async fn dispatch_command(
         } => {
             let to_jid = parse_jid(&to)?;
             let edit_msg = waproto::whatsapp::Message {
-                extended_text_message: Some(Box::new(
+                extended_text_message: MessageField::some(
                     waproto::whatsapp::message::ExtendedTextMessage {
                         text: Some(text),
                         ..Default::default()
                     },
-                )),
+                ),
                 ..Default::default()
             };
             client

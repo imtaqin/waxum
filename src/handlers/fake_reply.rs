@@ -5,6 +5,7 @@
 use crate::models::messages::FakeReplyConfig;
 use rand::seq::SliceRandom;
 use rand::Rng;
+use waproto::buffa::MessageField;
 use waproto::whatsapp as wa;
 
 // ── Indonesian realistic data pools ─────────────────────────────────────────
@@ -198,7 +199,7 @@ pub fn build_fake_reply_context_info(cfg: &FakeReplyConfig) -> Option<wa::Contex
     Some(wa::ContextInfo {
         stanza_id: Some(stanza_id),
         participant: Some(participant),
-        quoted_message: Some(Box::new(quoted)),
+        quoted_message: MessageField::some(quoted),
         ..Default::default()
     })
 }
@@ -234,9 +235,9 @@ fn build_quoted_message(
             let business_jid = random_jid();
 
             Some(wa::Message {
-                product_message: Some(Box::new(wa::message::ProductMessage {
-                    product: Some(Box::new(wa::message::product_message::ProductSnapshot {
-                        product_image: None,
+                product_message: MessageField::some(wa::message::ProductMessage {
+                    product: MessageField::some(wa::message::product_message::ProductSnapshot {
+                        product_image: None.into(),
                         product_id: Some(format!("PROD_{}", rand_digits(8))),
                         title: Some(product_title),
                         description: Some(desc),
@@ -245,10 +246,10 @@ fn build_quoted_message(
                         retailer_id: Some(retailer),
                         product_image_count: Some(rng.gen_range(1..=5)),
                         ..Default::default()
-                    })),
+                    }),
                     business_owner_jid: Some(business_jid),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }
@@ -262,16 +263,16 @@ fn build_quoted_message(
             });
 
             Some(wa::Message {
-                order_message: Some(Box::new(wa::message::OrderMessage {
+                order_message: MessageField::some(wa::message::OrderMessage {
                     order_id: Some(format!("ORD_{}", rand_digits(10))),
                     item_count: Some(rng.gen_range(1..=8)),
-                    status: Some(1),
-                    surface: Some(1),
+                    status: Some(wa::message::order_message::OrderStatus::INQUIRY),
+                    surface: Some(wa::message::order_message::OrderSurface::CATALOG),
                     message: Some(msg),
                     order_title: Some(order_title),
                     seller_jid: Some(random_jid()),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }
@@ -285,13 +286,13 @@ fn build_quoted_message(
             let lat_jitter = rng.gen_range(-0.005..0.005);
             let lng_jitter = rng.gen_range(-0.005..0.005);
             Some(wa::Message {
-                location_message: Some(Box::new(wa::message::LocationMessage {
+                location_message: MessageField::some(wa::message::LocationMessage {
                     degrees_latitude: Some(lat + lat_jitter),
                     degrees_longitude: Some(lng + lng_jitter),
                     name: Some(name_override),
                     address: body.map(|s| s.to_string()),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }
@@ -302,12 +303,12 @@ fn build_quoted_message(
                 .or_else(|| title.map(|s| s.to_string()))
                 .unwrap_or_else(|| pick(VIDEO_CAPTIONS).to_string());
             Some(wa::Message {
-                video_message: Some(Box::new(wa::message::VideoMessage {
+                video_message: MessageField::some(wa::message::VideoMessage {
                     seconds: Some(rng.gen_range(5..=180)),
                     caption: Some(caption),
                     mimetype: Some("video/mp4".to_string()),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }
@@ -317,13 +318,13 @@ fn build_quoted_message(
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| pick(DOCUMENT_NAMES).to_string());
             Some(wa::Message {
-                document_message: Some(Box::new(wa::message::DocumentMessage {
+                document_message: MessageField::some(wa::message::DocumentMessage {
                     title: Some(filename.clone()),
                     file_name: Some(filename),
                     mimetype: Some("application/pdf".to_string()),
                     caption: body.map(|s| s.to_string()),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }
@@ -338,11 +339,11 @@ fn build_quoted_message(
                 name, phone
             );
             Some(wa::Message {
-                contact_message: Some(Box::new(wa::message::ContactMessage {
+                contact_message: MessageField::some(wa::message::ContactMessage {
                     display_name: Some(name),
                     vcard: Some(vcard),
                     ..Default::default()
-                })),
+                }),
                 ..Default::default()
             })
         }

@@ -39,8 +39,23 @@ pub async fn reject_call(
         .parse()
         .map_err(|_| ApiError::InvalidJid(request.from.clone()))?;
 
+    if request.call_id.is_empty() {
+        return Err(ApiError::BadRequest("call_id is empty".to_string()));
+    }
+
+    let id = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
+    let stanza = NodeBuilder::new("call")
+        .attr("to", &from)
+        .attr("id", id.as_str())
+        .children([NodeBuilder::new("reject")
+            .attr("call-id", request.call_id.as_str())
+            .attr("call-creator", &from)
+            .attr("count", "0")
+            .build()])
+        .build();
+
     client
-        .reject_call(&request.call_id, &from)
+        .send_node(stanza)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

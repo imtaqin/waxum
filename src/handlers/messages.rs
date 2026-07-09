@@ -4,6 +4,7 @@ use axum::{
 };
 use base64::Engine;
 use wacore_binary::jid::Jid;
+use waproto::buffa::{Enumeration, MessageField};
 
 use crate::error::ApiError;
 use crate::models::messages::*;
@@ -33,24 +34,27 @@ pub async fn send_text(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+    let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
         } else {
-            request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+            request
+                .reply_to
+                .map(|id| waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
                 })
-            })
+                .into()
         };
 
     let message = waproto::whatsapp::Message {
-        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
-            text: Some(request.text),
-            context_info,
-            ..Default::default()
-        })),
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                context_info,
+                ..Default::default()
+            },
+        ),
         ..Default::default()
     };
 
@@ -102,20 +106,21 @@ pub async fn send_image(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+    let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
         } else {
-            request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+            request
+                .reply_to
+                .map(|id| waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
                 })
-            })
+                .into()
         };
 
     let message = waproto::whatsapp::Message {
-        image_message: Some(Box::new(waproto::whatsapp::message::ImageMessage {
+        image_message: MessageField::some(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -126,7 +131,7 @@ pub async fn send_image(
             caption: request.caption,
             context_info,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -178,20 +183,21 @@ pub async fn send_video(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+    let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
         } else {
-            request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+            request
+                .reply_to
+                .map(|id| waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
                 })
-            })
+                .into()
         };
 
     let message = waproto::whatsapp::Message {
-        video_message: Some(Box::new(waproto::whatsapp::message::VideoMessage {
+        video_message: MessageField::some(waproto::whatsapp::message::VideoMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -202,7 +208,7 @@ pub async fn send_video(
             caption: request.caption,
             context_info,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -255,7 +261,7 @@ pub async fn send_audio(
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
     let message = waproto::whatsapp::Message {
-        audio_message: Some(Box::new(waproto::whatsapp::message::AudioMessage {
+        audio_message: MessageField::some(waproto::whatsapp::message::AudioMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -265,7 +271,7 @@ pub async fn send_audio(
             mimetype: Some(mimetype),
             ptt: Some(request.ptt),
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -317,20 +323,21 @@ pub async fn send_document(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+    let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
         } else {
-            request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+            request
+                .reply_to
+                .map(|id| waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
                 })
-            })
+                .into()
         };
 
     let message = waproto::whatsapp::Message {
-        document_message: Some(Box::new(waproto::whatsapp::message::DocumentMessage {
+        document_message: MessageField::some(waproto::whatsapp::message::DocumentMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -342,7 +349,7 @@ pub async fn send_document(
             caption: request.caption,
             context_info,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -395,7 +402,7 @@ pub async fn send_sticker(
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
     let message = waproto::whatsapp::Message {
-        sticker_message: Some(Box::new(waproto::whatsapp::message::StickerMessage {
+        sticker_message: MessageField::some(waproto::whatsapp::message::StickerMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -404,7 +411,7 @@ pub async fn send_sticker(
             file_length: Some(data.len() as u64),
             mimetype: Some("image/webp".to_string()),
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -446,13 +453,13 @@ pub async fn send_location(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        location_message: Some(Box::new(waproto::whatsapp::message::LocationMessage {
+        location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
             degrees_latitude: Some(request.latitude),
             degrees_longitude: Some(request.longitude),
             name: request.name,
             address: request.address,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -496,11 +503,11 @@ pub async fn send_contact(
     let vcard = build_vcard(&request.contact);
 
     let message = waproto::whatsapp::Message {
-        contact_message: Some(Box::new(waproto::whatsapp::message::ContactMessage {
+        contact_message: MessageField::some(waproto::whatsapp::message::ContactMessage {
             display_name: Some(request.contact.display_name.clone()),
             vcard: Some(vcard),
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -542,10 +549,12 @@ pub async fn edit_message(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let new_content = waproto::whatsapp::Message {
-        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
-            text: Some(request.text),
-            ..Default::default()
-        })),
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                ..Default::default()
+            },
+        ),
         ..Default::default()
     };
 
@@ -641,12 +650,14 @@ pub async fn send_poll(
         .collect();
 
     let message = waproto::whatsapp::Message {
-        poll_creation_message: Some(Box::new(waproto::whatsapp::message::PollCreationMessage {
-            name: Some(request.name),
-            options,
-            selectable_options_count: Some(request.selectable_count),
-            ..Default::default()
-        })),
+        poll_creation_message: MessageField::some(
+            waproto::whatsapp::message::PollCreationMessage {
+                name: Some(request.name),
+                options,
+                selectable_options_count: Some(request.selectable_count),
+                ..Default::default()
+            },
+        ),
         ..Default::default()
     };
 
@@ -696,8 +707,12 @@ pub async fn send_buttons(
                 waproto::whatsapp::message::buttons_message::button::ButtonText {
                     display_text: Some(b.display_text),
                 },
+            )
+            .into(),
+            r#type: Some(
+                waproto::whatsapp::message::buttons_message::button::Type::from_i32(1)
+                    .unwrap_or_default(),
             ),
-            r#type: Some(1),
             ..Default::default()
         })
         .collect();
@@ -707,14 +722,17 @@ pub async fn send_buttons(
         .map(waproto::whatsapp::message::buttons_message::Header::Text);
 
     let message = waproto::whatsapp::Message {
-        buttons_message: Some(Box::new(waproto::whatsapp::message::ButtonsMessage {
+        buttons_message: MessageField::some(waproto::whatsapp::message::ButtonsMessage {
             content_text: Some(request.content_text),
             footer_text: request.footer,
             buttons,
-            header_type: header.as_ref().map(|_| 2),
+            header_type: header.as_ref().map(|_| {
+                waproto::whatsapp::message::buttons_message::HeaderType::from_i32(2)
+                    .unwrap_or_default()
+            }),
             header,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -794,23 +812,23 @@ pub async fn send_list(
     };
 
     let message = waproto::whatsapp::Message {
-        interactive_message: Some(Box::new(
+        interactive_message: MessageField::some(
             waproto::whatsapp::message::InteractiveMessage {
                 body: Some(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.description),
-                }),
+                }).into(),
                 footer: request.footer.map(|f| {
-                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                    waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    })
-                }),
+                    }
+                }).into(),
                 interactive_message: Some(
-                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -869,31 +887,36 @@ pub async fn send_interactive(
         ..Default::default()
     };
 
-    let context_info: Option<Box<waproto::whatsapp::ContextInfo>> =
+    let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).map(Box::new)
+            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
         } else {
-            request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+            request
+                .reply_to
+                .map(|id| waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
                 })
-            })
+                .into()
         };
 
     let interactive = waproto::whatsapp::message::InteractiveMessage {
         body: Some(waproto::whatsapp::message::interactive_message::Body {
             text: Some(request.body_text),
-        }),
-        footer: request.footer_text.map(|f| {
-            Box::new(waproto::whatsapp::message::interactive_message::Footer {
-                text: Some(f),
-                ..Default::default()
-            })
-        }),
+        })
+        .into(),
+        footer: request
+            .footer_text
+            .map(
+                |f| waproto::whatsapp::message::interactive_message::Footer {
+                    text: Some(f),
+                    ..Default::default()
+                },
+            )
+            .into(),
         interactive_message: Some(
             waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(
-                native_flow,
+                Box::new(native_flow),
             ),
         ),
         context_info,
@@ -901,15 +924,17 @@ pub async fn send_interactive(
     };
 
     let inner = waproto::whatsapp::Message {
-        interactive_message: Some(Box::new(interactive)),
+        interactive_message: MessageField::some(interactive),
         ..Default::default()
     };
 
     let message = if request.view_once {
         waproto::whatsapp::Message {
-            view_once_message_v2: Some(Box::new(waproto::whatsapp::message::FutureProofMessage {
-                message: Some(Box::new(inner)),
-            })),
+            view_once_message_v2: MessageField::some(
+                waproto::whatsapp::message::FutureProofMessage {
+                    message: MessageField::some(inner),
+                },
+            ),
             ..Default::default()
         }
     } else {
@@ -974,23 +999,23 @@ pub async fn send_cta_url(
     };
 
     let message = waproto::whatsapp::Message {
-        interactive_message: Some(Box::new(
+        interactive_message: MessageField::some(
             waproto::whatsapp::message::InteractiveMessage {
                 body: Some(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.body_text),
-                }),
+                }).into(),
                 footer: request.footer_text.map(|f| {
-                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                    waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    })
-                }),
+                    }
+                }).into(),
                 interactive_message: Some(
-                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1060,23 +1085,23 @@ pub async fn send_quick_reply(
     };
 
     let message = waproto::whatsapp::Message {
-        interactive_message: Some(Box::new(
+        interactive_message: MessageField::some(
             waproto::whatsapp::message::InteractiveMessage {
                 body: Some(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.body_text),
-                }),
+                }).into(),
                 footer: request.footer_text.map(|f| {
-                    Box::new(waproto::whatsapp::message::interactive_message::Footer {
+                    waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    })
-                }),
+                    }
+                }).into(),
                 interactive_message: Some(
-                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(native_flow),
+                    waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1118,7 +1143,7 @@ pub async fn send_newsletter_admin_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        newsletter_admin_invite_message: Some(Box::new(
+        newsletter_admin_invite_message: MessageField::some(
             waproto::whatsapp::message::NewsletterAdminInviteMessage {
                 newsletter_jid: Some(request.newsletter_jid),
                 newsletter_name: Some(request.newsletter_name),
@@ -1126,7 +1151,7 @@ pub async fn send_newsletter_admin_invite(
                 invite_expiration: request.invite_expiration,
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1168,14 +1193,14 @@ pub async fn send_newsletter_follower_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        newsletter_follower_invite_message_v2: Some(Box::new(
+        newsletter_follower_invite_message_v2: MessageField::some(
             waproto::whatsapp::message::NewsletterFollowerInviteMessage {
                 newsletter_jid: Some(request.newsletter_jid),
                 newsletter_name: Some(request.newsletter_name),
                 caption: request.caption,
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1217,14 +1242,14 @@ pub async fn send_order(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let status = request.status.as_deref().and_then(|s| match s {
-        "inquiry" => Some(1),
-        "accepted" => Some(2),
-        "declined" => Some(3),
+        "inquiry" => Some(waproto::whatsapp::message::order_message::OrderStatus::INQUIRY),
+        "accepted" => Some(waproto::whatsapp::message::order_message::OrderStatus::ACCEPTED),
+        "declined" => Some(waproto::whatsapp::message::order_message::OrderStatus::DECLINED),
         _ => None,
     });
 
     let message = waproto::whatsapp::Message {
-        order_message: Some(Box::new(waproto::whatsapp::message::OrderMessage {
+        order_message: MessageField::some(waproto::whatsapp::message::OrderMessage {
             order_id: Some(request.order_id),
             item_count: request.item_count,
             status,
@@ -1235,7 +1260,7 @@ pub async fn send_order(
             total_amount1000: request.total_amount_1000,
             total_currency_code: request.total_currency_code,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -1277,19 +1302,19 @@ pub async fn send_invoice(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
-        "image" => Some(0),
-        "pdf" => Some(1),
+        "image" => Some(waproto::whatsapp::message::invoice_message::AttachmentType::IMAGE),
+        "pdf" => Some(waproto::whatsapp::message::invoice_message::AttachmentType::PDF),
         _ => None,
     });
 
     let message = waproto::whatsapp::Message {
-        invoice_message: Some(Box::new(waproto::whatsapp::message::InvoiceMessage {
+        invoice_message: MessageField::some(waproto::whatsapp::message::InvoiceMessage {
             note: request.note,
             token: request.token,
             attachment_type,
             attachment_mimetype: request.attachment_mimetype,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -1331,10 +1356,14 @@ pub async fn send_payment_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        payment_invite_message: Some(Box::new(waproto::whatsapp::message::PaymentInviteMessage {
-            service_type: request.service_type,
-            ..Default::default()
-        })),
+        payment_invite_message: MessageField::some(
+            waproto::whatsapp::message::PaymentInviteMessage {
+                service_type: request.service_type.and_then(
+                    waproto::whatsapp::message::payment_invite_message::ServiceType::from_i32,
+                ),
+                ..Default::default()
+            },
+        ),
         ..Default::default()
     };
 
@@ -1375,19 +1404,24 @@ pub async fn send_pin_message(
     let client = get_client(&state, &session_id)?;
     let chat_jid = parse_jid(&request.chat)?;
 
-    let pin_type = if request.duration_seconds > 0 { 1 } else { 2 };
+    let pin_type = if request.duration_seconds > 0 {
+        waproto::whatsapp::message::pin_in_chat_message::Type::PIN_FOR_ALL
+    } else {
+        waproto::whatsapp::message::pin_in_chat_message::Type::UNPIN_FOR_ALL
+    };
 
     let message = waproto::whatsapp::Message {
-        pin_in_chat_message: Some(Box::new(waproto::whatsapp::message::PinInChatMessage {
+        pin_in_chat_message: MessageField::some(waproto::whatsapp::message::PinInChatMessage {
             key: Some(waproto::whatsapp::MessageKey {
                 remote_jid: Some(request.chat.clone()),
                 id: Some(request.message_id),
                 from_me: Some(false),
                 ..Default::default()
-            }),
+            })
+            .into(),
             r#type: Some(pin_type),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
-        })),
+        }),
         ..Default::default()
     };
 
@@ -1429,15 +1463,17 @@ pub async fn forward_message(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
-            text: Some(request.text),
-            context_info: Some(Box::new(waproto::whatsapp::ContextInfo {
-                is_forwarded: Some(true),
-                forwarding_score: Some(1),
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                context_info: MessageField::some(waproto::whatsapp::ContextInfo {
+                    is_forwarded: Some(true),
+                    forwarding_score: Some(1),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            })),
-            ..Default::default()
-        })),
+            },
+        ),
         ..Default::default()
     };
 
@@ -1490,20 +1526,22 @@ pub async fn send_poll_update(
     });
 
     let message = waproto::whatsapp::Message {
-        poll_update_message: Some(Box::new(waproto::whatsapp::message::PollUpdateMessage {
+        poll_update_message: MessageField::some(waproto::whatsapp::message::PollUpdateMessage {
             poll_creation_message_key: Some(waproto::whatsapp::MessageKey {
                 remote_jid: Some(request.to.clone()),
                 id: Some(request.poll_message_id),
                 from_me: Some(false),
                 ..Default::default()
-            }),
+            })
+            .into(),
             vote: Some(waproto::whatsapp::message::PollEncValue {
                 enc_payload,
                 enc_iv,
-            }),
+            })
+            .into(),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -1545,23 +1583,23 @@ pub async fn send_buttons_response(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        buttons_response_message: Some(Box::new(
+        buttons_response_message: MessageField::some(
             waproto::whatsapp::message::ButtonsResponseMessage {
             selected_button_id: Some(request.selected_button_id),
-            r#type: Some(1),
+            r#type: Some(waproto::whatsapp::message::buttons_response_message::Type::DISPLAY_TEXT),
             context_info: request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
+                waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
-                })
-            }),
+                }
+            }).into(),
                 response: Some(
                     waproto::whatsapp::message::buttons_response_message::Response::SelectedDisplayText(
                         request.selected_display_text,
                     ),
                 ),
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1603,22 +1641,28 @@ pub async fn send_list_response(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        list_response_message: Some(Box::new(waproto::whatsapp::message::ListResponseMessage {
-            title: Some(request.title),
-            list_type: Some(1),
-            single_select_reply: Some(
-                waproto::whatsapp::message::list_response_message::SingleSelectReply {
-                    selected_row_id: Some(request.selected_row_id),
-                },
-            ),
-            description: request.description,
-            context_info: request.reply_to.map(|id| {
-                Box::new(waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
-                })
-            }),
-        })),
+        list_response_message: MessageField::some(
+            waproto::whatsapp::message::ListResponseMessage {
+                title: Some(request.title),
+                list_type: Some(
+                    waproto::whatsapp::message::list_response_message::ListType::SINGLE_SELECT,
+                ),
+                single_select_reply: Some(
+                    waproto::whatsapp::message::list_response_message::SingleSelectReply {
+                        selected_row_id: Some(request.selected_row_id),
+                    },
+                )
+                .into(),
+                description: request.description,
+                context_info: request
+                    .reply_to
+                    .map(|id| waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
+                    .into(),
+            },
+        ),
         ..Default::default()
     };
 
@@ -1667,25 +1711,25 @@ pub async fn send_interactive_response(
         };
 
     let message = waproto::whatsapp::Message {
-        interactive_response_message: Some(Box::new(
+        interactive_response_message: MessageField::some(
             waproto::whatsapp::message::InteractiveResponseMessage {
                 body: request.body_text.map(|text| {
                     waproto::whatsapp::message::interactive_response_message::Body {
                         text: Some(text),
                         ..Default::default()
                     }
-                }),
+                }).into(),
                 context_info: request.reply_to.map(|id| {
-                    Box::new(waproto::whatsapp::ContextInfo {
+                    waproto::whatsapp::ContextInfo {
                         stanza_id: Some(id),
                         ..Default::default()
-                    })
-                }),
+                    }
+                }).into(),
                 interactive_response_message: Some(
-                    waproto::whatsapp::message::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(native_flow),
+                    waproto::whatsapp::message::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(Box::new(native_flow)),
                 ),
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1727,7 +1771,7 @@ pub async fn send_highly_structured(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        highly_structured_message: Some(Box::new(
+        highly_structured_message: MessageField::some(
             waproto::whatsapp::message::HighlyStructuredMessage {
                 namespace: Some(request.namespace),
                 element_name: Some(request.element_name),
@@ -1736,7 +1780,7 @@ pub async fn send_highly_structured(
                 fallback_lc: request.fallback_lc,
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1778,20 +1822,21 @@ pub async fn send_template_button_reply(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        template_button_reply_message: Some(Box::new(
+        template_button_reply_message: MessageField::some(
             waproto::whatsapp::message::TemplateButtonReplyMessage {
                 selected_id: Some(request.selected_id),
                 selected_display_text: Some(request.selected_display_text),
                 selected_index: request.selected_index,
-                context_info: request.reply_to.map(|id| {
-                    Box::new(waproto::whatsapp::ContextInfo {
+                context_info: request
+                    .reply_to
+                    .map(|id| waproto::whatsapp::ContextInfo {
                         stanza_id: Some(id),
                         ..Default::default()
                     })
-                }),
+                    .into(),
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1881,18 +1926,18 @@ pub async fn send_scheduled_call(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let call_type = match request.call_type.to_lowercase().as_str() {
-        "video" => 2,
-        _ => 1,
+        "video" => waproto::whatsapp::message::scheduled_call_creation_message::CallType::VIDEO,
+        _ => waproto::whatsapp::message::scheduled_call_creation_message::CallType::VOICE,
     };
 
     let message = waproto::whatsapp::Message {
-        scheduled_call_creation_message: Some(Box::new(
+        scheduled_call_creation_message: MessageField::some(
             waproto::whatsapp::message::ScheduledCallCreationMessage {
                 scheduled_timestamp_ms: Some(request.scheduled_timestamp_ms),
                 call_type: Some(call_type),
                 title: request.title,
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1934,22 +1979,23 @@ pub async fn send_scheduled_call_edit(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
-        "cancel" => 1,
-        _ => 0,
+        "cancel" => waproto::whatsapp::message::scheduled_call_edit_message::EditType::CANCEL,
+        _ => waproto::whatsapp::message::scheduled_call_edit_message::EditType::UNKNOWN,
     };
 
     let message = waproto::whatsapp::Message {
-        scheduled_call_edit_message: Some(Box::new(
+        scheduled_call_edit_message: MessageField::some(
             waproto::whatsapp::message::ScheduledCallEditMessage {
                 key: Some(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.scheduled_call_message_id),
                     from_me: Some(true),
                     ..Default::default()
-                }),
+                })
+                .into(),
                 edit_type: Some(edit_type),
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -1990,16 +2036,14 @@ pub async fn send_payment(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let note_message = request.note.map(|text| {
-        Box::new(waproto::whatsapp::Message {
-            extended_text_message: Some(Box::new(
-                waproto::whatsapp::message::ExtendedTextMessage {
-                    text: Some(text),
-                    ..Default::default()
-                },
-            )),
-            ..Default::default()
-        })
+    let note_message = request.note.map(|text| waproto::whatsapp::Message {
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(text),
+                ..Default::default()
+            },
+        ),
+        ..Default::default()
     });
 
     let request_message_key = request
@@ -2012,12 +2056,12 @@ pub async fn send_payment(
         });
 
     let message = waproto::whatsapp::Message {
-        send_payment_message: Some(Box::new(waproto::whatsapp::message::SendPaymentMessage {
-            note_message,
-            request_message_key,
+        send_payment_message: MessageField::some(waproto::whatsapp::message::SendPaymentMessage {
+            note_message: note_message.into(),
+            request_message_key: request_message_key.into(),
             transaction_data: request.transaction_data,
             ..Default::default()
-        })),
+        }),
         ..Default::default()
     };
 
@@ -2058,29 +2102,27 @@ pub async fn request_payment(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let note_message = request.note.map(|text| {
-        Box::new(waproto::whatsapp::Message {
-            extended_text_message: Some(Box::new(
-                waproto::whatsapp::message::ExtendedTextMessage {
-                    text: Some(text),
-                    ..Default::default()
-                },
-            )),
-            ..Default::default()
-        })
+    let note_message = request.note.map(|text| waproto::whatsapp::Message {
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(text),
+                ..Default::default()
+            },
+        ),
+        ..Default::default()
     });
 
     let message = waproto::whatsapp::Message {
-        request_payment_message: Some(Box::new(
+        request_payment_message: MessageField::some(
             waproto::whatsapp::message::RequestPaymentMessage {
-                note_message,
+                note_message: note_message.into(),
                 currency_code_iso4217: Some(request.currency_code),
                 amount1000: Some(request.amount1000),
                 request_from: Some(request.to.clone()),
                 expiry_timestamp: request.expiry_timestamp,
                 ..Default::default()
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -2122,16 +2164,17 @@ pub async fn cancel_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        cancel_payment_request_message: Some(Box::new(
+        cancel_payment_request_message: MessageField::some(
             waproto::whatsapp::message::CancelPaymentRequestMessage {
                 key: Some(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.request_message_id),
                     from_me: Some(false),
                     ..Default::default()
-                }),
+                })
+                .into(),
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -2173,16 +2216,17 @@ pub async fn decline_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
-        decline_payment_request_message: Some(Box::new(
+        decline_payment_request_message: MessageField::some(
             waproto::whatsapp::message::DeclinePaymentRequestMessage {
                 key: Some(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.request_message_id),
                     from_me: Some(false),
                     ..Default::default()
-                }),
+                })
+                .into(),
             },
-        )),
+        ),
         ..Default::default()
     };
 
@@ -2224,30 +2268,39 @@ pub async fn send_newsletter_forward(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let content_type = match request.content_type.as_deref() {
-        Some("update_card") => Some(2),
-        Some("link_card") => Some(3),
-        _ => Some(1),
+        Some("update_card") => Some(
+            waproto::whatsapp::context_info::forwarded_newsletter_message_info::ContentType::UPDATE_CARD,
+        ),
+        Some("link_card") => Some(
+            waproto::whatsapp::context_info::forwarded_newsletter_message_info::ContentType::LINK_CARD,
+        ),
+        _ => Some(
+            waproto::whatsapp::context_info::forwarded_newsletter_message_info::ContentType::UPDATE,
+        ),
     };
 
     let message = waproto::whatsapp::Message {
-        extended_text_message: Some(Box::new(waproto::whatsapp::message::ExtendedTextMessage {
-            text: Some(request.text),
-            context_info: Some(Box::new(waproto::whatsapp::ContextInfo {
-                is_forwarded: Some(true),
-                forwarding_score: Some(1),
-                forwarded_newsletter_message_info: Some(
-                    waproto::whatsapp::context_info::ForwardedNewsletterMessageInfo {
-                        newsletter_jid: Some(request.newsletter_jid),
-                        server_message_id: Some(request.server_message_id),
-                        newsletter_name: request.newsletter_name,
-                        content_type,
-                        ..Default::default()
-                    },
-                ),
+        extended_text_message: MessageField::some(
+            waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(request.text),
+                context_info: MessageField::some(waproto::whatsapp::ContextInfo {
+                    is_forwarded: Some(true),
+                    forwarding_score: Some(1),
+                    forwarded_newsletter_message_info: Some(
+                        waproto::whatsapp::context_info::ForwardedNewsletterMessageInfo {
+                            newsletter_jid: Some(request.newsletter_jid),
+                            server_message_id: Some(request.server_message_id),
+                            newsletter_name: request.newsletter_name,
+                            content_type,
+                            ..Default::default()
+                        },
+                    )
+                    .into(),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            })),
-            ..Default::default()
-        })),
+            },
+        ),
         ..Default::default()
     };
 

@@ -2,6 +2,27 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.14] - 2026-07-09
+
+### Upstream sync
+
+- Bumped the pinned `whatsapp-rust` revision from `302d478` to `f95eb2d`
+  (112 commits ahead). Notable upstream changes now available:
+  - 1:1 voice calling with real WebRTC media, not just signaling.
+  - Protocol surface bump to `2.3000.1042742319`.
+  - LID-PN mapping learned from history-sync `phoneNumberToLidMappings`,
+    with source-aware write policy matching WA Web.
+  - `ServerAck` observe-only event exposing server-side `<ack>` stanzas.
+  - Fix: sender-key map no longer memoizes the account's own devices,
+    matching WA Web parity.
+- The event payload API is now sealed with `#[non_exhaustive]` + `bon`
+  builders across the notification, sync, and ServerAck payloads. All
+  event consumers in this crate were ported to the new shape.
+- The message proto now uses `protobuf::MessageField<T>` in place of
+  `Option<Box<T>>`. All handlers (`handlers::messages`,
+  `handlers::fake_reply`, `handlers::status`, `handlers::operations`)
+  and the NATS producer were migrated. No REST API surface change.
+
 ## [0.6.13] - 2026-07-09
 
 ### Windows build

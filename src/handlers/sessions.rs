@@ -767,6 +767,7 @@ async fn connect_client_with_pair_code(
         show_push_notification: show_notification,
         custom_code: None,
         platform_id: None,
+        display_os: None,
     };
 
     let bot = Bot::builder()
@@ -828,7 +829,7 @@ async fn handle_event(
     };
 
     match event.as_ref() {
-        Event::PairingQrCode { code, timeout: _ } => {
+        Event::PairingQrCode(wacore::types::events::PairingQrCode { code, .. }) => {
             tracing::info!("Session {}: QR code received", session_id);
             runtime.set_qr_codes(vec![code.clone()]);
             runtime.set_status(SessionStatus::WaitingForQr);
@@ -843,7 +844,7 @@ async fn handle_event(
                 .update_session_status(session_id, SessionStatus::WaitingForQr, false)
                 .await;
         }
-        Event::PairingCode { code, timeout } => {
+        Event::PairingCode(wacore::types::events::PairingCode { code, timeout, .. }) => {
             tracing::info!("Session {}: Pair code received: {}", session_id, code);
             runtime.set_pair_code(Some(code.clone()));
             let now = chrono::Utc::now().timestamp();
@@ -940,7 +941,25 @@ async fn handle_event(
 
     persist_contact_event(state, session_id, event.as_ref()).await;
 
-    if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {
+    if let Event::Messages(batch) = event.as_ref() {
+        let timestamp = chrono::Utc::now().timestamp();
+        for im in batch.messages.iter() {
+            let data = message_event_data(&im.message, &im.info);
+            let payload_value = serde_json::json!({
+                "session_id": session_id,
+                "event": "message",
+                "timestamp": timestamp,
+                "data": data,
+            });
+            if let Ok(payload) = serde_json::to_string(&payload_value) {
+                state
+                    .broadcast_to_webhooks(session_id, "message", &payload)
+                    .await;
+                state.publish_to_nats(session_id, "message", &payload).await;
+                runtime.broadcast_event(payload);
+            }
+        }
+    } else if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {
         let event_type = get_event_type(event.as_ref());
         state
             .broadcast_to_webhooks(session_id, &event_type, &payload)
@@ -960,7 +979,7 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
         Event::Connected(_) => "connected".to_string(),
         Event::Disconnected(_) => "disconnected".to_string(),
         Event::LoggedOut(_) => "logged_out".to_string(),
-        Event::Message(_, _) => "message".to_string(),
+        Event::Messages(_) => "message".to_string(),
         Event::Receipt(_) => "receipt".to_string(),
         Event::Presence(_) => "presence".to_string(),
         Event::ChatPresence(_) => "chat_presence".to_string(),
@@ -993,7 +1012,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
         base64::engine::general_purpose::STANDARD.encode(b)
     }
 
-    if let Some(im) = msg.image_message.as_ref() {
+    if let Some(im) = msg.image_message.as_option() {
         return serde_json::json!({
             "kind": "image",
             "direct_path": im.direct_path,
@@ -1006,7 +1025,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
             "height": im.height,
         });
     }
-    if let Some(vm) = msg.video_message.as_ref() {
+    if let Some(vm) = msg.video_message.as_option() {
         return serde_json::json!({
             "kind": "video",
             "direct_path": vm.direct_path,
@@ -1018,7 +1037,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
             "seconds": vm.seconds,
         });
     }
-    if let Some(am) = msg.audio_message.as_ref() {
+    if let Some(am) = msg.audio_message.as_option() {
         return serde_json::json!({
             "kind": "audio",
             "direct_path": am.direct_path,
@@ -1031,7 +1050,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
             "ptt": am.ptt,
         });
     }
-    if let Some(dm) = msg.document_message.as_ref() {
+    if let Some(dm) = msg.document_message.as_option() {
         return serde_json::json!({
             "kind": "document",
             "direct_path": dm.direct_path,
@@ -1043,7 +1062,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
             "file_name": dm.file_name,
         });
     }
-    if let Some(sm) = msg.sticker_message.as_ref() {
+    if let Some(sm) = msg.sticker_message.as_option() {
         return serde_json::json!({
             "kind": "sticker",
             "direct_path": sm.direct_path,
@@ -1060,7 +1079,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
 /// Extracts location data (lat/lng + optional name/address/url) from a
 /// LocationMessage / LiveLocationMessage when present. Returns null otherwise.
 fn extract_location(msg: &waproto::whatsapp::Message) -> serde_json::Value {
-    if let Some(loc) = msg.location_message.as_ref() {
+    if let Some(loc) = msg.location_message.as_option() {
         return serde_json::json!({
             "latitude": loc.degrees_latitude,
             "longitude": loc.degrees_longitude,
@@ -1072,7 +1091,7 @@ fn extract_location(msg: &waproto::whatsapp::Message) -> serde_json::Value {
             "is_live": false,
         });
     }
-    if let Some(loc) = msg.live_location_message.as_ref() {
+    if let Some(loc) = msg.live_location_message.as_option() {
         return serde_json::json!({
             "latitude": loc.degrees_latitude,
             "longitude": loc.degrees_longitude,
@@ -1084,6 +1103,34 @@ fn extract_location(msg: &waproto::whatsapp::Message) -> serde_json::Value {
         });
     }
     serde_json::Value::Null
+}
+
+fn message_event_data(
+    msg: &waproto::whatsapp::Message,
+    info: &wacore::types::message::MessageInfo,
+) -> serde_json::Value {
+    let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
+    let media_meta = extract_media_metadata(msg);
+    let location = extract_location(msg);
+    serde_json::json!({
+        "from": info.source.sender.to_string(),
+        "chat": info.source.chat.to_string(),
+        "message_id": info.id.to_string(),
+        "timestamp": info.timestamp,
+        "is_from_me": info.source.is_from_me,
+        "push_name": info.push_name,
+        "verified_name": info.verified_name.as_ref().map(|c| format!("{:?}", c)),
+        "type": info.r#type,
+        "media_type": info.media_type,
+        "message_type": message_type,
+        "text": text,
+        "caption": caption,
+        "media_mimetype": media_mimetype,
+        "media": media_meta,
+        "location": location,
+        "is_group": info.source.chat.to_string().ends_with("@g.us"),
+        "participant": info.source.sender.to_string(),
+    })
 }
 
 /// Extracts user-visible content from a protobuf Message: best-effort text,
@@ -1103,71 +1150,74 @@ fn extract_message_content(
         }
     }
     if message_type == "unknown" {
-        if let Some(e) = msg.extended_text_message.as_ref() {
+        if let Some(e) = msg.extended_text_message.as_option() {
             text = e.text.clone();
             message_type = "text".to_string();
-        } else if let Some(im) = msg.image_message.as_ref() {
+        } else if let Some(im) = msg.image_message.as_option() {
             caption = im.caption.clone();
             media_mimetype = im.mimetype.clone();
             message_type = "image".to_string();
-        } else if let Some(vm) = msg.video_message.as_ref() {
+        } else if let Some(vm) = msg.video_message.as_option() {
             caption = vm.caption.clone();
             media_mimetype = vm.mimetype.clone();
             message_type = "video".to_string();
-        } else if let Some(am) = msg.audio_message.as_ref() {
+        } else if let Some(am) = msg.audio_message.as_option() {
             media_mimetype = am.mimetype.clone();
             message_type = if am.ptt.unwrap_or(false) {
                 "ptt".to_string()
             } else {
                 "audio".to_string()
             };
-        } else if let Some(dm) = msg.document_message.as_ref() {
+        } else if let Some(dm) = msg.document_message.as_option() {
             caption = dm.caption.clone();
             text = dm.file_name.clone();
             media_mimetype = dm.mimetype.clone();
             message_type = "document".to_string();
-        } else if let Some(sm) = msg.sticker_message.as_ref() {
+        } else if let Some(sm) = msg.sticker_message.as_option() {
             media_mimetype = sm.mimetype.clone();
             message_type = "sticker".to_string();
-        } else if msg.location_message.is_some() || msg.live_location_message.is_some() {
+        } else if msg.location_message.is_set() || msg.live_location_message.is_set() {
             message_type = "location".to_string();
-        } else if msg.contact_message.is_some() {
+        } else if msg.contact_message.is_set() {
             message_type = "contact".to_string();
             text = msg
                 .contact_message
-                .as_ref()
+                .as_option()
                 .and_then(|c| c.display_name.clone());
-        } else if msg.contacts_array_message.is_some() {
+        } else if msg.contacts_array_message.is_set() {
             message_type = "contacts".to_string();
-        } else if msg.poll_creation_message.is_some()
-            || msg.poll_creation_message_v2.is_some()
-            || msg.poll_creation_message_v3.is_some()
+        } else if msg.poll_creation_message.is_set()
+            || msg.poll_creation_message_v2.is_set()
+            || msg.poll_creation_message_v3.is_set()
         {
             message_type = "poll".to_string();
             text = msg
                 .poll_creation_message
-                .as_ref()
+                .as_option()
                 .and_then(|p| p.name.clone())
                 .or_else(|| {
                     msg.poll_creation_message_v2
-                        .as_ref()
+                        .as_option()
                         .and_then(|p| p.name.clone())
                 })
                 .or_else(|| {
                     msg.poll_creation_message_v3
-                        .as_ref()
+                        .as_option()
                         .and_then(|p| p.name.clone())
                 });
-        } else if msg.poll_update_message.is_some() {
+        } else if msg.poll_update_message.is_set() {
             message_type = "poll_vote".to_string();
-        } else if msg.reaction_message.is_some() {
+        } else if msg.reaction_message.is_set() {
             message_type = "reaction".to_string();
-            text = msg.reaction_message.as_ref().and_then(|r| r.text.clone());
-        } else if msg.buttons_message.is_some() {
+            text = msg
+                .reaction_message
+                .as_option()
+                .and_then(|r| r.text.clone());
+        } else if msg.buttons_message.is_set() {
             message_type = "buttons".to_string();
-        } else if msg.list_message.is_some() {
+        } else if msg.list_message.is_set() {
             message_type = "list".to_string();
-        } else if msg.template_message.is_some() {
+        } else if msg.template_message.is_set() {
             message_type = "template".to_string();
         }
     }
@@ -1182,6 +1232,51 @@ async fn persist_contact_event(
 ) {
     use wacore::types::events::Event;
     let store = crate::db::contacts::ContactStore::new(state.session_manager().pool());
+
+    if let Event::Messages(batch) = event {
+        for im in batch.messages.iter() {
+            let info = &im.info;
+            if info.source.is_from_me {
+                continue;
+            }
+            let sender = &info.source.sender;
+            let jid_str = sender.to_string();
+            let mut push_name = None::<String>;
+            if !info.push_name.is_empty() {
+                push_name = Some(info.push_name.clone());
+            }
+            let mut business_name = None::<String>;
+            if let Some(vn) = info.verified_name.as_ref() {
+                let s = format!("{:?}", vn);
+                if !s.is_empty() && s != "None" {
+                    business_name = Some(s);
+                }
+            }
+            let mut phone_str = None::<String>;
+            if sender.server == wacore_binary::jid::SERVER_JID {
+                phone_str = Some(sender.user.to_string());
+            }
+            let upsert = crate::db::contacts::ContactUpsert {
+                session_id,
+                jid: &jid_str,
+                phone: phone_str.as_deref(),
+                push_name: push_name.as_deref(),
+                business_name: business_name.as_deref(),
+                source: "message",
+                ..Default::default()
+            };
+            if let Err(e) = store.upsert(&upsert).await {
+                tracing::warn!(
+                    "contacts: upsert failed for {}/{}: {}",
+                    session_id,
+                    jid_str,
+                    e
+                );
+            }
+        }
+        return;
+    }
+
     let mut upsert = crate::db::contacts::ContactUpsert {
         session_id,
         ..Default::default()
@@ -1192,7 +1287,7 @@ async fn persist_contact_event(
     let mut full_name = None::<String>;
     let mut first_name = None::<String>;
     let mut push_name = None::<String>;
-    let mut business_name = None::<String>;
+    let business_name = None::<String>;
     let source: &str;
 
     match event {
@@ -1239,26 +1334,6 @@ async fn persist_contact_event(
             }
             source = "notification";
         }
-        Event::Message(_msg, info) => {
-            if info.source.is_from_me {
-                return;
-            }
-            let sender = &info.source.sender;
-            jid_str = sender.to_string();
-            if !info.push_name.is_empty() {
-                push_name = Some(info.push_name.clone());
-            }
-            if let Some(vn) = info.verified_name.as_ref() {
-                let s = format!("{:?}", vn);
-                if !s.is_empty() && s != "None" {
-                    business_name = Some(s);
-                }
-            }
-            if sender.server == wacore_binary::jid::SERVER_JID {
-                phone_str = Some(sender.user.to_string());
-            }
-            source = "message";
-        }
         _ => return,
     }
 
@@ -1288,30 +1363,10 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
     let timestamp = chrono::Utc::now().timestamp();
 
     let data = match event {
-        Event::Message(msg, info) => {
-            let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
-            let media_meta = extract_media_metadata(msg);
-            let location = extract_location(msg);
-            serde_json::json!({
-                "from": info.source.sender.to_string(),
-                "chat": info.source.chat.to_string(),
-                "message_id": info.id.to_string(),
-                "timestamp": info.timestamp,
-                "is_from_me": info.source.is_from_me,
-                "push_name": info.push_name,
-                "verified_name": info.verified_name.as_ref().map(|c| format!("{:?}", c)),
-                "type": info.r#type,
-                "media_type": info.media_type,
-                "message_type": message_type,
-                "text": text,
-                "caption": caption,
-                "media_mimetype": media_mimetype,
-                "media": media_meta,
-                "location": location,
-                "is_group": info.source.chat.to_string().ends_with("@g.us"),
-                "participant": info.source.sender.to_string(),
-            })
-        }
+        Event::Messages(batch) => match batch.first() {
+            Some(im) => message_event_data(&im.message, &im.info),
+            None => serde_json::json!({}),
+        },
         Event::Receipt(receipt) => {
             serde_json::json!({
                 "receipt": format!("{:?}", receipt),
