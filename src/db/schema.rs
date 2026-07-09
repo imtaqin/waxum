@@ -34,6 +34,8 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 events TEXT NOT NULL DEFAULT '', \
                 secret TEXT, \
                 enabled INTEGER NOT NULL DEFAULT 1, \
+                disabled_at TEXT, \
+                disabled_reason TEXT, \
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE \
              ); \
@@ -104,12 +106,27 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
                 events TEXT NOT NULL DEFAULT '',
                 secret VARCHAR(255),
                 enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                disabled_at TIMESTAMPTZ,
+                disabled_reason TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             "#,
             &[],
         )
         .await?;
+
+    let _ = client
+        .execute(
+            "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ",
+            &[],
+        )
+        .await;
+    let _ = client
+        .execute(
+            "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS disabled_reason TEXT",
+            &[],
+        )
+        .await;
 
     client
         .execute(
@@ -206,6 +223,8 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             events VARCHAR(2000) NOT NULL DEFAULT '',
             secret VARCHAR(255),
             enabled INT NOT NULL DEFAULT 1,
+            disabled_at VARCHAR(30) NULL,
+            disabled_reason TEXT NULL,
             created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             INDEX idx_webhooks_session_id (session_id)
@@ -254,6 +273,8 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
     .await?;
 
     let migrations = [
+        "ALTER TABLE webhooks ADD COLUMN disabled_at VARCHAR(30) NULL",
+        "ALTER TABLE webhooks ADD COLUMN disabled_reason TEXT NULL",
         "ALTER TABLE sessions MODIFY COLUMN is_logged_in INT NOT NULL DEFAULT 0",
         "ALTER TABLE sessions MODIFY COLUMN storage_path VARCHAR(500) NOT NULL",
         "ALTER TABLE sessions MODIFY COLUMN created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00'",

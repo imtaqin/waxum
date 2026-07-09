@@ -198,6 +198,7 @@ use state::AppState;
         handlers::webhooks::list_webhooks,
         handlers::webhooks::register_webhook,
         handlers::webhooks::unregister_webhook,
+        handlers::webhooks::reenable_webhook,
 
         handlers::nats_handler::nats_status,
         handlers::nats_handler::nats_purge_stream,

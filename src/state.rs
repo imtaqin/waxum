@@ -225,6 +225,16 @@ impl Default for CircuitState {
     }
 }
 
+/// Return code from [`AppState::webhook_record_failure`]: describes the
+/// state change the failure just caused, so the caller can log and, in
+/// the case of `HardDisable`, persist to the DB + purge in-memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WebhookFailureAction {
+    Noop,
+    Open,
+    HardDisable,
+}
+
 impl AppState {
     pub async fn new(pool: DbPool, nats: Option<NatsManager>) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
@@ -278,19 +288,61 @@ impl AppState {
         }
     }
 
-    /// Returns true if the circuit just transitioned to OPEN.
-    pub fn webhook_record_failure(&self, url: &str) -> bool {
-        const THRESHOLD: u32 = 25;
+    /// Returns the delta after this failure: `Open` when the circuit
+    /// first tripped and should skip dispatch for 5 min, `HardDisable`
+    /// when the target has been failing so long we're going to persist
+    /// `enabled=false` and stop even queuing events for it.
+    pub fn webhook_record_failure(&self, url: &str) -> WebhookFailureAction {
+        const OPEN_THRESHOLD: u32 = 25;
+        const HARD_DISABLE_THRESHOLD: u32 = 100;
         const COOLDOWN: std::time::Duration = std::time::Duration::from_secs(300);
         let map = &self.inner.webhook_circuits;
         let mut entry = map.entry(url.to_string()).or_default();
         entry.last_event = std::time::Instant::now();
         entry.failures = entry.failures.saturating_add(1);
-        if entry.failures >= THRESHOLD && entry.opened_until.is_none() {
-            entry.opened_until = Some(std::time::Instant::now() + COOLDOWN);
-            return true;
+        if entry.failures >= HARD_DISABLE_THRESHOLD {
+            return WebhookFailureAction::HardDisable;
         }
-        false
+        if entry.failures >= OPEN_THRESHOLD && entry.opened_until.is_none() {
+            entry.opened_until = Some(std::time::Instant::now() + COOLDOWN);
+            return WebhookFailureAction::Open;
+        }
+        WebhookFailureAction::Noop
+    }
+
+    /// Wipe every in-memory registration for `url` so once the DB row is
+    /// marked disabled the dispatcher stops considering it too.
+    pub fn purge_webhook_by_url(&self, url: &str) {
+        let sessions_with_url: Vec<(String, Vec<String>)> = self
+            .inner
+            .webhooks
+            .iter()
+            .filter_map(|entry| {
+                let ids: Vec<String> = entry
+                    .value()
+                    .iter()
+                    .filter(|w| w.value().url == url)
+                    .map(|w| w.key().clone())
+                    .collect();
+                if ids.is_empty() {
+                    None
+                } else {
+                    Some((entry.key().clone(), ids))
+                }
+            })
+            .collect();
+        for (session_id, ids) in sessions_with_url {
+            if let Some(session_map) = self.inner.webhooks.get(&session_id) {
+                for id in ids {
+                    session_map.remove(&id);
+                }
+            }
+        }
+        self.inner.webhook_circuits.remove(url);
+    }
+
+    pub fn purge_webhooks_for_session(&self, session_id: &str) {
+        self.inner.webhooks.remove(session_id);
     }
 
     pub fn nats(&self) -> Option<&NatsManager> {
@@ -456,20 +508,46 @@ impl AppState {
                     let _ = i;
                 }
                 if let Some(err) = last_err {
-                    let opened = state_for_task.webhook_record_failure(&url);
-                    if opened {
-                        tracing::warn!(
-                            "Webhook {} circuit OPEN after {} consecutive failures — will skip dispatch for 5 min",
-                            url,
-                            25
-                        );
-                    } else {
-                        tracing::warn!(
-                            "Failed to send webhook to {} after {} attempts: {}",
-                            url,
-                            backoff_ms.len(),
-                            err
-                        );
+                    let action = state_for_task.webhook_record_failure(&url);
+                    match action {
+                        WebhookFailureAction::HardDisable => {
+                            tracing::warn!(
+                                "Webhook {} auto-DISABLED after 100 consecutive failures — DB row switched to enabled=false",
+                                url
+                            );
+                            let reason = format!("100 consecutive failures ({err})");
+                            match state_for_task
+                                .session_manager()
+                                .disable_webhook_by_url(&url, &reason)
+                                .await
+                            {
+                                Ok(n) => tracing::info!(
+                                    "webhook auto-disable: {} row(s) marked enabled=false for {}",
+                                    n,
+                                    url
+                                ),
+                                Err(err) => tracing::warn!(
+                                    "webhook auto-disable persist failed for {}: {}",
+                                    url,
+                                    err
+                                ),
+                            }
+                            state_for_task.purge_webhook_by_url(&url);
+                        }
+                        WebhookFailureAction::Open => {
+                            tracing::warn!(
+                                "Webhook {} circuit OPEN after 25 consecutive failures — skipping dispatch for 5 min",
+                                url
+                            );
+                        }
+                        WebhookFailureAction::Noop => {
+                            tracing::warn!(
+                                "Failed to send webhook to {} after {} attempts: {}",
+                                url,
+                                backoff_ms.len(),
+                                err
+                            );
+                        }
                     }
                     crate::db::webhook_dlq::record_failure(
                         &pool,

@@ -23,6 +23,8 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .nest("/api/v1", api_routes())
         .route("/health", get(health_check))
+        .route("/livez", get(livez))
+        .route("/readyz", get(readyz))
         .route("/metrics", get(crate::metrics::metrics_handler))
         .route("/api/v1/info", get(handlers::info::get_info))
 }
@@ -392,8 +394,68 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/webhooks/{webhook_id}",
             delete(handlers::webhooks::unregister_webhook),
         )
+        .route(
+            "/{session_id}/webhooks/{webhook_id}/enable",
+            post(handlers::webhooks::reenable_webhook),
+        )
 }
 
 async fn health_check() -> &'static str {
     "OK"
+}
+
+async fn livez() -> &'static str {
+    "OK"
+}
+
+/// Deeper readiness probe: verifies the DB pool answers a trivial query
+/// and that the process actually has session runtimes registered. Used
+/// by Kubernetes-style readiness gates that want to gate traffic until
+/// the gateway is fully warm.
+async fn readyz(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use serde_json::json;
+
+    let db_ok = match state.session_manager().pool() {
+        crate::db::session::DbPool::Postgres(pool) => match pool.get().await {
+            Ok(client) => client.simple_query("SELECT 1").await.is_ok(),
+            Err(_) => false,
+        },
+        crate::db::session::DbPool::MySQL(pool) => {
+            use mysql_async::prelude::*;
+            match pool.get_conn().await {
+                Ok(mut conn) => conn.query_drop("SELECT 1").await.is_ok(),
+                Err(_) => false,
+            }
+        }
+        crate::db::session::DbPool::SQLite(handle) => {
+            let h = handle.clone();
+            tokio::task::spawn_blocking(move || {
+                let guard = h.lock();
+                crate::db::sqlite_raw::exec_batch(&guard, "SELECT 1").is_ok()
+            })
+            .await
+            .unwrap_or(false)
+        }
+    };
+
+    let sessions = state
+        .session_manager()
+        .list_sessions()
+        .await
+        .map(|s| s.len())
+        .unwrap_or(0);
+    let body = json!({
+        "db": if db_ok { "ok" } else { "fail" },
+        "sessions_known": sessions,
+    });
+    let status = if db_ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (status, axum::Json(body)).into_response()
 }

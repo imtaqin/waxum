@@ -2,6 +2,33 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.12] - 2026-07-09
+
+### Webhook subsystem hardening
+
+- **Auto-disable dead webhook targets.** After 100 consecutive delivery
+  failures for the same URL the circuit escalates from OPEN (5 min
+  cooldown) to a hard disable: the DB row switches to `enabled=false`,
+  fresh `disabled_at` + `disabled_reason` columns record the reason, and
+  the in-memory dispatcher purges every registration pointing at that
+  URL. Stops the "orphan 127.0.0.1:3452 keeps getting hammered for
+  months" behaviour. Manual recovery via
+  `POST /api/v1/sessions/{sid}/webhooks/{wid}/enable`.
+- **Session delete now cascades.** `DELETE /sessions/{id}` explicitly
+  purges child rows (`webhooks`, `contacts`, `webhook_dlq`) before
+  removing the `sessions` row and also drops the in-memory webhook
+  registry for that session. Belt-and-suspenders on top of the FK
+  cascade, so tables migrated in without the CASCADE clause still get
+  cleaned up.
+
+### Probes
+
+- **`/livez` (liveness) + `/readyz` (readiness) split.** `/health` still
+  answers `"OK"` for backward compat, but new deploys should use
+  `/livez` (pure static probe, no dependencies) as the liveness gate
+  and `/readyz` (runs a `SELECT 1` against the DB pool + reports the
+  session-runtime count in JSON) as the readiness gate.
+
 ## [0.6.11] - 2026-07-04
 
 ### Fixes

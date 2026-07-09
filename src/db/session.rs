@@ -320,6 +320,7 @@ impl SessionManager {
     }
 
     pub async fn delete_session(&self, id: &str) -> anyhow::Result<bool> {
+        self.purge_dependents(id).await?;
         match &self.pool {
             DbPool::Postgres(pool) => {
                 let client = pool.get().await?;
@@ -340,6 +341,149 @@ impl SessionManager {
                     sqlite_raw::execute(
                         conn,
                         "DELETE FROM sessions WHERE id = ?",
+                        &[SQ::Text(id_s)],
+                    )
+                })
+                .await?;
+                Ok(n > 0)
+            }
+        }
+    }
+
+    /// Explicitly purge every row that points at this session before the
+    /// `sessions` row itself is deleted. `ON DELETE CASCADE` on the FKs
+    /// covers this in the fresh schema, but production tables migrated
+    /// from earlier releases are missing the cascade — those tables
+    /// leave orphan webhooks (127.0.0.1:3452 stayed around for months
+    /// after the owning session was gone). Doing the delete here makes
+    /// the behaviour uniform across every backend, cascade or not.
+    async fn purge_dependents(&self, session_id: &str) -> anyhow::Result<()> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                client
+                    .execute("DELETE FROM webhooks WHERE session_id = $1", &[&session_id])
+                    .await?;
+                client
+                    .execute("DELETE FROM contacts WHERE session_id = $1", &[&session_id])
+                    .await?;
+                client
+                    .execute(
+                        "DELETE FROM webhook_dlq WHERE session_id = $1",
+                        &[&session_id],
+                    )
+                    .await?;
+            }
+            DbPool::MySQL(pool) => {
+                let mut conn = pool.get_conn().await?;
+                conn.exec_drop("DELETE FROM webhooks WHERE session_id = ?", (session_id,))
+                    .await?;
+                conn.exec_drop("DELETE FROM contacts WHERE session_id = ?", (session_id,))
+                    .await?;
+                conn.exec_drop(
+                    "DELETE FROM webhook_dlq WHERE session_id = ?",
+                    (session_id,),
+                )
+                .await?;
+            }
+            DbPool::SQLite(pool) => {
+                let sid = session_id.to_string();
+                sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "DELETE FROM webhooks WHERE session_id = ?",
+                        &[SQ::Text(sid.clone())],
+                    )?;
+                    sqlite_raw::execute(
+                        conn,
+                        "DELETE FROM contacts WHERE session_id = ?",
+                        &[SQ::Text(sid.clone())],
+                    )?;
+                    sqlite_raw::execute(
+                        conn,
+                        "DELETE FROM webhook_dlq WHERE session_id = ?",
+                        &[SQ::Text(sid)],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Persist the "disabled after N consecutive failures" decision. Sets
+    /// `enabled=false` plus optional `disabled_at` / `disabled_reason`
+    /// columns (added in 0.6.12) so the operator sees WHY a target got
+    /// muted, not just that it stopped receiving events.
+    pub async fn disable_webhook_by_url(&self, url: &str, reason: &str) -> anyhow::Result<u64> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                let n = client
+                    .execute(
+                        "UPDATE webhooks SET enabled=false, disabled_at=NOW(), disabled_reason=$2 WHERE url=$1 AND enabled=true",
+                        &[&url, &reason],
+                    )
+                    .await?;
+                Ok(n)
+            }
+            DbPool::MySQL(pool) => {
+                let mut conn = pool.get_conn().await?;
+                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                conn.exec_drop(
+                    "UPDATE webhooks SET enabled=0, disabled_at=?, disabled_reason=? WHERE url=? AND enabled=1",
+                    (now, reason, url),
+                )
+                .await?;
+                Ok(conn.affected_rows())
+            }
+            DbPool::SQLite(pool) => {
+                let url_s = url.to_string();
+                let reason_s = reason.to_string();
+                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                let n = sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "UPDATE webhooks SET enabled=0, disabled_at=?, disabled_reason=? WHERE url=? AND enabled=1",
+                        &[SQ::Text(now), SQ::Text(reason_s), SQ::Text(url_s)],
+                    )
+                })
+                .await?;
+                Ok(n)
+            }
+        }
+    }
+
+    /// Flip a specific webhook row back to enabled and clear the diagnostic
+    /// columns. Used by the manual re-enable REST endpoint.
+    pub async fn enable_webhook(&self, id: &str) -> anyhow::Result<bool> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                let n = client
+                    .execute(
+                        "UPDATE webhooks SET enabled=true, disabled_at=NULL, disabled_reason=NULL WHERE id=$1",
+                        &[&id],
+                    )
+                    .await?;
+                Ok(n > 0)
+            }
+            DbPool::MySQL(pool) => {
+                let mut conn = pool.get_conn().await?;
+                conn.exec_drop(
+                    "UPDATE webhooks SET enabled=1, disabled_at=NULL, disabled_reason=NULL WHERE id=?",
+                    (id,),
+                )
+                .await?;
+                Ok(conn.affected_rows() > 0)
+            }
+            DbPool::SQLite(pool) => {
+                let id_s = id.to_string();
+                let n = sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "UPDATE webhooks SET enabled=1, disabled_at=NULL, disabled_reason=NULL WHERE id=?",
                         &[SQ::Text(id_s)],
                     )
                 })

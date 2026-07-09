@@ -89,7 +89,8 @@ impl JwtAuth {
 }
 
 pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response {
-    if request.uri().path() == "/health" || request.uri().path() == "/metrics" {
+    let path = request.uri().path();
+    if matches!(path, "/health" | "/livez" | "/readyz" | "/metrics") {
         return next.run(request).await;
     }
 

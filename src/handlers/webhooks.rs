@@ -139,3 +139,44 @@ pub async fn unregister_webhook(
 
     Ok(Json(SuccessResponse::with_message("Webhook unregistered")))
 }
+
+/// Manually flip a webhook row back to enabled=true after the auto-disable
+/// circuit muted it. Used by operators once the downstream target has
+/// been fixed. Also clears `disabled_at` / `disabled_reason` so the
+/// listing reflects the recovered state.
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/webhooks/{webhook_id}/enable",
+    tag = "webhooks",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("webhook_id" = String, Path, description = "Webhook ID")
+    ),
+    responses(
+        (status = 200, description = "Webhook re-enabled", body = SuccessResponse),
+        (status = 404, description = "Webhook not found")
+    )
+)]
+pub async fn reenable_webhook(
+    State(state): State<AppState>,
+    Path((session_id, webhook_id)): Path<(String, String)>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    let flipped = state
+        .session_manager()
+        .enable_webhook(&webhook_id)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    if !flipped {
+        return Err(ApiError::WebhookNotFound(webhook_id));
+    }
+
+    tracing::info!(
+        "Session {}: Webhook {} manually re-enabled",
+        session_id,
+        webhook_id
+    );
+
+    Ok(Json(SuccessResponse::with_message("Webhook re-enabled")))
+}

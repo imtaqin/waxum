@@ -192,6 +192,7 @@ pub async fn delete_session(
     }
 
     state.remove_session(&session_id);
+    state.purge_webhooks_for_session(&session_id);
 
     if let Some(storage_path) = state
         .session_manager()
