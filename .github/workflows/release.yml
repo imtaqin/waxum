@@ -118,6 +118,11 @@ jobs:
           choco install mingw -y --no-progress
           echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $env:GITHUB_PATH
 
+      - name: Ensure GNU target libs (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: rustup target add x86_64-pc-windows-gnu
+
       - name: Build (native)
         if: "!matrix.cross"
         run: cargo build --release --target ${{ matrix.target }}
