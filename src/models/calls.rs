@@ -27,6 +27,11 @@ pub struct RingCallRequest {
     #[schema(example = "2E3F4A5B6C7D")]
     #[serde(default)]
     pub call_id: Option<String>,
+    /// Call kind: `"audio"` (default) or `"video"`. Video adds a `<video>`
+    /// codec child so the peer's phone shows the video-call incoming UI.
+    #[schema(example = "audio")]
+    #[serde(default)]
+    pub kind: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

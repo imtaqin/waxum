@@ -110,6 +110,13 @@ pub async fn ring_call(
     let stanza_id = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
     let now_ts = chrono::Utc::now().timestamp().to_string();
 
+    let is_video = request
+        .kind
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+        == Some("video");
+
     let audio_16k = NodeBuilder::new("audio")
         .attr("enc", "opus")
         .attr("rate", "16000")
@@ -119,13 +126,25 @@ pub async fn ring_call(
         .attr("rate", "8000")
         .build();
 
+    let mut offer_children = vec![audio_16k, audio_8k];
+    if is_video {
+        offer_children.push(
+            NodeBuilder::new("video")
+                .attr("enc", "vp8")
+                .attr("orientation", "0")
+                .attr("screen_width", "1280")
+                .attr("screen_height", "720")
+                .build(),
+        );
+    }
+
     let offer = NodeBuilder::new("offer")
         .attr("call-id", call_id.as_str())
         .attr("call-creator", &call_creator)
         .attr("caller_pn", &call_creator)
         .attr("device_class", "2016")
         .attr("joinable", "1")
-        .children([audio_16k, audio_8k])
+        .children(offer_children)
         .build();
 
     let stanza = NodeBuilder::new("call")

@@ -2,6 +2,23 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.15] - 2026-07-09
+
+### Calls
+
+- Video kind on `POST /sessions/{id}/calls/ring`. Send
+  `{"to": "...", "kind": "video"}` to make the peer's phone ring
+  with the video-call incoming UI. Adds a `<video enc="vp8" ...>`
+  codec child to the offer. Default remains `"audio"`.
+
+### CI
+
+- Explicit `rustup target add x86_64-pc-windows-gnu` in the Windows
+  release job. The `dtolnay/rust-toolchain@nightly` `targets:` input
+  did not actually fetch the GNU std libs on the `windows-latest`
+  runner, so the release lane failed with
+  `can't find crate for core / std`.
+
 ## [0.6.14] - 2026-07-09
 
 ### Upstream sync
