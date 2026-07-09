@@ -87,7 +87,7 @@ jobs:
             os: ubuntu-latest
             name: linux-arm64
             cross: true
-          - target: x86_64-pc-windows-msvc
+          - target: x86_64-pc-windows-gnu
             os: windows-latest
             name: windows-amd64
             cross: false
@@ -110,6 +110,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev
+
+      - name: Install MinGW (Windows GNU target)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install mingw -y --no-progress
+          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $env:GITHUB_PATH
 
       - name: Build (native)
         if: "!matrix.cross"

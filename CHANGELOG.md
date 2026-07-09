@@ -2,6 +2,17 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.13] - 2026-07-09
+
+### Windows build
+
+- Switched Windows release target from `x86_64-pc-windows-msvc` to
+  `x86_64-pc-windows-gnu`. The MSVC binary depends on
+  `VCRUNTIME140.dll` which many Windows machines don't ship with,
+  producing a "DLL not found" error at first launch. The GNU target
+  links against the MinGW runtime statically, so the release exe now
+  starts on a clean Windows without any redistributable install.
+
 ## [0.6.12] - 2026-07-09
 
 ### Webhook subsystem hardening
