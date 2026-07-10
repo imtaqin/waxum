@@ -1,6 +1,6 @@
 ﻿[package]
 name = "wa-rs"
-version = "0.6.15"
+version = "0.6.16"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -10,7 +10,7 @@ repository = "https://github.com/fdciabdul/wa-rs"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d", default-features = true }
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d", default-features = true, features = ["voip"] }
 wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
 wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
 waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
@@ -75,6 +75,7 @@ bytes = "1"
 futures = "0.3"
 
 prometheus = { version = "0.13", default-features = false }
+async-channel = "2"
 
 [profile.release]
 opt-level = "z"

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use wacore_binary::builder::NodeBuilder;
+use std::sync::Arc;
 use wacore_binary::jid::Jid;
 
 use crate::error::ApiError;
@@ -10,7 +10,21 @@ use crate::models::calls::{
     AcceptCallRequest, RejectCallRequest, RingCallRequest, RingCallResponse, TerminateCallRequest,
 };
 use crate::models::common::SuccessResponse;
-use crate::state::AppState;
+use crate::state::{ActiveCallAudio, AppState};
+
+type Pcm = Vec<i16>;
+type DummyAudio = (
+    async_channel::Receiver<Pcm>,
+    async_channel::Sender<Pcm>,
+    async_channel::Sender<Pcm>,
+    async_channel::Receiver<Pcm>,
+);
+
+fn make_dummy_audio() -> DummyAudio {
+    let (mic_tx, mic_rx) = async_channel::unbounded::<Pcm>();
+    let (spk_tx, spk_rx) = async_channel::unbounded::<Pcm>();
+    (mic_rx, spk_tx, mic_tx, spk_rx)
+}
 
 #[utoipa::path(
     post,
@@ -34,28 +48,18 @@ pub async fn reject_call(
     Json(request): Json<RejectCallRequest>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let from: Jid = request
-        .from
-        .parse()
-        .map_err(|_| ApiError::InvalidJid(request.from.clone()))?;
-
     if request.call_id.is_empty() {
         return Err(ApiError::BadRequest("call_id is empty".to_string()));
     }
-
-    let id = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
-    let stanza = NodeBuilder::new("call")
-        .attr("to", &from)
-        .attr("id", id.as_str())
-        .children([NodeBuilder::new("reject")
-            .attr("call-id", request.call_id.as_str())
-            .attr("call-creator", &from)
-            .attr("count", "0")
-            .build()])
-        .build();
+    let incoming = state
+        .incoming_calls()
+        .remove(&request.call_id)
+        .map(|(_, v)| v)
+        .ok_or_else(|| ApiError::BadRequest("call_id not found in registry".to_string()))?;
 
     client
-        .send_node(stanza)
+        .voip()
+        .reject(&incoming)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -94,75 +98,22 @@ pub async fn ring_call(
         Jid::pn(&request.to)
     };
 
-    let call_creator = client
-        .get_pn()
-        .ok_or_else(|| ApiError::Internal("session has no phone JID yet".to_string()))?;
-    let push_name = client.get_push_name();
-    let notify = if push_name.is_empty() {
-        "wa-rs".to_string()
-    } else {
-        push_name
-    };
+    let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
-    let call_id = request
-        .call_id
-        .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string().to_uppercase());
-    let stanza_id = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
-    let now_ts = chrono::Utc::now().timestamp().to_string();
-
-    let is_video = request
-        .kind
-        .as_deref()
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-        == Some("video");
-
-    let audio_16k = NodeBuilder::new("audio")
-        .attr("enc", "opus")
-        .attr("rate", "16000")
-        .build();
-    let audio_8k = NodeBuilder::new("audio")
-        .attr("enc", "opus")
-        .attr("rate", "8000")
-        .build();
-
-    let mut offer_children = vec![audio_16k, audio_8k];
-    if is_video {
-        offer_children.push(
-            NodeBuilder::new("video")
-                .attr("enc", "vp8")
-                .attr("orientation", "0")
-                .attr("screen_width", "1280")
-                .attr("screen_height", "720")
-                .build(),
-        );
-    }
-
-    let offer = NodeBuilder::new("offer")
-        .attr("call-id", call_id.as_str())
-        .attr("call-creator", &call_creator)
-        .attr("caller_pn", &call_creator)
-        .attr("device_class", "2016")
-        .attr("joinable", "1")
-        .children(offer_children)
-        .build();
-
-    let stanza = NodeBuilder::new("call")
-        .attr("to", &to)
-        .attr("id", stanza_id.as_str())
-        .attr("from", &call_creator)
-        .attr("version", "2.25.37.76")
-        .attr("platform", "android")
-        .attr("notify", notify.as_str())
-        .attr("t", now_ts.as_str())
-        .attr("e", "0")
-        .children([offer])
-        .build();
-
-    client
-        .send_node(stanza)
+    let handle = client
+        .voip()
+        .call(&to)
+        .audio(mic_rx, spk_tx)
+        .start()
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|e| ApiError::Internal(format!("place_call failed: {e}")))?;
+
+    let call_id = handle.call_id().to_string();
+    let handle_arc = Arc::new(handle);
+    state.active_calls().insert(call_id.clone(), handle_arc);
+    state
+        .call_audio_channels()
+        .insert(call_id.clone(), ActiveCallAudio { mic_tx, spk_rx });
 
     Ok(Json(RingCallResponse {
         call_id,
@@ -195,29 +146,29 @@ pub async fn accept_call(
         return Err(ApiError::BadRequest("call_id is empty".to_string()));
     }
     let client = get_client(&state, &session_id)?;
-    let from: Jid = request
-        .from
-        .parse()
-        .map_err(|_| ApiError::InvalidJid(request.from.clone()))?;
+    let incoming = state
+        .incoming_calls()
+        .remove(&request.call_id)
+        .map(|(_, v)| v)
+        .ok_or_else(|| ApiError::BadRequest("call_id not found in registry".to_string()))?;
 
-    let accept = NodeBuilder::new("accept")
-        .attr("call-id", request.call_id.as_str())
-        .attr("call-creator", &from)
-        .build();
+    let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
-    let stanza = NodeBuilder::new("call")
-        .attr("to", &from)
-        .attr(
-            "id",
-            uuid::Uuid::new_v4().simple().to_string().to_uppercase(),
-        )
-        .children([accept])
-        .build();
-
-    client
-        .send_node(stanza)
+    let handle = client
+        .voip()
+        .accept(&incoming)
+        .audio(mic_rx, spk_tx)
+        .start()
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|e| ApiError::Internal(format!("accept failed: {e}")))?;
+
+    let call_id = handle.call_id().to_string();
+    state
+        .active_calls()
+        .insert(call_id.clone(), Arc::new(handle));
+    state
+        .call_audio_channels()
+        .insert(call_id, ActiveCallAudio { mic_tx, spk_rx });
 
     Ok(Json(SuccessResponse::with_message("Call accepted")))
 }
@@ -247,39 +198,28 @@ pub async fn terminate_call(
         return Err(ApiError::BadRequest("call_id is empty".to_string()));
     }
     let client = get_client(&state, &session_id)?;
+
+    if let Some((_, handle)) = state.active_calls().remove(&request.call_id) {
+        handle.hangup().await;
+        state.call_audio_channels().remove(&request.call_id);
+        return Ok(Json(SuccessResponse::with_message("Call terminated")));
+    }
+
     let peer: Jid = request
         .peer
         .parse()
         .map_err(|_| ApiError::InvalidJid(request.peer.clone()))?;
-    let reason = request.reason.as_deref().unwrap_or("hangup");
-
-    let terminate = NodeBuilder::new("terminate")
-        .attr("call-id", request.call_id.as_str())
-        .attr("call-creator", &peer)
-        .attr("reason", reason)
-        .build();
-
-    let stanza = NodeBuilder::new("call")
-        .attr("to", &peer)
-        .attr(
-            "id",
-            uuid::Uuid::new_v4().simple().to_string().to_uppercase(),
-        )
-        .children([terminate])
-        .build();
 
     client
-        .send_node(stanza)
+        .voip()
+        .terminate(&request.call_id, &peer, &peer)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(SuccessResponse::with_message("Call terminated")))
 }
 
-fn get_client(
-    state: &AppState,
-    session_id: &str,
-) -> Result<std::sync::Arc<whatsapp_rust::Client>, ApiError> {
+fn get_client(state: &AppState, session_id: &str) -> Result<Arc<whatsapp_rust::Client>, ApiError> {
     let runtime = state
         .get_session(session_id)
         .ok_or(ApiError::NotConnected)?;

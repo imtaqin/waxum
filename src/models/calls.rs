@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct RejectCallRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub from: String,
@@ -17,6 +18,7 @@ pub struct RejectCallRequest {
 /// with "call not connected" once no audio flow follows. Useful for
 /// number verification, missed-call triggers, or attention pings.
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct RingCallRequest {
     /// Recipient. Bare phone number ("6285117822731") or full JID
     /// ("6285117822731@s.whatsapp.net"). LID is not supported.
@@ -45,6 +47,7 @@ pub struct RingCallResponse {
 /// `terminate` immediately if you just want the call to show up in the
 /// recipient's call log as "answered".
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct AcceptCallRequest {
     /// Caller JID as reported in `IncomingCall.from`.
     #[schema(example = "6285117822731@s.whatsapp.net")]
@@ -56,6 +59,7 @@ pub struct AcceptCallRequest {
 
 /// End a call the session is currently in.
 #[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct TerminateCallRequest {
     /// Peer JID (caller for incoming, callee for outgoing).
     #[schema(example = "6285117822731@s.whatsapp.net")]

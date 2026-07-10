@@ -206,6 +206,19 @@ struct AppStateInner {
     pub nats: Option<NatsManager>,
 
     pub webhook_circuits: DashMap<String, CircuitState>,
+
+    pub incoming_calls: DashMap<String, wacore::types::call::IncomingCall>,
+
+    pub active_calls: DashMap<String, Arc<whatsapp_rust::voip::CallHandle>>,
+
+    pub call_audio_channels: DashMap<String, ActiveCallAudio>,
+}
+
+pub struct ActiveCallAudio {
+    #[allow(dead_code)]
+    pub mic_tx: async_channel::Sender<Vec<i16>>,
+    #[allow(dead_code)]
+    pub spk_rx: async_channel::Receiver<Vec<i16>>,
 }
 
 #[derive(Clone, Debug)]
@@ -252,8 +265,23 @@ impl AppState {
                 base_storage_path,
                 nats,
                 webhook_circuits: DashMap::new(),
+                incoming_calls: DashMap::new(),
+                active_calls: DashMap::new(),
+                call_audio_channels: DashMap::new(),
             }),
         }
+    }
+
+    pub fn incoming_calls(&self) -> &DashMap<String, wacore::types::call::IncomingCall> {
+        &self.inner.incoming_calls
+    }
+
+    pub fn active_calls(&self) -> &DashMap<String, Arc<whatsapp_rust::voip::CallHandle>> {
+        &self.inner.active_calls
+    }
+
+    pub fn call_audio_channels(&self) -> &DashMap<String, ActiveCallAudio> {
+        &self.inner.call_audio_channels
     }
 
     /// Should we still attempt this webhook URL right now?

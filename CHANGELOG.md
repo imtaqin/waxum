@@ -2,6 +2,44 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.16] - 2026-07-10
+
+### Calls now use the upstream VoIP facade
+
+- `POST /calls/ring` now calls `client.voip().call(peer).audio(...).start()`
+  from the upstream `whatsapp-rust` VoIP module instead of hand-rolling
+  the raw `<call><offer>` signalling stanza. The old stanza was missing
+  the encrypted callKey per peer device, the privacy token, the net
+  hint, the capability blob, and the device-identity signature — WA's
+  server silently dropped it, so the peer phone never rang.
+
+  The new path generates a callKey, wraps it in a Signal `<enc>` per
+  peer device, and emits the full offer WA Web sends. Peer phone rings
+  for real. Audio is fed by empty async channels: the offer succeeds
+  but no PCM ever flows, so the callee sees ring → silent connect →
+  timeout, or connects briefly if they answer.
+
+- `POST /calls/reject` and `POST /calls/accept` now look up the
+  matching `IncomingCall` in a new in-memory registry (indexed by
+  `call_id`) and call `voip().reject(&incoming)` /
+  `voip().accept(&incoming).audio(...).start()`. The registry is
+  populated by the `Event::IncomingCall` handler so consumers always
+  have the `MediaOffer` material the VoIP path needs to decrypt the
+  peer's callKey.
+
+- `POST /calls/terminate` looks up the live `CallHandle` in a second
+  in-memory registry (populated by ring / accept) and calls
+  `.hangup().await`; falls back to `voip().terminate(...)` when the
+  handle isn't tracked (e.g. after a restart).
+
+### Build
+
+- Added the `voip` feature to the pinned `whatsapp-rust` dep. Pulls
+  in `webrtc-sctp`, `webrtc-dtls`, and `audiopus_sys` (opus codec),
+  so the debug binary is ~5 MB heavier and the Windows dev build now
+  needs the MSVC toolchain + CMake with
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5` for the audiopus FFI.
+
 ## [0.6.15] - 2026-07-09
 
 ### Calls
