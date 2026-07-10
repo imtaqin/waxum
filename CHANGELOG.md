@@ -2,6 +2,22 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.19] - 2026-07-10
+
+### Fix TTS / play "menghubungkan ulang" loop
+
+- The 4-second grace period between the `<offer>` ack and the first PCM
+  chunk was a hard silence gap that made WhatsApp think the media path
+  never came up — the callee saw "menghubungkan ulang" (reconnecting)
+  forever even after answering.
+- Rework the pipeline: generate/decode the audio BEFORE sending the
+  offer, prefix `answer_grace_ms` worth of silent PCM, then push a
+  continuous stream from the moment the media relay is up. The channel
+  never goes empty, WhatsApp treats it as an active call, and the peer
+  hears silence → real audio in one contiguous stream.
+- Default `answer_grace_ms` bumped from 4000 to 6000 to accommodate
+  average pickup latency.
+
 ## [0.6.18] - 2026-07-10
 
 ### Play arbitrary audio on a call

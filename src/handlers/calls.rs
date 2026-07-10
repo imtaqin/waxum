@@ -27,6 +27,11 @@ fn make_dummy_audio() -> DummyAudio {
     (mic_rx, spk_tx, mic_tx, spk_rx)
 }
 
+fn build_silence(ms: usize) -> Vec<i16> {
+    let samples = ms * 16;
+    vec![0i16; samples]
+}
+
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -255,6 +260,15 @@ pub async fn tts_call(
         Jid::pn(&request.to)
     };
 
+    let voice = request
+        .voice
+        .unwrap_or_else(|| "id-ID-ArdiNeural".to_string());
+    let pcm = generate_tts_pcm(&request.text, &voice)
+        .await
+        .map_err(|e| ApiError::Internal(format!("tts generation failed: {e}")))?;
+    let grace_ms = request.answer_grace_ms.unwrap_or(6000);
+    let silence_prefix = build_silence(grace_ms as usize);
+
     let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
     let handle = client
@@ -278,30 +292,14 @@ pub async fn tts_call(
         },
     );
 
-    let voice = request
-        .voice
-        .unwrap_or_else(|| "id-ID-ArdiNeural".to_string());
-    let text = request.text.clone();
-    let grace_ms = request.answer_grace_ms.unwrap_or(4000);
     let call_id_bg = call_id.clone();
     let state_bg = state.clone();
 
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
-
-        let pcm = match generate_tts_pcm(&text, &voice).await {
-            Ok(pcm) => pcm,
-            Err(e) => {
-                tracing::warn!(call_id = %call_id_bg, "tts generation failed: {e}");
-                handle_arc.hangup().await;
-                state_bg.active_calls().remove(&call_id_bg);
-                state_bg.call_audio_channels().remove(&call_id_bg);
-                return;
-            }
-        };
-
         const CHUNK: usize = 320;
-        for chunk in pcm.chunks(CHUNK) {
+        let mut full = silence_prefix;
+        full.extend_from_slice(&pcm);
+        for chunk in full.chunks(CHUNK) {
             if mic_tx.send(chunk.to_vec()).await.is_err() {
                 break;
             }
@@ -355,6 +353,12 @@ pub async fn play_call(
         Jid::pn(&request.to)
     };
 
+    let pcm = decode_url_to_pcm(&request.audio_url)
+        .await
+        .map_err(|e| ApiError::Internal(format!("audio decode failed: {e}")))?;
+    let grace_ms = request.answer_grace_ms.unwrap_or(6000);
+    let silence_prefix = build_silence(grace_ms as usize);
+
     let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
     let handle = client
@@ -378,27 +382,14 @@ pub async fn play_call(
         },
     );
 
-    let audio_url = request.audio_url.clone();
-    let grace_ms = request.answer_grace_ms.unwrap_or(4000);
     let call_id_bg = call_id.clone();
     let state_bg = state.clone();
 
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
-
-        let pcm = match decode_url_to_pcm(&audio_url).await {
-            Ok(pcm) => pcm,
-            Err(e) => {
-                tracing::warn!(call_id = %call_id_bg, "audio decode failed: {e}");
-                handle_arc.hangup().await;
-                state_bg.active_calls().remove(&call_id_bg);
-                state_bg.call_audio_channels().remove(&call_id_bg);
-                return;
-            }
-        };
-
         const CHUNK: usize = 320;
-        for chunk in pcm.chunks(CHUNK) {
+        let mut full = silence_prefix;
+        full.extend_from_slice(&pcm);
+        for chunk in full.chunks(CHUNK) {
             if mic_tx.send(chunk.to_vec()).await.is_err() {
                 break;
             }
