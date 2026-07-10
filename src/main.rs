@@ -172,6 +172,7 @@ use state::AppState;
 
         handlers::calls::reject_call,
         handlers::calls::ring_call,
+        handlers::calls::tts_call,
         handlers::calls::accept_call,
         handlers::calls::terminate_call,
 

@@ -57,6 +57,34 @@ pub struct AcceptCallRequest {
     pub call_id: String,
 }
 
+/// Ring a peer and, once the media relay is up, speak `text` at them via
+/// `edge-tts` (Microsoft Neural voices, free). Terminates the call after
+/// the last PCM chunk is flushed.
+#[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
+pub struct TtsCallRequest {
+    #[schema(example = "6285117822731")]
+    pub to: String,
+    #[schema(example = "Halo dari MAUBLAST, pesan otomatis.")]
+    pub text: String,
+    /// edge-tts voice id. Defaults to `id-ID-ArdiNeural` (male Indonesian).
+    /// See `edge-tts --list-voices` for the full list.
+    #[schema(example = "id-ID-ArdiNeural")]
+    #[serde(default)]
+    pub voice: Option<String>,
+    /// Grace period in milliseconds to wait before the first PCM chunk is
+    /// pushed, giving the peer a moment to answer. Defaults to 4000 ms.
+    #[schema(example = 4000)]
+    #[serde(default)]
+    pub answer_grace_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TtsCallResponse {
+    pub call_id: String,
+    pub to: String,
+}
+
 /// End a call the session is currently in.
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]

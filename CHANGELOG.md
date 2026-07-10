@@ -2,6 +2,25 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.17] - 2026-07-10
+
+### TTS voice calls
+
+- New endpoint `POST /calls/tts` — rings a peer and speaks a piece of
+  text at them using Microsoft Edge Neural voices. Request body:
+  `{ "to": "6285...", "text": "...", "voice": "id-ID-ArdiNeural",
+  "answer_grace_ms": 4000 }`. Default voice is Indonesian
+  (`id-ID-ArdiNeural`); see `edge-tts --list-voices` for the full
+  catalog.
+
+  Pipeline: `edge-tts` writes an MP3 to stdout, `ffmpeg` transcodes it
+  to raw 16-bit signed PCM at 16 kHz mono, and the handler pushes 20 ms
+  chunks (320 samples) into the VoIP mic channel. After the last chunk
+  is drained, the call hangs up. The `answer_grace_ms` param gives the
+  callee a few seconds to accept before playback starts.
+
+  Requires `edge-tts` and `ffmpeg` on `PATH` at runtime.
+
 ## [0.6.16] - 2026-07-10
 
 ### Calls now use the upstream VoIP facade
