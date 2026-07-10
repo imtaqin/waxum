@@ -12,14 +12,17 @@ use crate::models::calls::{
 use crate::models::common::SuccessResponse;
 use crate::state::{ActiveCallAudio, AppState};
 
-fn make_dummy_audio() -> (
-    async_channel::Receiver<Vec<i16>>,
-    async_channel::Sender<Vec<i16>>,
-    async_channel::Sender<Vec<i16>>,
-    async_channel::Receiver<Vec<i16>>,
-) {
-    let (mic_tx, mic_rx) = async_channel::unbounded::<Vec<i16>>();
-    let (spk_tx, spk_rx) = async_channel::unbounded::<Vec<i16>>();
+type Pcm = Vec<i16>;
+type DummyAudio = (
+    async_channel::Receiver<Pcm>,
+    async_channel::Sender<Pcm>,
+    async_channel::Sender<Pcm>,
+    async_channel::Receiver<Pcm>,
+);
+
+fn make_dummy_audio() -> DummyAudio {
+    let (mic_tx, mic_rx) = async_channel::unbounded::<Pcm>();
+    let (spk_tx, spk_rx) = async_channel::unbounded::<Pcm>();
     (mic_rx, spk_tx, mic_tx, spk_rx)
 }
 

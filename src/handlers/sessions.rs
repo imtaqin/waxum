@@ -939,7 +939,7 @@ async fn handle_event(
         Event::IncomingCall(call) => {
             let call_id = call.action.call_id().to_string();
             if !call_id.is_empty() {
-                state.incoming_calls().insert(call_id, (**call).clone());
+                state.incoming_calls().insert(call_id, call.clone());
             }
         }
         _ => {}
