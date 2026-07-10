@@ -4378,7 +4378,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wa-rs"
-version = "0.6.18"
+version = "0.6.19"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4463,6 +4463,7 @@ dependencies = [
  "smoothutf8 0.2.3",
  "subtle",
  "thiserror 2.0.18",
+ "tracing",
  "typed-builder",
  "wacore-appstate",
  "wacore-binary",
@@ -4925,6 +4926,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "wacore",
  "wacore-binary",
  "waproto",

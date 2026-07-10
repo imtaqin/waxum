@@ -10,7 +10,7 @@ repository = "https://github.com/fdciabdul/wa-rs"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d", default-features = true, features = ["voip"] }
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d", default-features = true, features = ["voip", "tracing"] }
 wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
 wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
 waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f95eb2d" }
