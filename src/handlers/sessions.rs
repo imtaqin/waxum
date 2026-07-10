@@ -936,6 +936,14 @@ async fn handle_event(
                 );
             }
         }
+        Event::IncomingCall(call) => {
+            let call_id = call.action.call_id().to_string();
+            if !call_id.is_empty() {
+                state
+                    .incoming_calls()
+                    .insert(call_id, (**call).clone());
+            }
+        }
         _ => {}
     }
 
@@ -1396,6 +1404,8 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
             serde_json::json!({
                 "from": call.from.to_string(),
                 "stanza_id": call.stanza_id,
+                "call_id": call.action.call_id().to_string(),
+                "call_creator": call.action.call_creator().to_string(),
                 "notify": call.notify,
                 "platform": call.platform,
                 "version": call.version,
