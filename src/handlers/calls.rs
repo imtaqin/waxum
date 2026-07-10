@@ -107,9 +107,7 @@ pub async fn ring_call(
 
     let call_id = handle.call_id().to_string();
     let handle_arc = Arc::new(handle);
-    state
-        .active_calls()
-        .insert(call_id.clone(), handle_arc);
+    state.active_calls().insert(call_id.clone(), handle_arc);
     state
         .call_audio_channels()
         .insert(call_id.clone(), ActiveCallAudio { mic_tx, spk_rx });
@@ -162,7 +160,9 @@ pub async fn accept_call(
         .map_err(|e| ApiError::Internal(format!("accept failed: {e}")))?;
 
     let call_id = handle.call_id().to_string();
-    state.active_calls().insert(call_id.clone(), Arc::new(handle));
+    state
+        .active_calls()
+        .insert(call_id.clone(), Arc::new(handle));
     state
         .call_audio_channels()
         .insert(call_id, ActiveCallAudio { mic_tx, spk_rx });
@@ -216,10 +216,7 @@ pub async fn terminate_call(
     Ok(Json(SuccessResponse::with_message("Call terminated")))
 }
 
-fn get_client(
-    state: &AppState,
-    session_id: &str,
-) -> Result<Arc<whatsapp_rust::Client>, ApiError> {
+fn get_client(state: &AppState, session_id: &str) -> Result<Arc<whatsapp_rust::Client>, ApiError> {
     let runtime = state
         .get_session(session_id)
         .ok_or(ApiError::NotConnected)?;
