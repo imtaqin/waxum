@@ -7,8 +7,8 @@ use wacore_binary::jid::Jid;
 
 use crate::error::ApiError;
 use crate::models::calls::{
-    AcceptCallRequest, RejectCallRequest, RingCallRequest, RingCallResponse, TerminateCallRequest,
-    TtsCallRequest, TtsCallResponse,
+    AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
+    RingCallResponse, TerminateCallRequest, TtsCallRequest, TtsCallResponse,
 };
 use crate::models::common::SuccessResponse;
 use crate::state::{ActiveCallAudio, AppState};
@@ -318,6 +318,139 @@ pub async fn tts_call(
         call_id,
         to: to.to_string(),
     }))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/calls/play",
+    tag = "calls",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = PlayCallRequest,
+    responses(
+        (status = 200, description = "Audio call started", body = PlayCallResponse),
+        (status = 400, description = "Invalid recipient or url"),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn play_call(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<PlayCallRequest>,
+) -> Result<Json<PlayCallResponse>, ApiError> {
+    if request.audio_url.trim().is_empty() {
+        return Err(ApiError::BadRequest("audio_url is empty".to_string()));
+    }
+    let client = get_client(&state, &session_id)?;
+
+    let to: Jid = if request.to.contains('@') {
+        request
+            .to
+            .parse()
+            .map_err(|_| ApiError::InvalidJid(request.to.clone()))?
+    } else {
+        Jid::pn(&request.to)
+    };
+
+    let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
+
+    let handle = client
+        .voip()
+        .call(&to)
+        .audio(mic_rx, spk_tx)
+        .start()
+        .await
+        .map_err(|e| ApiError::Internal(format!("place_call failed: {e}")))?;
+
+    let call_id = handle.call_id().to_string();
+    let handle_arc = Arc::new(handle);
+    state
+        .active_calls()
+        .insert(call_id.clone(), handle_arc.clone());
+    state.call_audio_channels().insert(
+        call_id.clone(),
+        ActiveCallAudio {
+            mic_tx: mic_tx.clone(),
+            spk_rx,
+        },
+    );
+
+    let audio_url = request.audio_url.clone();
+    let grace_ms = request.answer_grace_ms.unwrap_or(4000);
+    let call_id_bg = call_id.clone();
+    let state_bg = state.clone();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
+
+        let pcm = match decode_url_to_pcm(&audio_url).await {
+            Ok(pcm) => pcm,
+            Err(e) => {
+                tracing::warn!(call_id = %call_id_bg, "audio decode failed: {e}");
+                handle_arc.hangup().await;
+                state_bg.active_calls().remove(&call_id_bg);
+                state_bg.call_audio_channels().remove(&call_id_bg);
+                return;
+            }
+        };
+
+        const CHUNK: usize = 320;
+        for chunk in pcm.chunks(CHUNK) {
+            if mic_tx.send(chunk.to_vec()).await.is_err() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        handle_arc.hangup().await;
+        state_bg.active_calls().remove(&call_id_bg);
+        state_bg.call_audio_channels().remove(&call_id_bg);
+    });
+
+    Ok(Json(PlayCallResponse {
+        call_id,
+        to: to.to_string(),
+    }))
+}
+
+async fn decode_url_to_pcm(url: &str) -> anyhow::Result<Vec<i16>> {
+    use std::process::Stdio;
+
+    let ffmpeg = tokio::process::Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            url,
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "pipe:1",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let out = ffmpeg.wait_with_output().await?;
+    if !out.status.success() {
+        anyhow::bail!("ffmpeg exited with status {}", out.status);
+    }
+    let buf = out.stdout;
+    let mut samples = Vec::with_capacity(buf.len() / 2);
+    for chunk in buf.chunks_exact(2) {
+        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
+    }
+    Ok(samples)
 }
 
 async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {

@@ -85,6 +85,31 @@ pub struct TtsCallResponse {
     pub to: String,
 }
 
+/// Ring a peer and play back an audio file (mp3, wav, ogg — anything ffmpeg
+/// can decode) once the media relay is up. Terminates the call after the
+/// last PCM chunk is flushed.
+#[derive(Debug, Deserialize, ToSchema)]
+#[allow(dead_code)]
+pub struct PlayCallRequest {
+    #[schema(example = "6285117822731")]
+    pub to: String,
+    /// URL of the audio file to fetch and play. Must be reachable from the
+    /// wa-rs process. Any format ffmpeg can demux (mp3, wav, ogg, m4a, opus).
+    #[schema(example = "https://example.com/greeting.mp3")]
+    pub audio_url: String,
+    /// Grace period in ms before playback starts, giving the peer time to
+    /// answer. Defaults to 4000 ms.
+    #[schema(example = 4000)]
+    #[serde(default)]
+    pub answer_grace_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PlayCallResponse {
+    pub call_id: String,
+    pub to: String,
+}
+
 /// End a call the session is currently in.
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]

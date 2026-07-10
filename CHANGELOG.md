@@ -2,6 +2,17 @@
 
 All notable changes to **wa-rs** will be documented in this file.
 
+## [0.6.18] - 2026-07-10
+
+### Play arbitrary audio on a call
+
+- New endpoint `POST /calls/play` — ring a peer and, once the media
+  relay is up, play back an audio file fetched from `audio_url` (any
+  format ffmpeg can demux: mp3, wav, ogg, m4a, opus…). Terminates the
+  call after the last PCM chunk drains.
+- Complements `/calls/tts` for anything that's not text-to-speech —
+  pre-recorded voice messages, alerts, jingles, IVR clips.
+
 ## [0.6.17] - 2026-07-10
 
 ### TTS voice calls
