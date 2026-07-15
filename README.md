@@ -1,15 +1,9 @@
 
 <p align="center">
-  <img src="https://waxum.imtaqin.id/img/logo.png" alt="Waxum" width="140" />
+  <img src="https://waxum.imtaqin.id/img/logo.png" alt="Waxum" width="160" />
 </p>
 
-<pre align="center">
-   ▄▄▌ ▐ ▄▌ ▄▄▄· ▐▄• ▄  ▄• ▄▌• ▌ ▄ ·.
-   ██· █▌▐█▐█ ▀█  █▌█▌▪█▪██▌·██ ▐███▪
-   ██▪▐█▐▐▌▄█▀▀█  ·██· █▌▐█▌▐█ ▌▐▌▐█·
-   ▐█▌██▐█▌▐█ ▪▐▌▪▐█·█▌▐█▄█▌██ ██▌▐█▌
-    ▀▀▀▀ ▀▪ ▀  ▀ •▀▀ ▀▀ ▀▀▀ ▀▀  █▪▀▀▀
-</pre>
+<h1 align="center">Waxum</h1>
 
 <p align="center">
   <strong>High-performance multi-session WhatsApp Gateway built with Rust</strong><br>
