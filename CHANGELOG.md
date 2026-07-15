@@ -2,6 +2,27 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.0] - 2026-07-15
+
+### Waxum
+
+- **Rebrand.** The project is now `waxum`. Package name, binary name,
+  banner, docs domain (`waxum.imtaqin.id`), GitHub org
+  (`imtaqin/waxum`), metric prefix (`waxum_*`), README, Docker image,
+  everything renamed. `wa-rs` references only survive as historical
+  changelog entries.
+
+### Upstream sync
+
+- Bumped pinned `whatsapp-rust` revision from `f95eb2d` to `a7dc852`
+  (12 commits ahead — mostly hot-path perf: message allocations,
+  signal fast paths, receipt worker, node ack sizing, per-branch send
+  dispatch, binary marshal cache, group SKDM warmth, coalesced signal
+  flushes, batch outbound counter leases). Public API compatible; no
+  code changes required in waxum. New: `add_lid_pn_mapping` is now
+  public for embedder-learned sources, and upstream ships a
+  SQLite-backed chat/message history store that we do not consume yet.
+
 ## [0.6.19] - 2026-07-10
 
 ### Fix TTS / play "menghubungkan ulang" loop
