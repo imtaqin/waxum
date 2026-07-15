@@ -1,11 +1,11 @@
 ﻿[package]
-name = "wa-rs"
+name = "waxum"
 version = "0.6.19"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
 description = "REST API gateway for WhatsApp-Rust client"
-repository = "https://github.com/fdciabdul/wa-rs"
+repository = "https://github.com/imtaqin/waxum"
 
 [dependencies]
 
@@ -39,7 +39,7 @@ tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"
 deadpool-postgres = "0.14"
 mysql_async = { version = "0.35", default-features = false, features = ["default-rustls"] }
 # SQLite — used as the zero-config fallback when DATABASE_URL is unset so
-# `cargo run` "just works" against a local file (./wa-rs.db) without needing
+# `cargo run` "just works" against a local file (./waxum.db) without needing
 # Postgres or MySQL running.
 libsqlite3-sys = { version = "0.37", features = [] }
 

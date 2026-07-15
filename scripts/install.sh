@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# wa-rs install / update / uninstall script.
+# waxum install / update / uninstall script.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.sh | sudo bash
 #   sudo ./install.sh install     # first-time install
 #   sudo ./install.sh update      # pull latest release + restart
 #   sudo ./install.sh uninstall   # remove service + binary (data kept)
 #
 # Fetches the latest release binary from
-# https://github.com/fdciabdul/wa-rs/releases and installs it as a
+# https://github.com/imtaqin/waxum/releases and installs it as a
 # systemd service that auto-restarts on failure. On first install it
 # asks whether to enable a nightly cron that self-updates.
 
 set -euo pipefail
 
-readonly REPO="fdciabdul/wa-rs"
+readonly REPO="imtaqin/waxum"
 readonly BIN_DIR="/usr/local/bin"
-readonly BIN_PATH="${BIN_DIR}/wa-rs"
-readonly DATA_DIR="/var/lib/wa-rs"
-readonly ENV_FILE="/etc/wa-rs.env"
-readonly SERVICE_FILE="/etc/systemd/system/wa-rs.service"
-readonly CRON_FILE="/etc/cron.d/wa-rs-update"
-readonly UPDATE_HELPER="/usr/local/sbin/wa-rs-update"
+readonly BIN_PATH="${BIN_DIR}/waxum"
+readonly DATA_DIR="/var/lib/waxum"
+readonly ENV_FILE="/etc/waxum.env"
+readonly SERVICE_FILE="/etc/systemd/system/waxum.service"
+readonly CRON_FILE="/etc/cron.d/waxum-update"
+readonly UPDATE_HELPER="/usr/local/sbin/waxum-update"
 readonly VERSION_FILE="${DATA_DIR}/.version"
 
 CYAN='\033[0;36m'
@@ -42,15 +42,15 @@ banner() {
  ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝
 
   WhatsApp Gateway REST API — installer
-  https://github.com/fdciabdul/wa-rs
+  https://github.com/imtaqin/waxum
 
 ART
 }
 
-log()  { echo -e "${CYAN}[wa-rs]${RESET} $*"; }
-ok()   { echo -e "${GREEN}[wa-rs]${RESET} $*"; }
-warn() { echo -e "${YELLOW}[wa-rs]${RESET} $*"; }
-die()  { echo -e "${RED}[wa-rs]${RESET} $*" >&2; exit 1; }
+log()  { echo -e "${CYAN}[waxum]${RESET} $*"; }
+ok()   { echo -e "${GREEN}[waxum]${RESET} $*"; }
+warn() { echo -e "${YELLOW}[waxum]${RESET} $*"; }
+die()  { echo -e "${RED}[waxum]${RESET} $*" >&2; exit 1; }
 
 need_root() {
     if [[ ${EUID} -ne 0 ]]; then
@@ -83,17 +83,17 @@ fetch_latest_tag() {
 download_binary() {
     local tag="$1" arch="$2"
     local version="${tag#v}"
-    local url="https://github.com/${REPO}/releases/download/${tag}/wa-rs-${version}-${arch}.tar.gz"
+    local url="https://github.com/${REPO}/releases/download/${tag}/waxum-${version}-${arch}.tar.gz"
     local tmp
     tmp="$(mktemp -d)"
     trap "rm -rf '$tmp'" RETURN
 
     log "downloading ${tag} (${arch})…"
-    curl -fsSL "$url" -o "${tmp}/wa-rs.tar.gz" || die "download failed: $url"
-    tar -xzf "${tmp}/wa-rs.tar.gz" -C "$tmp"
-    [[ -f "${tmp}/wa-rs" ]] || die "release archive missing wa-rs binary"
+    curl -fsSL "$url" -o "${tmp}/waxum.tar.gz" || die "download failed: $url"
+    tar -xzf "${tmp}/waxum.tar.gz" -C "$tmp"
+    [[ -f "${tmp}/waxum" ]] || die "release archive missing waxum binary"
 
-    install -Dm755 "${tmp}/wa-rs" "$BIN_PATH"
+    install -Dm755 "${tmp}/waxum" "$BIN_PATH"
     echo "$tag" > "$VERSION_FILE"
     ok "installed binary at ${BIN_PATH}"
 }
@@ -109,12 +109,12 @@ write_env_if_absent() {
     fi
     umask 077
     cat > "$ENV_FILE" <<EOF
-# wa-rs environment. Edit and then: systemctl restart wa-rs
-DATABASE_URL=sqlite://${DATA_DIR}/wa-rs.db
+# waxum environment. Edit and then: systemctl restart waxum
+DATABASE_URL=sqlite://${DATA_DIR}/waxum.db
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n=/+')
 SUPERADMIN_TOKEN=$(openssl rand -hex 24)
 WHATSAPP_STORAGE_PATH=${DATA_DIR}/whatsapp_sessions
-RUST_LOG=wa_rs=info,tower_http=info
+RUST_LOG=waxum=info,tower_http=info
 WA_RS_BLOCKING_THREADS=256
 WA_RS_MYSQL_MAX_POOL=64
 NATS_URL=
@@ -126,7 +126,7 @@ EOF
 write_service() {
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=wa-rs WhatsApp Gateway REST API
+Description=waxum WhatsApp Gateway REST API
 After=network-online.target
 Wants=network-online.target
 
@@ -153,14 +153,14 @@ EOF
 write_update_helper() {
     cat > "$UPDATE_HELPER" <<'EOF'
 #!/usr/bin/env bash
-# Self-update helper installed by wa-rs installer. Downloads the latest
+# Self-update helper installed by waxum installer. Downloads the latest
 # release, compares against the installed version, and restarts the
 # service only if there's a new tag.
 set -euo pipefail
 
-REPO="fdciabdul/wa-rs"
-BIN_PATH="/usr/local/bin/wa-rs"
-VERSION_FILE="/var/lib/wa-rs/.version"
+REPO="imtaqin/waxum"
+BIN_PATH="/usr/local/bin/waxum"
+VERSION_FILE="/var/lib/waxum/.version"
 
 case "$(uname -m)" in
     x86_64|amd64)  ARCH="linux-amd64" ;;
@@ -172,20 +172,20 @@ TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
 CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "")
 if [[ "$TAG" == "$CURRENT" ]]; then
-    echo "wa-rs already at ${TAG}"
+    echo "waxum already at ${TAG}"
     exit 0
 fi
 
 VERSION="${TAG#v}"
-URL="https://github.com/${REPO}/releases/download/${TAG}/wa-rs-${VERSION}-${ARCH}.tar.gz"
+URL="https://github.com/${REPO}/releases/download/${TAG}/waxum-${VERSION}-${ARCH}.tar.gz"
 TMP=$(mktemp -d)
 trap "rm -rf $TMP" EXIT
-curl -fsSL "$URL" -o "${TMP}/wa-rs.tar.gz"
-tar -xzf "${TMP}/wa-rs.tar.gz" -C "$TMP"
-install -Dm755 "${TMP}/wa-rs" "$BIN_PATH"
+curl -fsSL "$URL" -o "${TMP}/waxum.tar.gz"
+tar -xzf "${TMP}/waxum.tar.gz" -C "$TMP"
+install -Dm755 "${TMP}/waxum" "$BIN_PATH"
 echo "$TAG" > "$VERSION_FILE"
-systemctl restart wa-rs
-echo "wa-rs updated ${CURRENT:-fresh} → ${TAG}"
+systemctl restart waxum
+echo "waxum updated ${CURRENT:-fresh} → ${TAG}"
 EOF
     chmod +x "$UPDATE_HELPER"
     ok "installed update helper at ${UPDATE_HELPER}"
@@ -226,10 +226,10 @@ ask_yesno() {
 setup_cron() {
     if ask_yesno "enable nightly auto-update cron (03:15 daily)?" "y"; then
         cat > "$CRON_FILE" <<EOF
-15 3 * * * root ${UPDATE_HELPER} >>/var/log/wa-rs-update.log 2>&1
+15 3 * * * root ${UPDATE_HELPER} >>/var/log/waxum-update.log 2>&1
 EOF
         chmod 644 "$CRON_FILE"
-        ok "auto-update cron enabled — logs at /var/log/wa-rs-update.log"
+        ok "auto-update cron enabled — logs at /var/log/waxum-update.log"
     else
         rm -f "$CRON_FILE"
         log "auto-update cron disabled — run '${UPDATE_HELPER}' manually to upgrade"
@@ -253,12 +253,12 @@ do_install() {
     write_update_helper
     setup_cron
 
-    if ask_yesno "start wa-rs now?" "y"; then
-        systemctl enable --now wa-rs
+    if ask_yesno "start waxum now?" "y"; then
+        systemctl enable --now waxum
         sleep 2
-        systemctl --no-pager status wa-rs || true
+        systemctl --no-pager status waxum || true
     else
-        warn "not started — enable later with: systemctl enable --now wa-rs"
+        warn "not started — enable later with: systemctl enable --now waxum"
     fi
 
     print_summary "$tag"
@@ -292,7 +292,7 @@ print_summary() {
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}║${RESET}  ${CYAN}wa-rs installed — save this info${RESET}                              ${GREEN}║${RESET}"
+    echo -e "${GREEN}║${RESET}  ${CYAN}waxum installed — save this info${RESET}                              ${GREEN}║${RESET}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${DIM}version${RESET}         : ${tag}"
@@ -320,8 +320,8 @@ print_summary() {
     echo -e "    curl -s ${url_local}/health"
     echo -e "    curl -s -H 'Authorization: Bearer ${token}' ${url_local}/api/v1/sessions"
     echo ""
-    echo -e "  ${DIM}logs:${RESET}    journalctl -fu wa-rs"
-    echo -e "  ${DIM}restart:${RESET} systemctl restart wa-rs"
+    echo -e "  ${DIM}logs:${RESET}    journalctl -fu waxum"
+    echo -e "  ${DIM}restart:${RESET} systemctl restart waxum"
     echo ""
 }
 
@@ -335,8 +335,8 @@ do_update() {
 do_uninstall() {
     banner
     need_root uninstall
-    if ask_yesno "stop and remove wa-rs service? (data in ${DATA_DIR} kept)" "n"; then
-        systemctl disable --now wa-rs || true
+    if ask_yesno "stop and remove waxum service? (data in ${DATA_DIR} kept)" "n"; then
+        systemctl disable --now waxum || true
         rm -f "$SERVICE_FILE" "$CRON_FILE" "$UPDATE_HELPER" "$BIN_PATH"
         systemctl daemon-reload
         ok "removed service, binary, cron. ${DATA_DIR} and ${ENV_FILE} left in place."

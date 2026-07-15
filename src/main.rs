@@ -1,4 +1,4 @@
-//! # wa-rs
+//! # waxum
 //!
 //! Multi-session REST + WebSocket gateway around the `whatsapp-rust` client
 //! library. One process fronts N WhatsApp Web sessions and exposes them
@@ -51,12 +51,12 @@ use utoipa_swagger_ui::SwaggerUi;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const BANNER: &str = r#"
-██╗    ██╗ █████╗       ██████╗ ███████╗
-██║    ██║██╔══██╗      ██╔══██╗██╔════╝
-██║ █╗ ██║███████║█████╗██████╔╝███████╗
-██║███╗██║██╔══██║╚════╝██╔══██╗╚════██║
-╚███╔███╔╝██║  ██║      ██║  ██║███████║
- ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝
+   ▄▄▌ ▐ ▄▌ ▄▄▄· ▐▄• ▄  ▄• ▄▌• ▌ ▄ ·.
+   ██· █▌▐█▐█ ▀█  █▌█▌▪█▪██▌·██ ▐███▪
+   ██▪▐█▐▐▌▄█▀▀█  ·██· █▌▐█▌▐█ ▌▐▌▐█·
+   ▐█▌██▐█▌▐█ ▪▐▌▪▐█·█▌▐█▄█▌██ ██▌▐█▌
+    ▀▀▀▀ ▀▪ ▀  ▀ •▀▀ ▀▀ ▀▀▀ ▀▀  █▪▀▀▀
+      ┈┈  premium whatsapp gateway  ┈┈
 "#;
 
 mod db;
@@ -440,9 +440,9 @@ fn parse_cli_args(args: &[String]) {
                 }
             }
             "--help" | "-h" => {
-                println!("wa-rs - WhatsApp REST API Gateway");
+                println!("waxum - WhatsApp REST API Gateway");
                 println!();
-                println!("Usage: wa-rs [OPTIONS]");
+                println!("Usage: waxum [OPTIONS]");
                 println!();
                 println!("Options:");
                 println!("  -t, --token <TOKEN>    Set superadmin token");
@@ -454,9 +454,9 @@ fn parse_cli_args(args: &[String]) {
                 println!("  -h, --help             Show this help");
                 println!();
                 println!("Examples:");
-                println!("  wa-rs --token mysecrettoken");
-                println!("  wa-rs --db sqlite://wa-rs.db --token mytoken");
-                println!("  wa-rs --db mysql://user:pass@localhost/wars --port 8080");
+                println!("  waxum --token mysecrettoken");
+                println!("  waxum --db sqlite://waxum.db --token mytoken");
+                println!("  waxum --db mysql://user:pass@localhost/wars --port 8080");
                 std::process::exit(0);
             }
             _ => {
@@ -481,7 +481,7 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(worker_threads)
         .max_blocking_threads(max_blocking)
-        .thread_name("wa-rs")
+        .thread_name("waxum")
         .enable_all()
         .build()?;
     runtime.block_on(async_main(worker_threads, max_blocking))
@@ -502,7 +502,7 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "wa_rs=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "waxum=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -512,8 +512,8 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     println!("\x1b[37m  Version: \x1b[96m{}\x1b[0m", VERSION);
     println!();
     println!("\x1b[37m  Author:  \x1b[93m@taqin\x1b[0m");
-    println!("\x1b[37m  GitHub:  \x1b[96mhttps://github.com/fdciabdul/wa-rs\x1b[0m");
-    println!("\x1b[37m  Docs:    \x1b[96mhttps://wa-rs.imtaqin.id/\x1b[0m");
+    println!("\x1b[37m  GitHub:  \x1b[96mhttps://github.com/imtaqin/waxum\x1b[0m");
+    println!("\x1b[37m  Docs:    \x1b[96mhttps://waxum.imtaqin.id/\x1b[0m");
     println!();
 
     tracing::info!(

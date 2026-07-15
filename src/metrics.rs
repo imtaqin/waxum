@@ -5,13 +5,13 @@
 //!
 //! Gauges:
 //!
-//! - `wa_rs_sessions_total` — number of session runtimes resident in
+//! - `waxum_sessions_total` — number of session runtimes resident in
 //!   memory.
-//! - `wa_rs_sessions_live` — sessions whose upstream client agrees it's
+//! - `waxum_sessions_live` — sessions whose upstream client agrees it's
 //!   connected AND logged in (source of truth for /status).
-//! - `wa_rs_process_threads` — thread count from `/proc/self/status`.
-//! - `wa_rs_process_open_fds` — FD count from `/proc/self/fd`.
-//! - `wa_rs_webhook_circuits_open` — webhook target URLs currently in the
+//! - `waxum_process_threads` — thread count from `/proc/self/status`.
+//! - `waxum_process_open_fds` — FD count from `/proc/self/fd`.
+//! - `waxum_webhook_circuits_open` — webhook target URLs currently in the
 //!   OPEN circuit-breaker state; alert when this is non-zero for long.
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
@@ -31,27 +31,27 @@ fn registry() -> &'static Registry {
     REGISTRY.get_or_init(|| {
         let r = Registry::new();
         let sessions_total = IntGauge::new(
-            "wa_rs_sessions_total",
+            "waxum_sessions_total",
             "Total session runtimes resident in the gateway",
         )
         .unwrap();
         let sessions_live = IntGauge::new(
-            "wa_rs_sessions_live",
+            "waxum_sessions_live",
             "Sessions whose underlying client reports connected + logged in",
         )
         .unwrap();
         let process_threads = IntGauge::new(
-            "wa_rs_process_threads",
-            "Thread count for the wa-rs process (from /proc/self/status)",
+            "waxum_process_threads",
+            "Thread count for the waxum process (from /proc/self/status)",
         )
         .unwrap();
         let process_open_fds = IntGauge::new(
-            "wa_rs_process_open_fds",
-            "Open file descriptor count for the wa-rs process",
+            "waxum_process_open_fds",
+            "Open file descriptor count for the waxum process",
         )
         .unwrap();
         let webhook_circuits_open = IntGauge::new(
-            "wa_rs_webhook_circuits_open",
+            "waxum_webhook_circuits_open",
             "Webhook target URLs currently in open-circuit state (skipped)",
         )
         .unwrap();

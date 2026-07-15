@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **wa-rs** will be documented in this file.
+All notable changes to **waxum** will be documented in this file.
 
 ## [0.6.19] - 2026-07-10
 
@@ -210,7 +210,7 @@ All notable changes to **wa-rs** will be documented in this file.
   successful response resets the counter. Stops the gateway from
   saturating its tokio task queue when a webhook receiver is dead
   (RENTALWA :8862 incident bled hundreds of retry tasks per minute).
-- **/metrics gains `wa_rs_webhook_circuits_open`** — scrape this to alert
+- **/metrics gains `waxum_webhook_circuits_open`** — scrape this to alert
   when a destination has been declared dead.
 
 ## [0.6.7] - 2026-06-29
@@ -223,8 +223,8 @@ All notable changes to **wa-rs** will be documented in this file.
   512). 200+ active WhatsApp sessions doing SQLite + MySQL writes
   saturated the default blocking pool — now we have 4× headroom.
 - **Prometheus `/metrics`.** New endpoint exposes
-  `wa_rs_sessions_total`, `wa_rs_sessions_live`,
-  `wa_rs_process_threads`, `wa_rs_process_open_fds`. Bypasses the JWT
+  `waxum_sessions_total`, `waxum_sessions_live`,
+  `waxum_process_threads`, `waxum_process_open_fds`. Bypasses the JWT
   middleware so a scraper can hit it without a token.
 
 ### Fixes
@@ -313,7 +313,7 @@ All notable changes to **wa-rs** will be documented in this file.
 
 #### SQLite default backend
 - When `DATABASE_URL` (and the legacy `POSTGRES_*` / `MYSQL_*` env vars)
-  are unset, wa-rs now defaults to an embedded SQLite file at `./wa-rs.db`
+  are unset, waxum now defaults to an embedded SQLite file at `./waxum.db`
   instead of trying a Postgres `localhost` URL that almost never matches
   a clean checkout. Override the path with `SQLITE_PATH=/path/to.db` or
   set `DATABASE_URL=sqlite:///path/to.db`.
@@ -389,7 +389,7 @@ All notable changes to **wa-rs** will be documented in this file.
 ### New Features
 
 #### Locally-cached contact list
-- `GET /sessions/{id}/contacts` — paginated dump of the contacts wa-rs
+- `GET /sessions/{id}/contacts` — paginated dump of the contacts waxum
   has seen for the session. Supports `?q=` (name / phone / business-name
   substring), `?limit=` (1-1000, default 100), `?offset=`.
 - New `contacts` table backs the endpoint (PostgreSQL + MySQL). Schema:
@@ -594,7 +594,7 @@ support the same trick.
 The adonis gateway previously did DNS resolve + ip-api lookup from its own
 side to get server geo. That fails for servers behind Tailscale since
 private IPs in the CGNAT range have no public geo info. Moving geo detection
-into wa-rs itself means the detection uses the server's own outbound public
+into waxum itself means the detection uses the server's own outbound public
 IP, which always works.
 
 ## [0.4.1] - 2026-04-23

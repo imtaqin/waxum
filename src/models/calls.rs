@@ -42,10 +42,10 @@ pub struct RingCallResponse {
     pub to: String,
 }
 
-/// Accept an incoming call by writing back the `<call><accept/>` stanza.
-/// Signalling only — no media stack, so audio will not flow. Pair with
-/// `terminate` immediately if you just want the call to show up in the
-/// recipient's call log as "answered".
+/// Accept an incoming call via `client.voip().accept(&incoming)`. If
+/// `text` or `audio_url` is supplied, the accepted call also plays that
+/// audio to the caller after `answer_grace_ms` of silent padding, then
+/// hangs up. Both silent by default.
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct AcceptCallRequest {
@@ -55,6 +55,18 @@ pub struct AcceptCallRequest {
     /// Call id from `IncomingCall.action.call_id()`.
     #[schema(example = "2E3F4A5B6C7D")]
     pub call_id: String,
+    /// Optional TTS text to speak to the caller once accepted.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Optional audio URL to play to the caller once accepted (mp3/wav/ogg).
+    #[serde(default)]
+    pub audio_url: Option<String>,
+    /// edge-tts voice id when `text` is set. Defaults to `id-ID-ArdiNeural`.
+    #[serde(default)]
+    pub voice: Option<String>,
+    /// Silent padding before playback starts. Defaults to 1500 ms.
+    #[serde(default)]
+    pub answer_grace_ms: Option<u64>,
 }
 
 /// Ring a peer and, once the media relay is up, speak `text` at them via
@@ -94,7 +106,7 @@ pub struct PlayCallRequest {
     #[schema(example = "6285117822731")]
     pub to: String,
     /// URL of the audio file to fetch and play. Must be reachable from the
-    /// wa-rs process. Any format ffmpeg can demux (mp3, wav, ogg, m4a, opus).
+    /// waxum process. Any format ffmpeg can demux (mp3, wav, ogg, m4a, opus).
     #[schema(example = "https://example.com/greeting.mp3")]
     pub audio_url: String,
     /// Grace period in ms before playback starts, giving the peer time to

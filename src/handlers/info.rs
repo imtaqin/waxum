@@ -8,7 +8,7 @@
 //!
 //! This is needed because some deployments run behind Tailscale or other
 //! overlay networks — the adonis gateway can't resolve their location from
-//! a private 100.64.0.0/10 address. wa-rs itself has outbound internet
+//! a private 100.64.0.0/10 address. waxum itself has outbound internet
 //! access via its real public IP (even if serving via Tailscale), so it
 //! can self-detect reliably.
 

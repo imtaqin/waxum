@@ -1,4 +1,4 @@
-# Override: compile wa-rs from source instead of pulling the prebuilt image.
+# Override: compile waxum from source instead of pulling the prebuilt image.
 # Useful when iterating on Rust code locally.
 #
 # Usage:

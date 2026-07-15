@@ -38,9 +38,9 @@ jobs:
           RUSTDOCFLAGS: "--enable-index-page -Z unstable-options"
         run: cargo doc --no-deps --release
 
-      - name: Redirect root to wa_rs crate
+      - name: Redirect root to waxum crate
         run: |
-          echo '<meta http-equiv="refresh" content="0; url=wa_rs/index.html">' > target/doc/index.html
+          echo '<meta http-equiv="refresh" content="0; url=waxum/index.html">' > target/doc/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

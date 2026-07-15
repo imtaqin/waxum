@@ -19,7 +19,7 @@ RUN mkdir -p src && \
 
 RUN cargo build --release 2>/dev/null || true
 
-RUN rm -rf src target/release/wa-rs target/release/deps/wa_rs*
+RUN rm -rf src target/release/waxum target/release/deps/waxum*
 
 COPY src/ ./src/
 
@@ -37,16 +37,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
-COPY --from=rust-builder /app/target/release/wa-rs /app/wa-rs
+COPY --from=rust-builder /app/target/release/waxum /app/waxum
 
 RUN mkdir -p /app/whatsapp_sessions
 
 ENV WHATSAPP_STORAGE_PATH=/app/whatsapp_sessions
-ENV RUST_LOG=wa_rs=info,tower_http=info
+ENV RUST_LOG=waxum=info,tower_http=info
 
 EXPOSE 3451
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS --max-time 4 http://127.0.0.1:3451/health || exit 1
 
-CMD ["/app/wa-rs"]
+CMD ["/app/waxum"]

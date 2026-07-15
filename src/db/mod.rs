@@ -64,7 +64,7 @@ pub fn resolve_database_url() -> (String, DbBackend) {
         return (url, DbBackend::MySQL);
     }
 
-    let path = std::env::var("SQLITE_PATH").unwrap_or_else(|_| "wa-rs.db".to_string());
+    let path = std::env::var("SQLITE_PATH").unwrap_or_else(|_| "waxum.db".to_string());
     (format!("sqlite://{}", path), DbBackend::SQLite)
 }
 

@@ -29,7 +29,7 @@ files:
     - "**/*.lock"
     - "**/*.min.*"
     - "CHANGELOG.md"
-    - "wa-rs-doc/**"
+    - "waxum-doc/**"
   maxFileSize: 200000
 
 rules:

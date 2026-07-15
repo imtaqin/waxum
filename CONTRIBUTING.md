@@ -1,14 +1,14 @@
-# Contributing to wa-rs
+# Contributing to waxum
 
-Thanks for your interest in improving wa-rs. This document covers the
+Thanks for your interest in improving waxum. This document covers the
 development workflow, quality gates every push must pass, and the
 conventions the project follows.
 
 ## Getting the code
 
 ```sh
-git clone https://github.com/fdciabdul/wa-rs.git
-cd wa-rs
+git clone https://github.com/imtaqin/waxum.git
+cd waxum
 ```
 
 The crate targets Rust **nightly** because the upstream `whatsapp-rust`
@@ -23,11 +23,11 @@ rustup default nightly
 ```sh
 cargo build --release
 cp .env.example .env    # then edit
-./target/release/wa-rs
+./target/release/waxum
 ```
 
 If `DATABASE_URL` is unset, the gateway boots against an embedded
-SQLite file (`./wa-rs.db`) so you don't need Postgres or MySQL running
+SQLite file (`./waxum.db`) so you don't need Postgres or MySQL running
 locally. Override `SQLITE_PATH` to point that file elsewhere. See the
 crate-level docs (`cargo doc --open`) for the full env matrix.
 
@@ -69,7 +69,7 @@ commands above and also rejects any push whose diff introduces new
 
 1. Add the handler function under `src/handlers/<domain>.rs`. Use the
    existing patterns (extract JSON, resolve the client via
-   [`get_live_client`](https://fdciabdul.github.io/wa-rs/wa_rs/state/struct.SessionState.html#method.get_live_client),
+   [`get_live_client`](https://fdciabdul.github.io/waxum/waxum/state/struct.SessionState.html#method.get_live_client),
    `?`-propagate `ApiError`).
 2. Add the axum route in `src/routes/mod.rs`.
 3. Register the handler on the utoipa `#[openapi(paths(…))]` list in
@@ -86,17 +86,17 @@ The release flow is manual:
 4. `git push origin main` — the `release.yml` workflow tags the commit,
    builds multi-arch binaries + Docker image, and publishes the
    GitHub release.
-5. On the production server: `docker pull fdciabdul/wa-rs:latest`, then
+5. On the production server: `docker pull imtaqin/waxum:latest`, then
    `docker cp` the binary out of a temporary container and
-   `pm2 restart wa-rs` (see the internal deploy runbook).
+   `pm2 restart waxum` (see the internal deploy runbook).
 
 ## Documentation
 
 - **Rustdoc** (this repo) is published to
-  <https://fdciabdul.github.io/wa-rs> on every push to `main`. Add
+  <https://fdciabdul.github.io/waxum> on every push to `main`. Add
   `///` doc-comments to items you introduce so the API browser stays
   useful.
-- **REST API docs** live in the separate `wa-rs-doc` mkdocs repo and
+- **REST API docs** live in the separate `waxum-doc` mkdocs repo and
   deploy to <https://doc.wars.imtaqin.id>.
 
 ## Filing an issue
@@ -106,7 +106,7 @@ Include:
 - Version (`git rev-parse HEAD` and `Cargo.toml` version).
 - Backend (`DATABASE_URL` scheme is enough — don't paste creds).
 - Reproduction: exact API call + observed vs expected response.
-- Relevant `RUST_LOG=wa_rs=debug` output.
+- Relevant `RUST_LOG=waxum=debug` output.
 
 ## License
 

@@ -1,13 +1,13 @@
-# wa-rs Windows installer / updater.
+# waxum Windows installer / updater.
 #
 # Fetches the latest release binary from
-# https://github.com/fdciabdul/wa-rs/releases, installs it into
-# C:\ProgramData\wa-rs, and registers a Windows service (via `sc.exe`) so
+# https://github.com/imtaqin/waxum/releases, installs it into
+# C:\ProgramData\waxum, and registers a Windows service (via `sc.exe`) so
 # it auto-restarts. First run prompts whether to enable a scheduled task
 # for nightly auto-update.
 #
 # Usage (elevated PowerShell):
-#   irm https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.ps1 | iex
 #   .\install.ps1 install
 #   .\install.ps1 update
 #   .\install.ps1 uninstall
@@ -18,14 +18,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Repo         = 'fdciabdul/wa-rs'
-$InstallDir   = "$env:ProgramData\wa-rs"
-$BinPath      = Join-Path $InstallDir 'wa-rs.exe'
+$Repo         = 'imtaqin/waxum'
+$InstallDir   = "$env:ProgramData\waxum"
+$BinPath      = Join-Path $InstallDir 'waxum.exe'
 $EnvFile      = Join-Path $InstallDir '.env'
 $VersionFile  = Join-Path $InstallDir '.version'
 $SessionsDir  = Join-Path $InstallDir 'whatsapp_sessions'
-$ServiceName  = 'wa-rs'
-$TaskName     = 'wa-rs-auto-update'
+$ServiceName  = 'waxum'
+$TaskName     = 'waxum-auto-update'
 
 function Show-Banner {
     Write-Host ''
@@ -37,14 +37,14 @@ function Show-Banner {
     Write-Host ' ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝' -ForegroundColor Cyan
     Write-Host ''
     Write-Host '  WhatsApp Gateway REST API - installer' -ForegroundColor White
-    Write-Host '  https://github.com/fdciabdul/wa-rs' -ForegroundColor DarkGray
+    Write-Host '  https://github.com/imtaqin/waxum' -ForegroundColor DarkGray
     Write-Host ''
 }
 
-function Log { Write-Host "[wa-rs] $args" -ForegroundColor Cyan }
-function Ok  { Write-Host "[wa-rs] $args" -ForegroundColor Green }
-function Warn{ Write-Host "[wa-rs] $args" -ForegroundColor Yellow }
-function Die { Write-Host "[wa-rs] $args" -ForegroundColor Red; exit 1 }
+function Log { Write-Host "[waxum] $args" -ForegroundColor Cyan }
+function Ok  { Write-Host "[waxum] $args" -ForegroundColor Green }
+function Warn{ Write-Host "[waxum] $args" -ForegroundColor Yellow }
+function Die { Write-Host "[waxum] $args" -ForegroundColor Red; exit 1 }
 
 function Assert-Admin {
     $current = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -65,7 +65,7 @@ function Detect-Arch {
 }
 
 function Get-LatestTag {
-    $headers = @{ 'User-Agent' = 'wa-rs-installer' }
+    $headers = @{ 'User-Agent' = 'waxum-installer' }
     $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $headers
     if (-not $rel.tag_name) { Die 'could not resolve latest release tag from GitHub' }
     return $rel.tag_name
@@ -91,15 +91,15 @@ function Ensure-Dirs {
 
 function Download-Binary($tag, $arch) {
     $version = $tag.TrimStart('v')
-    $url  = "https://github.com/$Repo/releases/download/$tag/wa-rs-$version-$arch.zip"
-    $tmp  = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "wa-rs-$([guid]::NewGuid().Guid)")
+    $url  = "https://github.com/$Repo/releases/download/$tag/waxum-$version-$arch.zip"
+    $tmp  = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "waxum-$([guid]::NewGuid().Guid)")
     try {
         Log "downloading $tag ($arch)..."
-        $zip = Join-Path $tmp 'wa-rs.zip'
+        $zip = Join-Path $tmp 'waxum.zip'
         Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
         Expand-Archive -Path $zip -DestinationPath $tmp -Force
-        $binSrc = Get-ChildItem -Path $tmp -Filter 'wa-rs.exe' -Recurse | Select-Object -First 1
-        if (-not $binSrc) { Die 'release archive missing wa-rs.exe' }
+        $binSrc = Get-ChildItem -Path $tmp -Filter 'waxum.exe' -Recurse | Select-Object -First 1
+        if (-not $binSrc) { Die 'release archive missing waxum.exe' }
 
         # Stop service before overwriting the binary — Windows locks a
         # running exe. Ignore errors if the service isn't installed yet.
@@ -121,12 +121,12 @@ function Write-EnvIfAbsent {
     $jwt   = New-RandomHex 48
     $admin = New-RandomHex 24
     $lines = @(
-        '# wa-rs environment. Edit and then: Restart-Service wa-rs',
-        "DATABASE_URL=sqlite://$($InstallDir -replace '\\','/')/wa-rs.db",
+        '# waxum environment. Edit and then: Restart-Service waxum',
+        "DATABASE_URL=sqlite://$($InstallDir -replace '\\','/')/waxum.db",
         "JWT_SECRET=$jwt",
         "SUPERADMIN_TOKEN=$admin",
         "WHATSAPP_STORAGE_PATH=$($SessionsDir -replace '\\','/')",
-        'RUST_LOG=wa_rs=info,tower_http=info',
+        'RUST_LOG=waxum=info,tower_http=info',
         'WA_RS_BLOCKING_THREADS=256',
         'NATS_URL='
     )
@@ -151,8 +151,8 @@ for /f "usebackq eol=# tokens=1,* delims==" %%A in ("$EnvFile") do (
 
     $existing = sc.exe query $ServiceName 2>$null
     if ($LASTEXITCODE -ne 0) {
-        sc.exe create $ServiceName binPath= "cmd.exe /c `"$launcher`"" start= auto DisplayName= 'wa-rs WhatsApp Gateway' | Out-Null
-        sc.exe description $ServiceName 'WhatsApp Gateway REST API (wa-rs)' | Out-Null
+        sc.exe create $ServiceName binPath= "cmd.exe /c `"$launcher`"" start= auto DisplayName= 'waxum WhatsApp Gateway' | Out-Null
+        sc.exe description $ServiceName 'WhatsApp Gateway REST API (waxum)' | Out-Null
     }
     Ok "registered Windows service '$ServiceName'"
 }
@@ -168,18 +168,18 @@ switch (`$env:PROCESSOR_ARCHITECTURE) {
     'ARM64' { `$arch = 'windows-arm64' }
     default { exit 0 }
 }
-`$headers = @{ 'User-Agent' = 'wa-rs-installer' }
+`$headers = @{ 'User-Agent' = 'waxum-installer' }
 `$rel = Invoke-RestMethod -Uri "https://api.github.com/repos/`$repo/releases/latest" -Headers `$headers
 `$tag = `$rel.tag_name
 `$current = if (Test-Path `$verFile) { Get-Content `$verFile } else { '' }
 if (`$tag -eq `$current) { exit 0 }
 `$version = `$tag.TrimStart('v')
-`$url = "https://github.com/`$repo/releases/download/`$tag/wa-rs-`$version-`$arch.zip"
-`$tmp = New-Item -ItemType Directory -Force -Path (Join-Path `$env:TEMP "wa-rs-`$([guid]::NewGuid().Guid)")
-`$zip = Join-Path `$tmp 'wa-rs.zip'
+`$url = "https://github.com/`$repo/releases/download/`$tag/waxum-`$version-`$arch.zip"
+`$tmp = New-Item -ItemType Directory -Force -Path (Join-Path `$env:TEMP "waxum-`$([guid]::NewGuid().Guid)")
+`$zip = Join-Path `$tmp 'waxum.zip'
 Invoke-WebRequest -Uri `$url -OutFile `$zip -UseBasicParsing
 Expand-Archive -Path `$zip -DestinationPath `$tmp -Force
-`$src = Get-ChildItem -Path `$tmp -Filter 'wa-rs.exe' -Recurse | Select-Object -First 1
+`$src = Get-ChildItem -Path `$tmp -Filter 'waxum.exe' -Recurse | Select-Object -First 1
 Stop-Service -Name '$ServiceName' -ErrorAction SilentlyContinue
 Copy-Item -Path `$src.FullName -Destination `$binPath -Force
 Set-Content -Path `$verFile -Value `$tag
@@ -221,15 +221,15 @@ function Invoke-Install {
         Log "auto-update disabled - update later with: irm https://raw.githubusercontent.com/$Repo/main/scripts/install.ps1 | iex; Invoke-Update"
     }
 
-    if (Read-YesNo 'start wa-rs now?' 'y') {
+    if (Read-YesNo 'start waxum now?' 'y') {
         Start-Service -Name $ServiceName
         Start-Sleep -Seconds 2
         Get-Service -Name $ServiceName | Format-Table Name, Status, StartType
     } else {
-        Warn 'not started - later: Start-Service wa-rs'
+        Warn 'not started - later: Start-Service waxum'
     }
 
-    Ok "done. edit $EnvFile then Restart-Service wa-rs after changes."
+    Ok "done. edit $EnvFile then Restart-Service waxum after changes."
 }
 
 function Invoke-Update {
@@ -250,7 +250,7 @@ function Invoke-Update {
 function Invoke-Uninstall {
     Show-Banner
     Assert-Admin
-    if (Read-YesNo "stop and remove wa-rs service? (data in $InstallDir kept)" 'n') {
+    if (Read-YesNo "stop and remove waxum service? (data in $InstallDir kept)" 'n') {
         Stop-Service -Name $ServiceName -ErrorAction SilentlyContinue
         sc.exe delete $ServiceName | Out-Null
         Remove-UpdateTask

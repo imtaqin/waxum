@@ -158,6 +158,28 @@ pub async fn accept_call(
         .map(|(_, v)| v)
         .ok_or_else(|| ApiError::BadRequest("call_id not found in registry".to_string()))?;
 
+    let payload_pcm: Option<Vec<i16>> = if let Some(text) = request.text.as_ref() {
+        let voice = request
+            .voice
+            .clone()
+            .unwrap_or_else(|| "id-ID-ArdiNeural".to_string());
+        Some(
+            generate_tts_pcm(text, &voice)
+                .await
+                .map_err(|e| ApiError::Internal(format!("tts generation failed: {e}")))?,
+        )
+    } else if let Some(url) = request.audio_url.as_ref() {
+        Some(
+            decode_url_to_pcm(url)
+                .await
+                .map_err(|e| ApiError::Internal(format!("audio decode failed: {e}")))?,
+        )
+    } else {
+        None
+    };
+    let grace_ms = request.answer_grace_ms.unwrap_or(1500);
+    let silence_prefix = build_silence(grace_ms as usize);
+
     let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
     let handle = client
@@ -169,12 +191,37 @@ pub async fn accept_call(
         .map_err(|e| ApiError::Internal(format!("accept failed: {e}")))?;
 
     let call_id = handle.call_id().to_string();
+    let handle_arc = Arc::new(handle);
     state
         .active_calls()
-        .insert(call_id.clone(), Arc::new(handle));
-    state
-        .call_audio_channels()
-        .insert(call_id, ActiveCallAudio { mic_tx, spk_rx });
+        .insert(call_id.clone(), handle_arc.clone());
+    state.call_audio_channels().insert(
+        call_id.clone(),
+        ActiveCallAudio {
+            mic_tx: mic_tx.clone(),
+            spk_rx,
+        },
+    );
+
+    if let Some(pcm) = payload_pcm {
+        let call_id_bg = call_id.clone();
+        let state_bg = state.clone();
+        tokio::spawn(async move {
+            const CHUNK: usize = 320;
+            let mut full = silence_prefix;
+            full.extend_from_slice(&pcm);
+            for chunk in full.chunks(CHUNK) {
+                if mic_tx.send(chunk.to_vec()).await.is_err() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            handle_arc.hangup().await;
+            state_bg.active_calls().remove(&call_id_bg);
+            state_bg.call_audio_channels().remove(&call_id_bg);
+        });
+    }
 
     Ok(Json(SuccessResponse::with_message("Call accepted")))
 }

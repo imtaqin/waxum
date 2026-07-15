@@ -1,11 +1,14 @@
 
+<p align="center">
+  <img src="https://waxum.imtaqin.id/img/logo.png" alt="Waxum" width="140" />
+</p>
+
 <pre align="center">
-██╗    ██╗ █████╗       ██████╗ ███████╗
-██║    ██║██╔══██╗      ██╔══██╗██╔════╝
-██║ █╗ ██║███████║█████╗██████╔╝███████╗
-██║███╗██║██╔══██║╚════╝██╔══██╗╚════██║
-╚███╔███╔╝██║  ██║      ██║  ██║███████║
- ╚══╝╚══╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝╚══════╝
+   ▄▄▌ ▐ ▄▌ ▄▄▄· ▐▄• ▄  ▄• ▄▌• ▌ ▄ ·.
+   ██· █▌▐█▐█ ▀█  █▌█▌▪█▪██▌·██ ▐███▪
+   ██▪▐█▐▐▌▄█▀▀█  ·██· █▌▐█▌▐█ ▌▐▌▐█·
+   ▐█▌██▐█▌▐█ ▪▐▌▪▐█·█▌▐█▄█▌██ ██▌▐█▌
+    ▀▀▀▀ ▀▪ ▀  ▀ •▀▀ ▀▀ ▀▀▀ ▀▀  █▪▀▀▀
 </pre>
 
 <p align="center">
@@ -14,8 +17,8 @@
 </p>
 
 <p align="center">
-  <a href="https://wa-rs.imtaqin.id/">Documentation</a> &bull;
-  <a href="https://wa-rs.imtaqin.id/api/nats">NATS JetStream</a>
+  <a href="https://waxum.imtaqin.id/">Documentation</a> &bull;
+  <a href="https://waxum.imtaqin.id/api/nats">NATS JetStream</a>
 </p>
 
 ## Tech Stack
@@ -44,7 +47,7 @@
 
 ## Premium (Pro / Enterprise)
 
-Everything above is MIT-free forever. On top of it wa-rs offers a paid
+Everything above is MIT-free forever. On top of it waxum offers a paid
 tier that activates through a signed license key — no source access
 required, drop the key into the environment and the runtime unlocks the
 extra features.
@@ -57,12 +60,12 @@ extra features.
 | **Webhook DLQ replay UI + admin API** | — | ✓ | ✓ |
 | **Encrypted backup** (AES-256-GCM tar.zst → S3 or local) | — | ✓ | ✓ |
 | **AI auto-reply** (OpenAI-compatible: OpenAI, Kimi, Claude via proxy, Ollama) | — | — | ✓ |
-| **Multi-node cluster** (session sharding across N wa-rs instances) | — | — | ✓ |
+| **Multi-node cluster** (session sharding across N waxum instances) | — | — | ✓ |
 | Priority support (private Slack, response SLA) | — | community | ✓ |
 
 **How to activate**
 
-1. Grab a license key at [wa-rs.imtaqin.id/pricing](https://wa-rs.imtaqin.id/pricing) — currently invite-only, DM to onboard.
+1. Grab a license key at [waxum.imtaqin.id/pricing](https://waxum.imtaqin.id/pricing) — currently invite-only, DM to onboard.
 2. Set two env vars and restart:
    ```
    WA_RS_LICENSE_KEY=<your license>
@@ -82,28 +85,28 @@ run identically, they just log `premium: free tier` at boot.
 ### One-liner install (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.sh | sudo bash
 ```
 
 Fetches the latest GitHub Release binary, drops it in `/usr/local/bin`,
-writes a systemd unit at `/etc/systemd/system/wa-rs.service`, generates
-`/etc/wa-rs.env` with a random JWT + superadmin token, and offers to
+writes a systemd unit at `/etc/systemd/system/waxum.service`, generates
+`/etc/waxum.env` with a random JWT + superadmin token, and offers to
 enable a nightly auto-update cron. Same script handles `update` and
 `uninstall`:
 
 ```bash
-sudo /usr/local/bin/wa-rs-update       # pull latest release + restart
+sudo /usr/local/bin/waxum-update       # pull latest release + restart
 sudo bash install.sh uninstall         # remove service + binary (data kept)
 ```
 
 ### One-liner install (Windows, elevated PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/fdciabdul/wa-rs/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.ps1 | iex
 ```
 
 Downloads the latest release, installs into
-`C:\ProgramData\wa-rs`, registers a Windows service (`wa-rs`) that
+`C:\ProgramData\waxum`, registers a Windows service (`waxum`) that
 auto-starts on boot, and — if you say yes — installs a scheduled task
 for nightly auto-update at 03:15. Subcommands:
 
@@ -121,14 +124,14 @@ subsequent runs.
 Pulls the prebuilt image from Docker Hub — no compile step, comes up in seconds.
 
 ```bash
-git clone https://github.com/fdciabdul/wa-rs.git
-cd wa-rs
+git clone https://github.com/imtaqin/waxum.git
+cd waxum
 docker compose up -d
 ```
 
 Pin a version with `WA_RS_TAG=0.5.0 docker compose up -d`. Default is `latest`.
 
-This starts **NATS JetStream** and the **WA-RS API** server (bring your own MySQL/Postgres in `.env`).
+This starts **NATS JetStream** and the **Waxum API** server (bring your own MySQL/Postgres in `.env`).
 
 ### Docker Compose (build from source)
 
@@ -141,11 +144,11 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ### Manual
 
 ```bash
-git clone https://github.com/fdciabdul/wa-rs.git
-cd wa-rs
+git clone https://github.com/imtaqin/waxum.git
+cd waxum
 cp .env.example .env    # edit with your config
 cargo build --release
-./target/release/wa-rs
+./target/release/waxum
 ```
 
 **Requirements:** Rust nightly, PostgreSQL 14+
@@ -191,11 +194,11 @@ Omit `NATS_URL` to disable NATS entirely — the API runs in webhooks-only mode.
 
 ## NATS JetStream
 
-WA-RS optionally integrates with NATS JetStream for durable event streaming and queue-based messaging.
+Waxum optionally integrates with NATS JetStream for durable event streaming and queue-based messaging.
 
 ```
-Your App  ◄──── wa.events.{session}.{type} ────  WA-RS  ◄──── WhatsApp
-Your App  ────► wa.send.{session}           ────► WA-RS  ────► WhatsApp
+Your App  ◄──── wa.events.{session}.{type} ────  Waxum  ◄──── WhatsApp
+Your App  ────► wa.send.{session}           ────► Waxum  ────► WhatsApp
 ```
 
 **Subscribe to events:**
@@ -208,7 +211,7 @@ nats sub "wa.events.>"
 nats pub "wa.send.my-session" '{"type":"text","to":"628123456789","text":"Hello from NATS!"}'
 ```
 
-See the [NATS documentation](https://wa-rs.imtaqin.id/api/nats) for all 16 supported message types, consumer details, and send result format.
+See the [NATS documentation](https://waxum.imtaqin.id/api/nats) for all 16 supported message types, consumer details, and send result format.
 
 ## API Overview
 
@@ -230,7 +233,7 @@ See the [NATS documentation](https://wa-rs.imtaqin.id/api/nats) for all 16 suppo
 
 ## Documentation
 
-Full documentation: **[https://wa-rs.imtaqin.id/](https://wa-rs.imtaqin.id/)**
+Full documentation: **[https://waxum.imtaqin.id/](https://waxum.imtaqin.id/)**
 
 ## License
 

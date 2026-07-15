@@ -4377,55 +4377,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "wa-rs"
-version = "0.6.19"
-dependencies = [
- "anyhow",
- "async-channel",
- "async-nats",
- "async-trait",
- "axum",
- "base64",
- "bytes",
- "chrono",
- "dashmap",
- "deadpool-postgres",
- "dotenvy",
- "futures",
- "hex",
- "hmac 0.12.1",
- "jsonwebtoken",
- "libsqlite3-sys",
- "mysql_async",
- "once_cell",
- "parking_lot",
- "prometheus",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.18",
- "tokio",
- "tokio-postgres",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
- "wacore",
- "wacore-binary",
- "waproto",
- "whatsapp-rust",
- "whatsapp-rust-sqlite-storage",
- "whatsapp-rust-tokio-transport",
- "whatsapp-rust-ureq-http-client",
-]
-
-[[package]]
 name = "wacore"
 version = "0.6.0"
 source = "git+https://github.com/oxidezap/whatsapp-rust?rev=f95eb2d#f95eb2de21661fd8e602025db6ff8fc03b62f7c1"
@@ -4737,6 +4688,55 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap",
  "semver",
+]
+
+[[package]]
+name = "waxum"
+version = "0.6.19"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-nats",
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "chrono",
+ "dashmap",
+ "deadpool-postgres",
+ "dotenvy",
+ "futures",
+ "hex",
+ "hmac 0.12.1",
+ "jsonwebtoken",
+ "libsqlite3-sys",
+ "mysql_async",
+ "once_cell",
+ "parking_lot",
+ "prometheus",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-postgres",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+ "wacore",
+ "wacore-binary",
+ "waproto",
+ "whatsapp-rust",
+ "whatsapp-rust-sqlite-storage",
+ "whatsapp-rust-tokio-transport",
+ "whatsapp-rust-ureq-http-client",
 ]
 
 [[package]]

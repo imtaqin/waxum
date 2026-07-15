@@ -16,7 +16,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: docker.io
-  IMAGE_NAME: fdciabdul/wa-rs
+  IMAGE_NAME: imtaqin/waxum
 
 jobs:
   # Determine version and create tag
@@ -135,24 +135,24 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/wa-rs dist/
+          cp target/${{ matrix.target }}/release/waxum dist/
           cd dist
-          tar -czvf wa-rs-${{ needs.version.outputs.version }}-${{ matrix.name }}.tar.gz wa-rs
-          rm wa-rs
+          tar -czvf waxum-${{ needs.version.outputs.version }}-${{ matrix.name }}.tar.gz waxum
+          rm waxum
 
       - name: Package binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          Copy-Item "target/${{ matrix.target }}/release/wa-rs.exe" -Destination "dist/"
-          Compress-Archive -Path "dist/wa-rs.exe" -DestinationPath "dist/wa-rs-${{ needs.version.outputs.version }}-${{ matrix.name }}.zip"
-          Remove-Item "dist/wa-rs.exe"
+          Copy-Item "target/${{ matrix.target }}/release/waxum.exe" -Destination "dist/"
+          Compress-Archive -Path "dist/waxum.exe" -DestinationPath "dist/waxum-${{ needs.version.outputs.version }}-${{ matrix.name }}.zip"
+          Remove-Item "dist/waxum.exe"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wa-rs-${{ matrix.name }}
+          name: waxum-${{ matrix.name }}
           path: dist/*
 
   # Build and push Docker images (optional — won't block release)
@@ -248,9 +248,9 @@ jobs:
             echo ""
             echo "| Platform | Architecture | Download |"
             echo "|----------|--------------|----------|"
-            echo "| Linux | x86_64 | \`wa-rs-${VERSION}-linux-amd64.tar.gz\` |"
-            echo "| Linux | ARM64 | \`wa-rs-${VERSION}-linux-arm64.tar.gz\` |"
-            echo "| Windows | x86_64 | \`wa-rs-${VERSION}-windows-amd64.zip\` |"
+            echo "| Linux | x86_64 | \`waxum-${VERSION}-linux-amd64.tar.gz\` |"
+            echo "| Linux | ARM64 | \`waxum-${VERSION}-linux-arm64.tar.gz\` |"
+            echo "| Windows | x86_64 | \`waxum-${VERSION}-windows-amd64.zip\` |"
             echo ""
             echo "### Database Support"
             echo "Supports PostgreSQL, MySQL, and SQLite. Set \`DATABASE_URL\` in your \`.env\`:"
@@ -260,7 +260,7 @@ jobs:
             echo "# MySQL"
             echo "DATABASE_URL=mysql://user:pass@localhost:3306/wagateway"
             echo "# SQLite"
-            echo "DATABASE_URL=sqlite://wa-rs.db"
+            echo "DATABASE_URL=sqlite://waxum.db"
             echo '```'
             echo ""
             echo "## Verify Checksums"
@@ -273,7 +273,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          name: WA-RS v${{ needs.version.outputs.version }}
+          name: Waxum v${{ needs.version.outputs.version }}
           draft: false
           prerelease: false
           files: |
