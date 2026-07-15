@@ -8,7 +8,11 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     curl \
     git \
+    cmake \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 
 RUN rustup default nightly
 

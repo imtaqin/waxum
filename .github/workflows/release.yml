@@ -17,6 +17,7 @@ env:
   CARGO_TERM_COLOR: always
   REGISTRY: docker.io
   IMAGE_NAME: imtaqin/waxum
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
 jobs:
   # Determine version and create tag
@@ -109,7 +110,7 @@ jobs:
         if: runner.os == 'Linux' && !matrix.cross
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev
+          sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev cmake build-essential
 
       - name: Install MinGW (Windows GNU target)
         if: runner.os == 'Windows'
