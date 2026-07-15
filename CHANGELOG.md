@@ -2,6 +2,17 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.1] - 2026-07-15
+
+### CI
+
+- Added `cmake` + `build-essential` to the Linux release lane, set
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5` globally, and added a
+  `Cross.toml` that installs cmake inside the ARM64 cross container.
+  This unblocks the audiopus / opus build script on every runner.
+- Dockerfile installs cmake in the rust-builder stage and exports the
+  same policy env so `docker build` succeeds too.
+
 ## [0.7.0] - 2026-07-15
 
 ### Waxum
