@@ -16,7 +16,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: docker.io
-  IMAGE_NAME: imtaqin/waxum
+  IMAGE_NAME: fdciabdul/waxum
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
 jobs:

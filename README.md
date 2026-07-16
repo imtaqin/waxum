@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.
 irm https://raw.githubusercontent.com/imtaqin/waxum/main/scripts/install.ps1 | iex
 
 # Docker
-docker pull imtaqin/waxum
+docker pull fdciabdul/waxum
 ```
 
 Or build from source:
