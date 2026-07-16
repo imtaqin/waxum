@@ -14,10 +14,10 @@ services:
 
   api:
     # Pull the prebuilt image from Docker Hub instead of compiling on the
-    # host. Override the tag with WA_RS_TAG=0.5.0 to pin, default `latest`.
+    # host. Override the tag with WAXUM_TAG=0.5.0 to pin, default `latest`.
     # For a from-source build, use `docker compose -f docker-compose.yml -f
     # docker-compose.build.yml up -d` — see docker-compose.build.yml.
-    image: imtaqin/waxum:${WA_RS_TAG:-latest}
+    image: fdciabdul/waxum:${WAXUM_TAG:-latest}
     container_name: wagateway-api
     env_file:
       - .env
