@@ -2,6 +2,21 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.4] - 2026-07-16
+
+### CI
+
+- Release binary lane now runs the ARM64 job on `ubuntu-24.04-arm` (native
+  runner) instead of `cross` under QEMU emulation. Dropped `Cross.toml`
+  and the `cross` bootstrap step. ~5–8× faster on the ARM64 job.
+- Docker publish is now a per-arch parallel matrix (`linux/amd64` on
+  `ubuntu-latest`, `linux/arm64` on `ubuntu-24.04-arm`) followed by a
+  `docker-manifest` job that stitches the two into a single
+  `imtaqin/waxum:{version}` and `:latest` manifest via
+  `docker buildx imagetools create`. End-to-end Docker publish went from
+  ~90 min (single QEMU job) to ~20 min (parallel native jobs). Reported
+  in #31.
+
 ## [0.7.3] - 2026-07-16
 
 ### Fix
