@@ -995,12 +995,20 @@ pub async fn send_cta_url(
                 button_params_json: Some(params.to_string()),
             },
         ],
+        message_params_json: Some("{\"tag\":\"cta_url\"}".to_string()),
+        ..Default::default()
+    };
+
+    let header = waproto::whatsapp::message::interactive_message::Header {
+        title: Some(request.display_text.clone()),
+        has_media_attachment: Some(false),
         ..Default::default()
     };
 
     let message = waproto::whatsapp::Message {
         interactive_message: MessageField::some(
             waproto::whatsapp::message::InteractiveMessage {
+                header: MessageField::some(header),
                 body: Some(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.body_text),
                 }).into(),

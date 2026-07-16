@@ -31,3 +31,5 @@ tmp/
 temp/
 *.tmp
 postman/
+waxum.db
+waxum.db-*

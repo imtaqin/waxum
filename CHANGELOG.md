@@ -2,6 +2,17 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.3] - 2026-07-16
+
+### Fix
+
+- `POST /messages/cta-url` now delivers to the recipient. The outbound
+  `NativeFlowMessage` was missing `message_params_json = "{\"tag\":
+  \"cta_url\"}"` and the parent `InteractiveMessage` was missing its
+  `header` (`title` + `has_media_attachment=false`). WA silently dropped
+  the CTA button without them — the send would return a message id but
+  nothing ever landed on the receiver. Reported in #31.
+
 ## [0.7.2] - 2026-07-15
 
 ### CI
