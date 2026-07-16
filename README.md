@@ -18,7 +18,7 @@
 
 Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Swagger. Prometheus. NATS JetStream (optional).
 
-Runs 500 sessions in ~20 MB on a bare-metal pm2 process.
+Production-grade.
 
 ## Install
 
