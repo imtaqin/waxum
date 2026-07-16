@@ -2,6 +2,12 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.2] - 2026-07-15
+
+### CI
+
+- Docker image now publishes to `fdciabdul/waxum` on Docker Hub.
+
 ## [0.7.1] - 2026-07-15
 
 ### CI
