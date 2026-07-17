@@ -2,6 +2,33 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.5] - 2026-07-17
+
+### Upstream sync
+
+- Bumped pinned `whatsapp-rust` from `a7dc852` to `4d9e8ed`
+  (13 commits ahead). New in upstream: **1:1 video calls** (#1024) and
+  the encoded-audio pipeline with native Opus negotiation (#1050).
+  Ten more perf/fix commits in the signal + message hot paths, plus a
+  CI-side disk reclamation before tests. No API surface change on the
+  waxum side.
+
+### Tests
+
+- Added an integration test harness under `tests/`. Every endpoint that
+  does not require a live WhatsApp client now has a contract test
+  running against an in-process `AppState` backed by a per-test SQLite
+  file. Twenty-four tests cover the auth gate, `/livez` + `/readyz` +
+  `/health` + `/metrics`, `/api/v1/info`, sessions CRUD, session status
+  shape parity, and webhooks CRUD + re-enable 404.
+
+### CI
+
+- `Run tests` step now runs before `Build (release)` so a failing test
+  fails the build fast instead of after ten minutes of release LTO.
+- `Clippy` now runs `--all-targets` so the integration tests get linted
+  the same way as the binary.
+
 ## [0.7.4] - 2026-07-16
 
 ### CI
