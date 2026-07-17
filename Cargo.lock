@@ -4692,7 +4692,7 @@ dependencies = [
 
 [[package]]
 name = "waxum"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4708,6 +4708,7 @@ dependencies = [
  "futures",
  "hex",
  "hmac 0.12.1",
+ "http-body-util",
  "jsonwebtoken",
  "libsqlite3-sys",
  "mysql_async",
@@ -4719,6 +4720,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-postgres",

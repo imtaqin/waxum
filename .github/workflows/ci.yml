@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
 jobs:
   check:
@@ -25,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev
+          sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev cmake build-essential
 
       - name: Cache cargo
         uses: actions/cache@v4

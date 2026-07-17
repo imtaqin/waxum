@@ -77,6 +77,10 @@ futures = "0.3"
 prometheus = { version = "0.13", default-features = false }
 async-channel = "2"
 
+[dev-dependencies]
+http-body-util = "0.1"
+tempfile = "3"
+
 [profile.release]
 opt-level = "z"
 debug = false

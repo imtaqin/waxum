@@ -59,17 +59,13 @@ const BANNER: &str = r#"
       ┈┈  premium whatsapp gateway  ┈┈
 "#;
 
-mod db;
-mod device_props;
-mod error;
-mod handlers;
-mod metrics;
-mod middleware;
-mod models;
-mod nats;
-mod net;
-mod routes;
-mod state;
+use waxum::db;
+use waxum::handlers;
+use waxum::middleware;
+use waxum::models;
+use waxum::nats;
+use waxum::routes;
+use waxum::state;
 
 use routes::create_router;
 use state::AppState;
