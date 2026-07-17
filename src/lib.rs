@@ -2,6 +2,7 @@
 //! tests under `tests/` can build the same router and state the binary
 //! uses. The binary in `src/main.rs` also depends on these modules.
 
+pub mod console;
 pub mod db;
 pub mod device_props;
 pub mod error;

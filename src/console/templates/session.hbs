@@ -1,0 +1,266 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" aria-label="Waxum home">
+      <img src="/assets/logo.png" alt="" class="brand-mark" width="36" height="36">
+      <span class="brand-word">Waxum</span>
+      <span class="brand-chip">Console</span>
+    </a>
+    <span class="spacer"></span>
+    <span class="tag">v{{version}}</span>
+    <a class="tag" href="/" title="Back to overview">
+      <svg class="icon sm" style="transform:rotate(180deg)"><use href="#i-arrow"/></svg>
+      Overview
+    </a>
+    <form method="post" action="/logout" style="margin:0">
+      <button type="submit" class="logout-btn">
+        <svg class="icon sm" style="vertical-align:-2px;margin-right:6px"><use href="#i-power"/></svg>
+        Sign out
+      </button>
+    </form>
+  </div>
+</header>
+
+<main class="page">
+  <section class="session-head">
+    <div>
+      <div class="hero-eyebrow">SESSION</div>
+      <h1 class="session-id mono">{{session_id}}</h1>
+      <div class="session-meta">
+        <span class="status-pill {{status_class}}"><span class="status-dot"></span>{{status_label}}</span>
+        {{#if phone}}<span class="phone mono">{{phone}}</span>{{/if}}
+        <span class="mono" style="color:var(--mist)">{{storage_path}}</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="playground">
+    <nav class="pg-tabs" id="pg-tabs" aria-label="Playground tabs"></nav>
+
+    <section class="pg-body">
+      <div class="pg-endpoints panel">
+        <header class="panel-head">
+          <span class="panel-title" id="pg-tab-title">Endpoints</span>
+          <span class="panel-serial">PANEL.03</span>
+        </header>
+        <div id="pg-endpoint-list" class="pg-endpoint-list"></div>
+      </div>
+
+      <div class="pg-workbench panel">
+        <header class="panel-head">
+          <span class="panel-title" id="pg-current-label">Pick an endpoint</span>
+          <span class="panel-serial mono" id="pg-current-method">—</span>
+        </header>
+        <div class="pg-form" id="pg-form">
+          <div class="empty">Choose a tab, then click an endpoint on the left to load its form here.</div>
+        </div>
+      </div>
+
+      <div class="pg-result panel">
+        <header class="panel-head">
+          <span class="panel-title">Response</span>
+          <span class="panel-serial mono" id="pg-result-status">—</span>
+        </header>
+        <pre id="pg-result-body" class="pg-result-body"><span style="color:var(--mist)">No request sent yet.</span></pre>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>window.__SID__ = {{{sid_json}}};</script>
+<script src="/assets/playground.js"></script>
+<script>
+(function () {
+  const tabsEl = document.getElementById('pg-tabs');
+  const listEl = document.getElementById('pg-endpoint-list');
+  const titleEl = document.getElementById('pg-tab-title');
+  const formEl = document.getElementById('pg-form');
+  const curLabelEl = document.getElementById('pg-current-label');
+  const curMethodEl = document.getElementById('pg-current-method');
+  const resStatusEl = document.getElementById('pg-result-status');
+  const resBodyEl = document.getElementById('pg-result-body');
+
+  const sid = window.__SID__;
+  const endpoints = window.__ENDPOINTS__ || [];
+  const groups = window.__GROUP_META__ || {};
+  const groupKeys = Array.from(new Set(endpoints.map(e => e.group)));
+  let activeGroup = groupKeys[0];
+  let activeEndpoint = null;
+
+  function renderTabs() {
+    tabsEl.innerHTML = '';
+    groupKeys.forEach(g => {
+      const meta = groups[g] || { title: g };
+      const btn = document.createElement('button');
+      btn.className = 'pg-tab' + (g === activeGroup ? ' active' : '');
+      btn.type = 'button';
+      btn.dataset.g = g;
+      btn.innerHTML = '<svg class="icon sm"><use href="#' + (meta.icon || 'i-dot') + '"/></svg>' +
+        '<span>' + meta.title + '</span>';
+      btn.addEventListener('click', () => { activeGroup = g; renderTabs(); renderList(); });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function renderList() {
+    const items = endpoints.filter(e => e.group === activeGroup);
+    const meta = groups[activeGroup] || {};
+    titleEl.textContent = meta.title || activeGroup;
+    listEl.innerHTML = '';
+    items.forEach(ep => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'pg-endpoint' + (ep.danger ? ' danger' : '') +
+        (activeEndpoint && activeEndpoint.key === ep.key && activeEndpoint.group === ep.group ? ' active' : '');
+      row.innerHTML =
+        '<span class="method m-' + ep.method.toLowerCase() + '">' + ep.method + '</span>' +
+        '<span class="label">' + ep.label + '</span>' +
+        '<span class="path mono">' + ep.path.replace('/api/v1/sessions/{sid}', '') + '</span>';
+      row.addEventListener('click', () => { activeEndpoint = ep; renderList(); renderForm(); });
+      listEl.appendChild(row);
+    });
+  }
+
+  function renderForm() {
+    if (!activeEndpoint) return;
+    curLabelEl.textContent = activeEndpoint.label;
+    curMethodEl.textContent = activeEndpoint.method + '  ' + activeEndpoint.path.replace('{sid}', sid);
+    formEl.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'pg-fields';
+
+    activeEndpoint.fields.forEach(f => {
+      const g = document.createElement('div');
+      g.className = 'field';
+      const l = document.createElement('label');
+      l.textContent = f.label + (f.required ? ' *' : '');
+      g.appendChild(l);
+
+      let input;
+      if (f.type === 'textarea' || f.type === 'json') {
+        input = document.createElement('textarea');
+        input.rows = f.type === 'json' ? 4 : 3;
+      } else if (f.type === 'select') {
+        input = document.createElement('select');
+        (f.options || []).forEach(opt => {
+          const o = document.createElement('option');
+          o.value = opt; o.textContent = opt;
+          input.appendChild(o);
+        });
+      } else if (f.type === 'checkbox') {
+        input = document.createElement('input');
+        input.type = 'checkbox';
+      } else if (f.type === 'number') {
+        input = document.createElement('input');
+        input.type = 'number';
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+      }
+      input.name = f.name;
+      input.dataset.type = f.type;
+      if (f.placeholder) input.placeholder = f.placeholder;
+      if (f.default !== undefined) {
+        if (f.type === 'checkbox') input.checked = !!f.default;
+        else input.value = String(f.default);
+      }
+      g.appendChild(input);
+      wrap.appendChild(g);
+    });
+    formEl.appendChild(wrap);
+
+    const bar = document.createElement('div');
+    bar.className = 'pg-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn primary' + (activeEndpoint.danger ? ' danger' : '');
+    btn.innerHTML = '<svg class="icon sm"><use href="#i-arrow"/></svg>Send request';
+    btn.addEventListener('click', () => submit());
+    bar.appendChild(btn);
+    formEl.appendChild(bar);
+  }
+
+  function collectValues() {
+    const values = {};
+    formEl.querySelectorAll('input, textarea, select').forEach(el => {
+      const t = el.dataset.type;
+      if (t === 'checkbox') values[el.name] = el.checked;
+      else if (t === 'number') values[el.name] = el.value === '' ? null : Number(el.value);
+      else if (t === 'json') {
+        if (el.value.trim()) {
+          try { values[el.name] = JSON.parse(el.value); }
+          catch (e) { throw new Error('Field "' + el.name + '" is not valid JSON: ' + e.message); }
+        }
+      } else values[el.name] = el.value;
+    });
+    return values;
+  }
+
+  function buildPath(values) {
+    let p = activeEndpoint.path.replace('{sid}', encodeURIComponent(sid));
+    activeEndpoint.fields.forEach(f => {
+      if (f.in_path) {
+        p = p.replace('{' + f.name + '}', encodeURIComponent(values[f.name] || ''));
+      }
+    });
+    return p;
+  }
+
+  function stripPathFields(values) {
+    const out = {};
+    activeEndpoint.fields.forEach(f => {
+      if (!f.in_path && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
+        out[f.name] = values[f.name];
+      }
+    });
+    return out;
+  }
+
+  async function submit() {
+    resStatusEl.textContent = 'Sending…';
+    resBodyEl.textContent = '';
+    let values;
+    try { values = collectValues(); }
+    catch (e) {
+      resStatusEl.textContent = 'ERROR';
+      resBodyEl.textContent = e.message;
+      return;
+    }
+
+    const path = buildPath(values);
+    const body = stripPathFields(values);
+    const method = activeEndpoint.method;
+
+    const opts = {
+      method,
+      credentials: 'same-origin',
+      headers: {},
+    };
+    if (method !== 'GET' && method !== 'DELETE' && Object.keys(body).length) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    if ((method === 'DELETE') && Object.keys(body).length) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+
+    try {
+      const res = await fetch(path, opts);
+      const text = await res.text();
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* not JSON */ }
+      resStatusEl.textContent = res.status + ' ' + res.statusText;
+      resStatusEl.style.color = res.ok ? 'var(--jade-deep)' : 'var(--sakura)';
+      resBodyEl.textContent = pretty;
+    } catch (e) {
+      resStatusEl.textContent = 'NETWORK';
+      resStatusEl.style.color = 'var(--sakura)';
+      resBodyEl.textContent = String(e);
+    }
+  }
+
+  renderTabs();
+  renderList();
+})();
+</script>

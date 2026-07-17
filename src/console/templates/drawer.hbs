@@ -1,0 +1,66 @@
+<header class="drawer-head">
+  <div>
+    <div class="drawer-title">{{session_id}}</div>
+    <div class="panel-serial" style="margin-top:4px">SESSION DETAIL</div>
+  </div>
+  <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">
+    <svg class="icon lg"><use href="#i-x"/></svg>
+  </button>
+</header>
+<div class="drawer-body">
+  <div class="field">
+    <label>Status</label>
+    <span class="status-pill {{status_class}}" style="align-self:flex-start;margin-top:4px">
+      <span class="status-dot"></span>{{status_label}}
+    </span>
+  </div>
+  {{#if phone}}
+  <div class="field">
+    <label>Phone</label>
+    <span class="val">{{phone}}</span>
+  </div>
+  {{/if}}
+  {{#if jid}}
+  <div class="field">
+    <label>JID</label>
+    <span class="val">{{jid}}</span>
+  </div>
+  {{/if}}
+  <div class="field">
+    <label>Storage path</label>
+    <span class="val">{{storage_path}}</span>
+  </div>
+
+  {{#if qr_svg}}
+  <div class="field">
+    <label>Pair with QR</label>
+    <div class="qr-wrap">{{{qr_svg}}}</div>
+    <div class="hint" style="font-size:12px;color:var(--mist);margin-top:8px">
+      Open WhatsApp on your phone → Linked devices → Link a device, then scan.
+      QR refreshes every ~20 seconds until paired.
+    </div>
+  </div>
+  {{/if}}
+
+  <div class="actions">
+    {{#if is_connected}}
+    <button class="btn" onclick="sessionAction('{{session_id}}','disconnect')">
+      <svg class="icon sm"><use href="#i-power"/></svg>
+      Disconnect
+    </button>
+    <button class="btn danger" onclick="sessionAction('{{session_id}}','logout')">
+      <svg class="icon sm"><use href="#i-power"/></svg>
+      Logout (unpair)
+    </button>
+    {{else}}
+    <button class="btn primary" onclick="sessionAction('{{session_id}}','connect')">
+      <svg class="icon sm"><use href="#i-power"/></svg>
+      Connect
+    </button>
+    {{/if}}
+    <button class="btn danger" onclick="if(confirm('Delete session {{session_id}}? This removes its Signal Store and metadata row.'))sessionAction('{{session_id}}','delete')">
+      <svg class="icon sm"><use href="#i-trash"/></svg>
+      Delete
+    </button>
+  </div>
+</div>

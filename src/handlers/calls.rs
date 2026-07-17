@@ -491,28 +491,46 @@ async fn decode_url_to_pcm(url: &str) -> anyhow::Result<Vec<i16>> {
     Ok(samples)
 }
 
+/// Synthesise `text` with Microsoft Edge's neural voice engine and return
+/// the resulting audio as 16 kHz mono PCM ready to feed into a WhatsApp
+/// call.
+///
+/// Uses the `msedge-tts` crate — a native Rust WebSocket client for the
+/// Edge readaloud endpoint. Nothing external is required on the server
+/// (no `edge-tts` CLI, no Python interpreter), just `ffmpeg` for the
+/// MP3 → PCM decode step.
 async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
-    let edge_out = tokio::process::Command::new("edge-tts")
-        .args([
-            "--voice",
-            voice,
-            "--text",
-            text,
-            "--write-media",
-            "/dev/stdout",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .await?;
+    let text_owned = text.to_string();
+    let voice_owned = voice.to_string();
 
-    if !edge_out.status.success() {
-        anyhow::bail!("edge-tts exited with status {}", edge_out.status);
-    }
-    let mp3 = edge_out.stdout;
+    let mp3 = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+        use msedge_tts::tts::client::connect;
+        use msedge_tts::tts::SpeechConfig;
+        use msedge_tts::voice::get_voices_list;
+
+        let voices = get_voices_list().map_err(|e| anyhow::anyhow!("edge tts voice list: {e}"))?;
+        let matched = voices
+            .iter()
+            .find(|v| v.short_name.as_deref() == Some(voice_owned.as_str()))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "edge tts voice '{}' not found. Try id-ID-ArdiNeural, \
+                     en-US-JennyNeural, ja-JP-NanamiNeural, etc.",
+                    voice_owned
+                )
+            })?;
+
+        let config = SpeechConfig::from(matched);
+        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
+        let audio = client
+            .synthesize(&text_owned, &config)
+            .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
+        Ok(audio.audio_bytes)
+    })
+    .await??;
 
     let mut ffmpeg = tokio::process::Command::new("ffmpeg")
         .args([
@@ -534,7 +552,12 @@ async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "ffmpeg not found on PATH: {e}. Install ffmpeg to enable /calls/tts and /calls/play."
+            )
+        })?;
 
     if let Some(mut stdin) = ffmpeg.stdin.take() {
         stdin.write_all(&mp3).await?;

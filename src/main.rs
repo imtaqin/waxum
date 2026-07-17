@@ -59,6 +59,7 @@ const BANNER: &str = r#"
       ┈┈  premium whatsapp gateway  ┈┈
 "#;
 
+use waxum::console;
 use waxum::db;
 use waxum::handlers;
 use waxum::middleware;
@@ -656,6 +657,7 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
 
     let app = create_router()
         .merge(swagger_router)
+        .merge(console::console_router())
         .layer(axum::middleware::from_fn(
             middleware::jwt::jwt_auth_middleware,
         ))

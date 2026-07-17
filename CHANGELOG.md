@@ -2,6 +2,59 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.8] - 2026-07-17
+
+### Added — browser console
+
+- **Server-rendered ops console mounted at `/`.** A single-binary
+  Handlebars UI over the existing REST surface, no separate frontend
+  build. Landing page shows a fleet overview (speech-bubble hero with
+  the connected/total count, active-webhook + open-circuit KPIs, a
+  live-events tail panel, and a sessions table). Auth is a
+  `waxum_console` cookie carrying `SUPERADMIN_TOKEN`; the same JWT
+  middleware now accepts that cookie as a fallback to
+  `Authorization: Bearer`, so browser fetches from the console UI
+  hit `/api/v1/...` without exposing the token to JavaScript.
+- **Per-session playground at `/s/{session_id}`.** Nine tabs (Info &
+  Pair, Send, Chat, Contacts, Groups, Calls, Blocking, Webhooks,
+  Operations) covering 60+ REST endpoints. Every endpoint is
+  described once in `src/console/assets/playground.js`; forms are
+  rendered dynamically from that registry, and responses stream
+  back into a JSON panel.
+- **Manga-panel visual system.** Hand-drawn ink borders on a mint
+  paper background, jade accent for connected/OK, sakura for
+  attention states, halftone dot texture on the speech-bubble hero.
+  Logo taken from `logoini.png` (light-theme variant). Zen Maru
+  Gothic + Inter + JetBrains Mono type pairing.
+
+### Added — media plane
+
+- **CTA URL messages now accept an image header.**
+  `POST /api/v1/sessions/{sid}/messages/cta-url` accepts an optional
+  `image` field (`{ "url": "…" }` or
+  `{ "data": "<base64>", "mimetype": "image/jpeg" }`). When set,
+  waxum uploads the image to the WhatsApp CDN and attaches it as
+  the interactive header media, so the button appears with a
+  thumbnail on the recipient side.
+- **`/calls/tts` no longer requires an external `edge-tts` CLI or
+  Python interpreter.** Speech synthesis now runs through the
+  in-process `msedge-tts` Rust crate, which talks the Microsoft
+  Edge readaloud WebSocket directly. Server prerequisites drop to
+  just `ffmpeg` (for MP3 → PCM decode). Voice IDs are validated
+  against the live catalogue; a bad voice returns a clear error
+  listing valid alternatives instead of the previous opaque
+  "program not found".
+
+### Observability
+
+- **Every WhatsApp event is now logged to the terminal, not only
+  forwarded to webhooks.** `broadcast_to_webhooks` pushes each event
+  into a bounded ring buffer (last 200) and emits a
+  `tracing::info!` at `target = "waxum::event"` with the session id,
+  event type, and a 160-char payload preview. The console overview
+  "Live events" panel is backed by this same ring, so operators see
+  live activity without needing to register a webhook at all.
+
 ## [0.7.7] - 2026-07-17
 
 ### Fixed — flap causes

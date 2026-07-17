@@ -1,0 +1,105 @@
+<section class="hero">
+  <div class="bubble">
+    <div class="hero-eyebrow">FLEET STATUS</div>
+    <div class="hero-num">{{connected}}<span class="of"> / {{total}}</span></div>
+    <div class="hero-caption">sessions on the line</div>
+    <div class="hero-subline">
+      {{#if pairing_count}}<span>{{pairing_count}} pairing</span><span class="sep">·</span>{{/if}}
+      {{#if disconnected_count}}<span class="warn">{{disconnected_count}} offline</span>{{else}}<span>0 offline</span>{{/if}}
+      <span class="sep">·</span>
+      <span>{{event_rate}} events / min</span>
+    </div>
+  </div>
+  <div class="kpi-stack">
+    <div class="kpi">
+      <div class="kpi-label">Active webhooks</div>
+      <div class="kpi-num">{{webhook_count}}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Circuits open</div>
+      <div class="kpi-num {{#if circuits_open}}sakura{{/if}}">{{circuits_open}}</div>
+    </div>
+  </div>
+</section>
+
+<section class="panels">
+  <article class="panel">
+    <header class="panel-head">
+      <span class="panel-title">Sessions</span>
+      <span class="panel-serial">PANEL.01</span>
+    </header>
+    <div class="panel-body">
+      {{#if has_sessions}}
+      <table class="sessions-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th style="text-align:right;padding-right:24px">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {{#each sessions}}
+          <tr onclick="location.href='/s/'+encodeURIComponent('{{id}}')">
+            <td class="id">{{id}}</td>
+            <td class="phone">{{#if phone}}{{phone}}{{else}}<span style="color:var(--ash)">—</span>{{/if}}</td>
+            <td>
+              <span class="status-pill {{status_class}}">
+                <span class="status-dot"></span>
+                {{status_label}}
+              </span>
+            </td>
+            <td style="text-align:right;padding-right:24px">
+              <button class="btn" onclick="event.stopPropagation();location.href='/s/'+encodeURIComponent('{{id}}')">
+                <svg class="icon sm"><use href="#i-arrow"/></svg>
+                Open
+              </button>
+            </td>
+          </tr>
+        {{/each}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">
+        No sessions yet. Create one to start pairing.
+        <div style="margin-top:16px">
+          <button class="btn primary" onclick="createSession()">
+            <svg class="icon sm"><use href="#i-plus"/></svg>
+            New session
+          </button>
+        </div>
+      </div>
+      {{/if}}
+    </div>
+    {{#if has_sessions}}
+    <div style="padding:14px 20px;border-top:1px dashed var(--ash);display:flex;justify-content:space-between;align-items:center">
+      <span class="panel-serial">{{sessions_count}} TOTAL</span>
+      <button class="btn primary" onclick="createSession()">
+        <svg class="icon sm"><use href="#i-plus"/></svg>
+        New session
+      </button>
+    </div>
+    {{/if}}
+  </article>
+
+  <article class="panel">
+    <header class="panel-head">
+      <span class="panel-title">Live events</span>
+      <span class="panel-serial">PANEL.02</span>
+    </header>
+    <div class="events">
+      {{#if has_events}}
+        {{#each events}}
+        <div class="event">
+          <span class="t">{{time}}</span>
+          <span class="kind {{level}}">{{kind}}</span>
+          <span class="msg">{{msg}} <span class="sid">· {{session}}</span></span>
+        </div>
+        {{/each}}
+      {{else}}
+      <div class="empty">No events yet. Activity will appear here as sessions come online.</div>
+      {{/if}}
+    </div>
+  </article>
+</section>

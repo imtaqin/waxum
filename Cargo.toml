@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.7.7"
+version = "0.7.8"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -76,6 +76,18 @@ futures = "0.3"
 
 prometheus = { version = "0.13", default-features = false }
 async-channel = "2"
+
+# Console (server-rendered dashboard) — Handlebars templates + tiny
+# static asset bundle baked into the binary via `include_str!`. No
+# separate frontend build step.
+handlebars = "6"
+# QR code SVG rendering for the console session drawer.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
+# Pure-Rust Microsoft Edge TTS client. Speaks the Edge readaloud WebSocket
+# directly so `/calls/tts` does not need an external `edge-tts` CLI or
+# Python interpreter installed on the server.
+msedge-tts = "0.4"
 
 [dev-dependencies]
 http-body-util = "0.1"

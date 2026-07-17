@@ -1,0 +1,79 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" aria-label="Waxum home">
+      <img src="/assets/logo.png" alt="" class="brand-mark" width="36" height="36">
+      <span class="brand-word">Waxum</span>
+      <span class="brand-chip">Console</span>
+    </a>
+    <span class="spacer"></span>
+    <span class="tag">v{{version}}</span>
+    <a class="tag" href="/swagger-ui" target="_blank" rel="noopener">
+      <svg class="icon sm"><use href="#i-book"/></svg>
+      API docs
+    </a>
+    <form method="post" action="/logout" style="margin:0">
+      <button type="submit" class="logout-btn">
+        <svg class="icon sm" style="vertical-align:-2px;margin-right:6px"><use href="#i-power"/></svg>
+        Sign out
+      </button>
+    </form>
+  </div>
+</header>
+
+<main class="page" id="page-root">
+  {{> overview_body}}
+</main>
+
+<div id="drawer-scrim" class="drawer-scrim" onclick="closeDrawer()"></div>
+<aside id="drawer" class="drawer" aria-hidden="true"></aside>
+
+<script>
+  async function openDrawer(sid) {
+    const res = await fetch('/drawer/' + encodeURIComponent(sid), { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const html = await res.text();
+    const d = document.getElementById('drawer');
+    d.innerHTML = html;
+    d.classList.add('open');
+    d.setAttribute('aria-hidden', 'false');
+    document.getElementById('drawer-scrim').classList.add('open');
+  }
+  function closeDrawer() {
+    const d = document.getElementById('drawer');
+    d.classList.remove('open');
+    d.setAttribute('aria-hidden', 'true');
+    document.getElementById('drawer-scrim').classList.remove('open');
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+
+  async function refreshOverview() {
+    try {
+      const res = await fetch('/data', { credentials: 'same-origin' });
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      if (!res.ok) return;
+      document.getElementById('page-root').innerHTML = await res.text();
+    } catch (e) { /* network blip — try again on next tick */ }
+  }
+  setInterval(refreshOverview, 3000);
+
+  async function sessionAction(sid, action) {
+    const res = await fetch('/sessions/' + encodeURIComponent(sid) + '/' + action, {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    if (res.ok) { closeDrawer(); refreshOverview(); }
+  }
+
+  async function createSession() {
+    const id = prompt('New session id (letters, digits, dashes):');
+    if (!id) return;
+    const res = await fetch('/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ id, name: id }),
+    });
+    if (res.ok) refreshOverview();
+    else alert('Could not create session (' + res.status + ')');
+  }
+</script>

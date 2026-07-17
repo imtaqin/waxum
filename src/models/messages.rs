@@ -397,6 +397,13 @@ pub struct SendCtaUrlRequest {
     /// clients show this in the link preview UI.
     pub merchant_url: Option<String>,
 
+    /// Optional image to show above the CTA body. Accepts either an
+    /// `{ "url": "https://…" }` or `{ "data": "<base64>", "mimetype": "image/jpeg" }`
+    /// object. When set, waxum uploads the image to WhatsApp and
+    /// attaches it as the interactive header media, so the button
+    /// appears with an image thumbnail on the recipient side.
+    pub image: Option<MediaData>,
+
     pub reply_to: Option<String>,
 }
 

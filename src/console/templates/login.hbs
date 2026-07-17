@@ -1,0 +1,25 @@
+<div class="login-wrap">
+  <form class="login-card" method="post" action="/login" autocomplete="off">
+    <div class="login-brand">
+      <img src="/assets/logo.png" alt="" width="72" height="72">
+      <div>
+        <div class="brand-word" style="font-size:24px;font-weight:800;letter-spacing:0.16em">Waxum</div>
+        <div class="subhead" style="margin:0">Console · Sign in</div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="token">Superadmin token</label>
+      <input type="password" id="token" name="token" placeholder="paste SUPERADMIN_TOKEN" autofocus required>
+    </div>
+    <button class="btn primary" type="submit">
+      <svg class="icon sm"><use href="#i-arrow"/></svg>
+      Sign in
+    </button>
+    {{#if error}}<div class="err">{{error}}</div>{{/if}}
+    <div class="hint">
+      Same token you set in <code>SUPERADMIN_TOKEN</code>. If you did not
+      set one, check the server logs on boot — waxum prints an auto-generated
+      one on first run.
+    </div>
+  </form>
+</div>

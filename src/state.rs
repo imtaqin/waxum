@@ -212,6 +212,23 @@ struct AppStateInner {
     pub active_calls: DashMap<String, Arc<whatsapp_rust::voip::CallHandle>>,
 
     pub call_audio_channels: DashMap<String, ActiveCallAudio>,
+
+    /// Bounded ring of the last N events crossing `broadcast_to_webhooks`.
+    /// Backs the console overview "Live events" panel and also serves as
+    /// the source for the terminal event log line.
+    pub event_ring: parking_lot::Mutex<std::collections::VecDeque<ConsoleEvent>>,
+}
+
+/// A structured event captured from `broadcast_to_webhooks` for both the
+/// terminal log line and the console overview panel. `payload_preview` is
+/// the first ~120 chars of the JSON payload; full payload is not kept to
+/// avoid unbounded memory growth.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ConsoleEvent {
+    pub session_id: String,
+    pub event_type: String,
+    pub payload_preview: String,
+    pub at_epoch_ms: i64,
 }
 
 pub struct ActiveCallAudio {
@@ -268,8 +285,37 @@ impl AppState {
                 incoming_calls: DashMap::new(),
                 active_calls: DashMap::new(),
                 call_audio_channels: DashMap::new(),
+                event_ring: parking_lot::Mutex::new(std::collections::VecDeque::with_capacity(200)),
             }),
         }
+    }
+
+    pub fn push_event(&self, session_id: &str, event: &str, payload: &str) {
+        const PREVIEW_MAX: usize = 160;
+        let preview: String = payload.chars().take(PREVIEW_MAX).collect();
+        let now = chrono::Utc::now().timestamp_millis();
+        let mut ring = self.inner.event_ring.lock();
+        if ring.len() >= 200 {
+            ring.pop_front();
+        }
+        ring.push_back(ConsoleEvent {
+            session_id: session_id.to_string(),
+            event_type: event.to_string(),
+            payload_preview: preview,
+            at_epoch_ms: now,
+        });
+        tracing::info!(
+            target: "waxum::event",
+            session_id = %session_id,
+            event = %event,
+            "{}",
+            payload.chars().take(PREVIEW_MAX).collect::<String>()
+        );
+    }
+
+    pub fn recent_events(&self, limit: usize) -> Vec<ConsoleEvent> {
+        let ring = self.inner.event_ring.lock();
+        ring.iter().rev().take(limit).cloned().collect()
     }
 
     pub fn incoming_calls(&self) -> &DashMap<String, wacore::types::call::IncomingCall> {
@@ -455,6 +501,8 @@ impl AppState {
     }
 
     pub async fn broadcast_to_webhooks(&self, session_id: &str, event: &str, payload: &str) {
+        self.push_event(session_id, event, payload);
+
         let webhooks = self.get_webhooks(session_id);
         let client = webhook_client();
         let pool = self.session_manager().pool().clone();

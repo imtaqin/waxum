@@ -999,9 +999,38 @@ pub async fn send_cta_url(
         ..Default::default()
     };
 
+    let header_media = if let Some(ref media_ref) = request.image {
+        let (data, mimetype) = get_media_data(media_ref).await?;
+        let upload = client
+            .upload(
+                data.clone(),
+                wacore::download::MediaType::Image,
+                Default::default(),
+            )
+            .await
+            .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
+        Some(waproto::whatsapp::message::ImageMessage {
+            url: Some(upload.url),
+            direct_path: Some(upload.direct_path),
+            media_key: Some(upload.media_key.to_vec()),
+            file_sha256: Some(upload.file_sha256.to_vec()),
+            file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
+            file_length: Some(data.len() as u64),
+            mimetype: Some(mimetype),
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
     let header = waproto::whatsapp::message::interactive_message::Header {
         title: Some(request.display_text.clone()),
-        has_media_attachment: Some(false),
+        has_media_attachment: Some(header_media.is_some()),
+        media: header_media.map(|img| {
+            waproto::whatsapp::__buffa::oneof::message::interactive_message::header::Media::ImageMessage(
+                Box::new(img),
+            )
+        }),
         ..Default::default()
     };
 

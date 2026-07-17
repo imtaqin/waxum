@@ -106,6 +106,10 @@ pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response
         return next.run(request).await;
     }
 
+    if crate::console::is_console_path(path) {
+        return next.run(request).await;
+    }
+
     let jwt_auth = JwtAuth::new();
 
     let auth_header = request
@@ -113,14 +117,32 @@ pub async fn jwt_auth_middleware(request: Request<Body>, next: Next) -> Response
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
 
-    let token = match auth_header {
-        Some(header) if header.starts_with("Bearer ") => &header[7..],
-        _ => {
-            return unauthorized_response(
-                "Missing or invalid Authorization header. Use: Bearer <token>",
-            );
-        }
+    let cookie_token = request
+        .headers()
+        .get(header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|raw| {
+            for part in raw.split(';') {
+                let p = part.trim();
+                if let Some(rest) = p.strip_prefix("waxum_console=") {
+                    return Some(rest.to_string());
+                }
+            }
+            None
+        });
+
+    let token: String = match auth_header {
+        Some(header) if header.starts_with("Bearer ") => header[7..].to_string(),
+        _ => match cookie_token {
+            Some(t) => t,
+            None => {
+                return unauthorized_response(
+                    "Missing or invalid Authorization header. Use: Bearer <token>",
+                );
+            }
+        },
     };
+    let token = token.as_str();
 
     if let Ok(superadmin_token) = std::env::var("SUPERADMIN_TOKEN") {
         if !superadmin_token.is_empty() && token == superadmin_token {
