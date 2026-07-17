@@ -20,6 +20,22 @@ Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Sw
 
 Production-grade.
 
+## Console
+
+Server-rendered ops dashboard baked into the binary. Point a browser at
+`http://<host>:3451/`, sign in with your `SUPERADMIN_TOKEN`, and you land
+on the fleet overview. Click any session for the per-session playground
+covering 60+ REST endpoints — send messages, drive calls, manage groups,
+inspect webhooks, all without leaving the tab.
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Waxum Console — fleet overview" width="820" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/playground.png" alt="Waxum Console — session playground" width="820" />
+</p>
+
 ## Install
 
 ```bash
@@ -45,6 +61,7 @@ cargo build --release
 
 | URL | Purpose |
 |---|---|
+| `/` | Console — fleet overview + per-session playground |
 | `/api/v1` | REST API |
 | `/swagger-ui` | OpenAPI schema + interactive docs |
 | `/livez` · `/readyz` | Liveness · readiness probes |
