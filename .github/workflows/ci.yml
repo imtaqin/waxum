@@ -28,7 +28,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev cmake build-essential
 
-      - name: Cache cargo
+      # NOTE: `target/` is intentionally excluded from the cache. Some
+      # crates (utoipa-swagger-ui, protoc-gen builds) bake absolute
+      # build-directory paths into generated code, so restoring a
+      # `target/` produced under a different repo path (e.g. an older
+      # wa-rs → waxum rename) makes those crates fail to link with
+      # "folder does not exist". Caching only the registry keeps cold
+      # rebuilds cheap without dragging in path-poisoned artifacts.
+      - name: Cache cargo registry + git
         uses: actions/cache@v4
         with:
           path: |
@@ -36,9 +43,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-waxum-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-waxum-
 
       - name: Check formatting
         run: cargo fmt --check
