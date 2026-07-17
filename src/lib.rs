@@ -11,5 +11,6 @@ pub mod middleware;
 pub mod models;
 pub mod nats;
 pub mod net;
+pub mod preflight;
 pub mod routes;
 pub mod state;

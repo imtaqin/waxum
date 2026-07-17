@@ -586,7 +586,9 @@ pub async fn reconnect_all_on_startup(state: AppState) {
         }
     };
 
+    let stagger = crate::preflight::session_startup_stagger();
     tracing::info!(
+        stagger_ms = stagger.as_millis() as u64,
         "[startup] auto-reconnect: found {} sessions in DB",
         sessions.len()
     );
@@ -644,7 +646,7 @@ pub async fn reconnect_all_on_startup(state: AppState) {
             }
         });
 
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(stagger).await;
     }
 }
 

@@ -2,6 +2,40 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.7] - 2026-07-17
+
+### Fixed — flap causes
+
+Three classic reasons a waxum instance kept dropping WhatsApp connections
+in the field were left to bite operators one at a time. This release
+adds startup diagnostics + a hard interlock for the ones we can prevent.
+
+- **Two instances on the same Signal Store no longer coexist.** waxum
+  now takes a pidfile at `{WHATSAPP_STORAGE_PATH}/.waxum.lock` on
+  startup. If another *live* process already owns that path, the new
+  instance refuses to boot with a clear error. Previously the two
+  processes would fight — WhatsApp servers issue `<failure
+  reason='replaced'/>` against whichever session was last to connect,
+  so the two peers would knock each other offline in a permanent
+  loop, indistinguishable from a "random" disconnect storm.
+  Stale pidfiles (owner PID no longer running) are silently reclaimed
+  so a hard-killed container that never cleaned up on exit does not
+  brick the next start.
+- **`RLIMIT_NOFILE` is checked on Linux startup.** A soft limit under
+  65536 logs a `WARN` with the estimated session ceiling (~soft / 70)
+  and the exact docker-compose `ulimits:` block to add. A 1024-fd
+  container wedges at ~14 sessions with brand-new connections
+  silently failing to open, which is by far the most-diagnosed
+  cause of "sessions disconnect but WA app never shows a logout".
+- **Cold-start reconnect burst is tunable.** The per-session spawn
+  stagger inside `reconnect_all_on_startup` used to be hard-coded to
+  500 ms. It is now driven by `SESSION_STARTUP_STAGGER_MS` (default
+  still 500 ms). Ops teams running >500 sessions on shared infra can
+  raise this to 2000 ms so the WA rate limiter never sees the full
+  fleet reconnect at once after a restart.
+
+New knob: `SESSION_STARTUP_STAGGER_MS` (integer, ms).
+
 ## [0.7.6] - 2026-07-17
 
 ### Fixed
