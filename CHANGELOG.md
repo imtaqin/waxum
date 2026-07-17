@@ -2,6 +2,20 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.6] - 2026-07-17
+
+### Fixed
+
+- **Sessions vanishing after container restart** (reported in issue
+  #34 as a follow-up). The default SQLite metadata file used to live
+  next to the binary (`./waxum.db`), which meant a Docker Compose
+  setup that only mounted `whatsapp_sessions/` kept the Signal Store
+  but lost the session metadata table on restart. The default is now
+  `{WHATSAPP_STORAGE_PATH}/waxum.db` (default
+  `./whatsapp_sessions/waxum.db`), so a single volume mount covers
+  both buckets. Parent directory is auto-created on boot. `DATABASE_URL`,
+  `SQLITE_PATH`, and the Postgres/MySQL env pairs still override.
+
 ## [0.7.5] - 2026-07-17
 
 ### Upstream sync

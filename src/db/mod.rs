@@ -64,7 +64,20 @@ pub fn resolve_database_url() -> (String, DbBackend) {
         return (url, DbBackend::MySQL);
     }
 
-    let path = std::env::var("SQLITE_PATH").unwrap_or_else(|_| "waxum.db".to_string());
+    let path = std::env::var("SQLITE_PATH").unwrap_or_else(|_| {
+        let storage = std::env::var("WHATSAPP_STORAGE_PATH")
+            .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
+        let joined = std::path::Path::new(&storage).join("waxum.db");
+        let s = joined.to_string_lossy().replace('\\', "/");
+        if !s.starts_with("./") && !s.starts_with('/') && !s.contains(':') {
+            format!("./{}", s)
+        } else {
+            s
+        }
+    });
+    let _ = std::path::Path::new(&path)
+        .parent()
+        .map(std::fs::create_dir_all);
     (format!("sqlite://{}", path), DbBackend::SQLite)
 }
 
