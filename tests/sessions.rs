@@ -14,7 +14,11 @@ async fn list_sessions_is_empty_on_fresh_db() {
     let (status, body) = call(&h.app, req_get("/api/v1/sessions", Some(TEST_TOKEN))).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body.get("total").and_then(|v| v.as_u64()), Some(0));
-    assert!(body.get("sessions").and_then(|v| v.as_array()).unwrap().is_empty());
+    assert!(body
+        .get("sessions")
+        .and_then(|v| v.as_array())
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -56,7 +60,6 @@ async fn create_session_generates_uuid_when_no_id_given() {
         .pointer("/session/id")
         .and_then(|v| v.as_str())
         .expect("generated id");
-    // UUIDv4 is 36 chars, hyphenated
     assert_eq!(id.len(), 36);
     assert_eq!(id.chars().filter(|c| *c == '-').count(), 4);
 }
@@ -67,7 +70,12 @@ async fn create_session_conflicts_on_duplicate_id() {
     let payload = json!({"id": "s-dup", "name": "First"});
     let (status1, _) = call(
         &h.app,
-        req_json(Method::POST, "/api/v1/sessions", Some(TEST_TOKEN), payload.clone()),
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(TEST_TOKEN),
+            payload.clone(),
+        ),
     )
     .await;
     assert_eq!(status1, StatusCode::OK);
@@ -82,11 +90,7 @@ async fn create_session_conflicts_on_duplicate_id() {
 #[tokio::test]
 async fn get_session_404_when_missing() {
     let h = Harness::new().await;
-    let (status, _) = call(
-        &h.app,
-        req_get("/api/v1/sessions/nope", Some(TEST_TOKEN)),
-    )
-    .await;
+    let (status, _) = call(&h.app, req_get("/api/v1/sessions/nope", Some(TEST_TOKEN))).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -103,11 +107,7 @@ async fn get_session_returns_stored_row() {
         ),
     )
     .await;
-    let (status, body) = call(
-        &h.app,
-        req_get("/api/v1/sessions/s-get", Some(TEST_TOKEN)),
-    )
-    .await;
+    let (status, body) = call(&h.app, req_get("/api/v1/sessions/s-get", Some(TEST_TOKEN))).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("s-get"));
     assert_eq!(body.get("name").and_then(|v| v.as_str()), Some("Gettable"));
@@ -156,11 +156,7 @@ async fn delete_session_removes_row() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body.get("success").and_then(|v| v.as_bool()), Some(true));
 
-    let (status, _) = call(
-        &h.app,
-        req_get("/api/v1/sessions/s-del", Some(TEST_TOKEN)),
-    )
-    .await;
+    let (status, _) = call(&h.app, req_get("/api/v1/sessions/s-del", Some(TEST_TOKEN))).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -177,9 +173,6 @@ async fn delete_missing_session_returns_404() {
 
 #[tokio::test]
 async fn get_session_status_shape_matches_list_entry() {
-    // The two endpoints answering "is this session logged in?" must
-    // return the same shape so a client can rely on either. Reported in
-    // https://github.com/imtaqin/waxum/issues/33.
     let h = Harness::new().await;
     let _ = call(
         &h.app,
@@ -191,12 +184,16 @@ async fn get_session_status_shape_matches_list_entry() {
         ),
     )
     .await;
-    let (list_status, list_body) = call(&h.app, req_get("/api/v1/sessions", Some(TEST_TOKEN))).await;
+    let (list_status, list_body) =
+        call(&h.app, req_get("/api/v1/sessions", Some(TEST_TOKEN))).await;
     assert_eq!(list_status, StatusCode::OK);
     let entry = list_body
         .get("sessions")
         .and_then(|v| v.as_array())
-        .and_then(|a| a.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some("s-stat")))
+        .and_then(|a| {
+            a.iter()
+                .find(|s| s.get("id").and_then(|v| v.as_str()) == Some("s-stat"))
+        })
         .expect("row for s-stat");
     let entry_status = entry.get("status").and_then(|v| v.as_str());
     let entry_logged = entry.get("is_logged_in").and_then(|v| v.as_bool());

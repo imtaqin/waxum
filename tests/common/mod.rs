@@ -33,7 +33,6 @@ impl Harness {
     /// Fresh SQLite DB in a per-test temp dir. `SUPERADMIN_TOKEN` is set to
     /// `TEST_TOKEN` for the duration of the test.
     pub async fn new() -> Self {
-        // SAFETY: single-thread test binary, no other code inspects env.
         unsafe {
             std::env::set_var("SUPERADMIN_TOKEN", TEST_TOKEN);
             std::env::set_var("JWT_SECRET", "test-jwt-secret-value");
@@ -68,13 +67,13 @@ pub async fn call(app: &Router, req: Request<Body>) -> (StatusCode, Value) {
     let json: Value = if body_bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&body_bytes).unwrap_or_else(|_| {
-            Value::String(String::from_utf8_lossy(&body_bytes).to_string())
-        })
+        serde_json::from_slice(&body_bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body_bytes).to_string()))
     };
     (status, json)
 }
 
+#[allow(dead_code)]
 pub fn req_json(method: Method, path: &str, token: Option<&str>, body: Value) -> Request<Body> {
     let mut b = Request::builder()
         .method(method)
@@ -94,6 +93,7 @@ pub fn req_get(path: &str, token: Option<&str>) -> Request<Body> {
     b.body(Body::empty()).expect("build request")
 }
 
+#[allow(dead_code)]
 pub fn req_delete(path: &str, token: Option<&str>) -> Request<Body> {
     let mut b = Request::builder().method(Method::DELETE).uri(path);
     if let Some(t) = token {

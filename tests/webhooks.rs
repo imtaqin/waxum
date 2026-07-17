@@ -57,10 +57,6 @@ async fn register_webhook_returns_full_config() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    // The register response is the persisted `WebhookConfig`. The
-    // internal id lives on the list rows (`WebhookConfigWithId`); the
-    // register endpoint just echoes back the config so the caller knows
-    // it landed. Contract: url + events + secret + enabled.
     assert_eq!(
         body.get("url").and_then(|v| v.as_str()),
         Some("https://example.com/hook")
@@ -106,7 +102,6 @@ async fn delete_webhook_removes_it() {
         ),
     )
     .await;
-    // Register only returns the config; the id lives on list rows.
     let (_, listed) = call(
         &h.app,
         req_get("/api/v1/sessions/wh-s-04/webhooks", Some(TEST_TOKEN)),
@@ -128,10 +123,7 @@ async fn delete_webhook_removes_it() {
         req_get("/api/v1/sessions/wh-s-04/webhooks", Some(TEST_TOKEN)),
     )
     .await;
-    assert_eq!(
-        listed_after.get("count").and_then(|v| v.as_u64()),
-        Some(0)
-    );
+    assert_eq!(listed_after.get("count").and_then(|v| v.as_u64()), Some(0));
 }
 
 #[tokio::test]

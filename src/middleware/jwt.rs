@@ -38,6 +38,12 @@ pub struct JwtAuth {
     secret: String,
 }
 
+impl Default for JwtAuth {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JwtAuth {
     pub fn new() -> Self {
         let secret = std::env::var("JWT_SECRET")

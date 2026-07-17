@@ -129,6 +129,7 @@ impl WebhookEvent {
 
     /// Parse from string
     #[allow(dead_code)]
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "all" => Some(WebhookEvent::All),
