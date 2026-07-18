@@ -24,8 +24,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Fetch base
-        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+      - name: Fetch base (unshallow enough to see a merge base)
+        run: |
+          git fetch --no-tags --unshallow origin ${{ github.event.pull_request.base.ref }} 2>/dev/null \
+            || git fetch --no-tags origin ${{ github.event.pull_request.base.ref }}
 
       - name: Collect PR diff + metadata
         id: collect
