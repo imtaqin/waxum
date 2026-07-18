@@ -434,51 +434,106 @@ pub async fn pair_session(
         .unwrap_or_else(|| format!("{}/{}", state.base_storage_path(), session_id));
 
     let runtime = state.get_or_create_session(&session_id, &storage_path);
-    runtime.set_status(SessionStatus::WaitingForPairCode);
 
-    let state_clone = state.clone();
-    let session_id_clone = session_id.clone();
-    let phone_number = request.phone_number.clone();
-    let show_notification = request.show_push_notification;
-    let device_override = request.device.as_ref().map(|d| {
-        crate::device_props::resolve_with_override(
-            d.os.as_deref(),
-            d.platform.as_deref(),
-            d.version.as_deref(),
-        )
-    });
+    use whatsapp_rust::pair_code::PairCodeOptions;
+    let opts_for_client = PairCodeOptions {
+        phone_number: request.phone_number.clone(),
+        show_push_notification: request.show_push_notification,
+        custom_code: None,
+        platform_id: None,
+        display_os: None,
+    };
 
-    tokio::spawn(async move {
-        if let Err(e) = connect_client_with_pair_code(
-            &state_clone,
-            &session_id_clone,
-            &phone_number,
-            show_notification,
-            device_override,
-        )
-        .await
+    if let Some(client) = runtime.get_client() {
+        let code = client
+            .pair_with_code(opts_for_client)
+            .await
+            .map_err(|e| ApiError::Internal(format!("pair_with_code failed: {e}")))?;
+        runtime.set_pair_code(Some(code.clone()));
+        return Ok(Json(PairCodeResponse {
+            code,
+            timeout_seconds: 180,
+        }));
+    }
+
+    let existing_status = runtime.get_status();
+    let spawn_needed = !matches!(
+        existing_status,
+        SessionStatus::WaitingForPairCode | SessionStatus::Connecting
+    );
+
+    if spawn_needed {
+        runtime.set_status(SessionStatus::WaitingForPairCode);
+
+        let state_clone = state.clone();
+        let session_id_clone = session_id.clone();
+        let phone_number = request.phone_number.clone();
+        let show_notification = request.show_push_notification;
+        let device_override = request.device.as_ref().map(|d| {
+            crate::device_props::resolve_with_override(
+                d.os.as_deref(),
+                d.platform.as_deref(),
+                d.version.as_deref(),
+            )
+        });
+
+        tokio::spawn(async move {
+            if let Err(e) = connect_client_with_pair_code(
+                &state_clone,
+                &session_id_clone,
+                &phone_number,
+                show_notification,
+                device_override,
+            )
+            .await
+            {
+                tracing::error!(
+                    "Session {} pair code connection failed: {}",
+                    session_id_clone,
+                    e
+                );
+                if let Some(runtime) = state_clone.get_session(&session_id_clone) {
+                    runtime.set_status(SessionStatus::Disconnected);
+                }
+            }
+        });
+    }
+
+    let mut pair_code = String::new();
+    for _ in 0..80 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+        if let Some(c) = state
+            .get_session(&session_id)
+            .and_then(|r| r.get_pair_code())
         {
-            tracing::error!(
-                "Session {} pair code connection failed: {}",
-                session_id_clone,
-                e
-            );
-            if let Some(runtime) = state_clone.get_session(&session_id_clone) {
-                runtime.set_status(SessionStatus::Disconnected);
+            if !c.is_empty() {
+                pair_code = c;
+                break;
             }
         }
-    });
+    }
 
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-    let pair_code = state
-        .get_session(&session_id)
-        .and_then(|r| r.get_pair_code())
-        .unwrap_or_default();
+    if pair_code.is_empty() {
+        if let Some(client) = state.get_session(&session_id).and_then(|r| r.get_client()) {
+            let opts = PairCodeOptions {
+                phone_number: request.phone_number.clone(),
+                show_push_notification: request.show_push_notification,
+                custom_code: None,
+                platform_id: None,
+                display_os: None,
+            };
+            if let Ok(code) = client.pair_with_code(opts).await {
+                if let Some(runtime) = state.get_session(&session_id) {
+                    runtime.set_pair_code(Some(code.clone()));
+                }
+                pair_code = code;
+            }
+        }
+    }
 
     Ok(Json(PairCodeResponse {
         code: pair_code,
-        timeout_seconds: 60,
+        timeout_seconds: 180,
     }))
 }
 
@@ -891,11 +946,22 @@ async fn handle_event(
                 .update_last_connected(session_id)
                 .await;
         }
-        Event::Disconnected(_) => {
-            tracing::warn!(
-                "Session {}: socket dropped — auto-reconnect in flight",
-                session_id
-            );
+        Event::Disconnected(d) => {
+            let reason = format!("{}", d.reason);
+            let clean = d.reason.is_clean_shutdown();
+            if clean {
+                tracing::info!(
+                    session_id = %session_id,
+                    reason = %reason,
+                    "socket dropped (clean recycle) — auto-reconnect in flight"
+                );
+            } else {
+                tracing::warn!(
+                    session_id = %session_id,
+                    reason = %reason,
+                    "socket dropped (unexpected) — auto-reconnect in flight"
+                );
+            }
             runtime.set_status(SessionStatus::Connecting);
         }
         Event::LoggedOut(logged_out) => {

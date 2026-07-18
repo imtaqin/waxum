@@ -89,12 +89,22 @@ pub struct TtsCallRequest {
     #[schema(example = 4000)]
     #[serde(default)]
     pub answer_grace_ms: Option<u64>,
+    /// If true, waxum decodes the peer's incoming MLOW frames back to
+    /// 16 kHz mono PCM and writes them as a WAV file under
+    /// `{WHATSAPP_STORAGE_PATH}/{session_id}/recordings/{call_id}.wav`.
+    /// The file is served over
+    /// `GET /api/v1/sessions/{session_id}/calls/{call_id}/recording.wav`
+    /// once the call ends. Defaults to `false`.
+    #[serde(default)]
+    pub record: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TtsCallResponse {
     pub call_id: String,
     pub to: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recording_url: Option<String>,
 }
 
 /// Ring a peer and play back an audio file (mp3, wav, ogg — anything ffmpeg
@@ -114,12 +124,17 @@ pub struct PlayCallRequest {
     #[schema(example = 4000)]
     #[serde(default)]
     pub answer_grace_ms: Option<u64>,
+    /// See `TtsCallRequest::record`. Same behaviour.
+    #[serde(default)]
+    pub record: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PlayCallResponse {
     pub call_id: String,
     pub to: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recording_url: Option<String>,
 }
 
 /// End a call the session is currently in.

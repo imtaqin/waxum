@@ -12,6 +12,7 @@ use std::sync::Arc;
 use wacore_binary::jid::Jid;
 
 use crate::error::ApiError;
+use crate::handlers::messages::parse_jid;
 use crate::models::calls::{
     AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
     RingCallResponse, TerminateCallRequest, TtsCallRequest, TtsCallResponse,
@@ -36,6 +37,274 @@ fn make_dummy_audio() -> DummyAudio {
 fn build_silence(ms: usize) -> Vec<i16> {
     let samples = ms * 16;
     vec![0i16; samples]
+}
+
+/// Encode a silence prefix + speech PCM to a stream of native MLOW frames.
+///
+/// First iteration used `WaOpusEncoder::new_mlow_escape()` (Opus carried
+/// through MLOW's RTP profile). Peer received the packets cleanly (RTCP
+/// showed zero loss, sequence advancing) but the WhatsApp client on the
+/// callee side never emitted audio to the speaker — the decoder path
+/// there is native MLOW, not the Opus-escape codec. Encoding directly with
+/// `wacore::voip::mlow::encode::MlowEncoder` and using the
+/// `AudioFormat::MLOW_16KHZ_60MS` profile matches the codec the peer's
+/// receiver expects on 1:1 companion calls.
+///
+/// PCM is padded to a full 60 ms boundary with zeros and split into
+/// 960-sample frames. `MlowEncoder::encode` takes normalised f32 samples in
+/// [-1.0, 1.0]; the i16 → f32 conversion happens once per frame.
+fn encode_pcm_to_mlow_native(silence: &[i16], pcm: &[i16]) -> anyhow::Result<Vec<bytes::Bytes>> {
+    use wacore::voip::MlowEncoder;
+    use whatsapp_rust::voip::audio::WA_FRAME_SAMPLES;
+
+    let mut full: Vec<i16> = Vec::with_capacity(silence.len() + pcm.len());
+    full.extend_from_slice(silence);
+    full.extend_from_slice(pcm);
+    let rem = full.len() % WA_FRAME_SAMPLES;
+    if rem != 0 {
+        full.extend(std::iter::repeat_n(0i16, WA_FRAME_SAMPLES - rem));
+    }
+
+    let mut enc = MlowEncoder::new();
+    let mut frames: Vec<bytes::Bytes> = Vec::with_capacity(full.len() / WA_FRAME_SAMPLES);
+    let mut total_bytes: usize = 0;
+    let mut buf: Vec<f32> = vec![0.0; WA_FRAME_SAMPLES];
+    for chunk in full.chunks_exact(WA_FRAME_SAMPLES) {
+        for (dst, &src) in buf.iter_mut().zip(chunk.iter()) {
+            *dst = (src as f32) / 32768.0;
+        }
+        let bytes = enc
+            .encode(&buf)
+            .map_err(|e| anyhow::anyhow!("mlow encode: {e:?}"))?;
+        total_bytes += bytes.len();
+        frames.push(bytes::Bytes::from(bytes));
+    }
+    tracing::info!(
+        target: "waxum::call_audio",
+        frames = frames.len(),
+        total_bytes,
+        pcm_samples = full.len(),
+        duration_ms = full.len() / 16,
+        "encoded PCM to native MLOW"
+    );
+    Ok(frames)
+}
+
+async fn place_encoded_audio_call(
+    state: AppState,
+    to: wacore_binary::jid::Jid,
+    client: Arc<whatsapp_rust::Client>,
+    opus_frames: Vec<bytes::Bytes>,
+    session_id: String,
+    record: bool,
+) -> Result<(String, wacore_binary::jid::Jid, Option<String>), ApiError> {
+    use wacore::voip::AudioFormat;
+
+    let (opus_tx, opus_rx) = async_channel::bounded::<bytes::Bytes>(32);
+    let (peer_tx, peer_rx) = async_channel::bounded::<wacore::voip::EncodedAudioFrame>(64);
+
+    let handle = client
+        .voip()
+        .call(&to)
+        .encoded_audio(AudioFormat::MLOW_16KHZ_60MS, opus_rx, peer_tx)
+        .start()
+        .await
+        .map_err(|e| ApiError::Internal(format!("place_call failed: {e}")))?;
+
+    let call_id = handle.call_id().to_string();
+    let handle_arc = Arc::new(handle);
+    state
+        .active_calls()
+        .insert(call_id.clone(), handle_arc.clone());
+
+    let recording_url: Option<String> = if record {
+        let base = state.base_storage_path().to_string();
+        let sid = session_id.clone();
+        let cid = call_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = record_peer_task(peer_rx, base, sid, cid).await {
+                tracing::warn!(target: "waxum::call_audio", "record task ended: {e}");
+            }
+        });
+        Some(format!(
+            "/api/v1/sessions/{}/calls/{}/recording.wav",
+            session_id, call_id
+        ))
+    } else {
+        None
+    };
+
+    let call_id_bg = call_id.clone();
+    let state_bg = state.clone();
+    let events = handle_arc.events();
+    let call_id_events = call_id.clone();
+    tokio::spawn(async move {
+        while let Ok(ev) = events.recv().await {
+            let is_rtcp = matches!(ev, whatsapp_rust::voip::CallEvent::RtcpReceived { .. });
+            if is_rtcp {
+                tracing::debug!(
+                    target: "waxum::call_audio",
+                    call_id = %call_id_events,
+                    "call event: {:?}", ev
+                );
+            } else {
+                tracing::info!(
+                    target: "waxum::call_audio",
+                    call_id = %call_id_events,
+                    "call event: {:?}", ev
+                );
+            }
+        }
+    });
+
+    tokio::spawn(async move {
+        let total = opus_frames.len();
+        for (i, frame) in opus_frames.into_iter().enumerate() {
+            if opus_tx.send(frame).await.is_err() {
+                tracing::warn!(
+                    target: "waxum::call_audio",
+                    call_id = %call_id_bg,
+                    sent = i,
+                    total,
+                    "opus source channel closed early — engine dropped receiver"
+                );
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+        }
+        tracing::info!(
+            target: "waxum::call_audio",
+            call_id = %call_id_bg,
+            total_frames = total,
+            "opus stream complete, hanging up"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        handle_arc.hangup().await;
+        state_bg.active_calls().remove(&call_id_bg);
+    });
+
+    Ok((call_id, to, recording_url))
+}
+
+/// Consume peer-received MLOW frames off the sink, decode each to f32 PCM,
+/// convert to i16, and write out as a 16 kHz mono WAV file once the sink
+/// closes (i.e. the call has ended).
+async fn record_peer_task(
+    rx: async_channel::Receiver<wacore::voip::EncodedAudioFrame>,
+    base_storage: String,
+    session_id: String,
+    call_id: String,
+) -> anyhow::Result<()> {
+    use wacore::voip::MlowDecoder;
+
+    let mut decoder = MlowDecoder::new();
+    let mut pcm_i16: Vec<i16> = Vec::new();
+
+    while let Ok(frame) = rx.recv().await {
+        let pcm_f32 = decoder.decode(&frame.data);
+        pcm_i16.reserve(pcm_f32.len());
+        for &s in &pcm_f32 {
+            let clamped = s.clamp(-1.0, 1.0);
+            pcm_i16.push((clamped * 32767.0) as i16);
+        }
+    }
+
+    let dir = std::path::Path::new(&base_storage)
+        .join(&session_id)
+        .join("recordings");
+    tokio::fs::create_dir_all(&dir).await?;
+    let path = dir.join(format!("{}.wav", call_id));
+
+    let wav_bytes = build_wav_pcm16_mono_16khz(&pcm_i16);
+    tokio::fs::write(&path, &wav_bytes).await?;
+
+    if pcm_i16.is_empty() {
+        tracing::info!(
+            target: "waxum::call_audio",
+            call_id = %call_id,
+            "peer sent no audio (call never fully answered) — wrote 0-sample WAV placeholder"
+        );
+        return Ok(());
+    }
+
+    tracing::info!(
+        target: "waxum::call_audio",
+        call_id = %call_id,
+        samples = pcm_i16.len(),
+        duration_ms = pcm_i16.len() / 16,
+        path = %path.display(),
+        "peer audio recorded"
+    );
+    Ok(())
+}
+
+/// Build a minimal RIFF/WAV container for 16-bit mono PCM at 16 kHz. Written
+/// by hand because the codec pipeline is already fixed to that format — a
+/// full crate like `hound` would only bloat the binary for this one call
+/// site.
+fn build_wav_pcm16_mono_16khz(samples: &[i16]) -> Vec<u8> {
+    let sample_rate: u32 = 16_000;
+    let channels: u16 = 1;
+    let bits_per_sample: u16 = 16;
+    let byte_rate = sample_rate * (bits_per_sample as u32 / 8) * (channels as u32);
+    let block_align = channels * bits_per_sample / 8;
+    let data_len = (samples.len() * 2) as u32;
+    let riff_len = 36 + data_len;
+
+    let mut buf = Vec::with_capacity(44 + samples.len() * 2);
+    buf.extend_from_slice(b"RIFF");
+    buf.extend_from_slice(&riff_len.to_le_bytes());
+    buf.extend_from_slice(b"WAVE");
+    buf.extend_from_slice(b"fmt ");
+    buf.extend_from_slice(&16u32.to_le_bytes());
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&channels.to_le_bytes());
+    buf.extend_from_slice(&sample_rate.to_le_bytes());
+    buf.extend_from_slice(&byte_rate.to_le_bytes());
+    buf.extend_from_slice(&block_align.to_le_bytes());
+    buf.extend_from_slice(&bits_per_sample.to_le_bytes());
+    buf.extend_from_slice(b"data");
+    buf.extend_from_slice(&data_len.to_le_bytes());
+    for &s in samples {
+        buf.extend_from_slice(&s.to_le_bytes());
+    }
+    buf
+}
+
+pub async fn get_recording(
+    State(state): State<AppState>,
+    Path((session_id, call_id)): Path<(String, String)>,
+) -> Result<AxumResponse, ApiError> {
+    let base = state.base_storage_path().to_string();
+    let path = std::path::Path::new(&base)
+        .join(&session_id)
+        .join("recordings")
+        .join(format!("{}.wav", call_id));
+    let bytes = match tokio::fs::read(&path).await {
+        Ok(b) => b,
+        Err(_) => {
+            let mut r = AxumResponse::new(axum::body::Body::from(
+                "{\"success\":false,\"error\":{\"code\":404,\"message\":\"recording not ready yet — wait until peer hangs up, then reload\"}}",
+            ));
+            *r.status_mut() = axum::http::StatusCode::NOT_FOUND;
+            r.headers_mut().insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/json"),
+            );
+            return Ok(r);
+        }
+    };
+    let mut r = AxumResponse::new(axum::body::Body::from(bytes));
+    r.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("audio/wav"),
+    );
+    r.headers_mut().insert(
+        axum::http::header::CONTENT_DISPOSITION,
+        axum::http::HeaderValue::from_str(&format!("attachment; filename=\"{}.wav\"", call_id))
+            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("attachment")),
+    );
+    Ok(r)
 }
 
 #[utoipa::path(
@@ -101,14 +370,7 @@ pub async fn ring_call(
 ) -> Result<Json<RingCallResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
 
-    let to: Jid = if request.to.contains('@') {
-        request
-            .to
-            .parse()
-            .map_err(|_| ApiError::InvalidJid(request.to.clone()))?
-    } else {
-        Jid::pn(&request.to)
-    };
+    let to = resolve_call_recipient(client.clone(), parse_jid(&request.to)?).await;
 
     let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
 
@@ -213,14 +475,14 @@ pub async fn accept_call(
         let call_id_bg = call_id.clone();
         let state_bg = state.clone();
         tokio::spawn(async move {
-            const CHUNK: usize = 320;
+            const CHUNK: usize = 960;
             let mut full = silence_prefix;
             full.extend_from_slice(&pcm);
             for chunk in full.chunks(CHUNK) {
                 if mic_tx.send(chunk.to_vec()).await.is_err() {
                     break;
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(60)).await;
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             handle_arc.hangup().await;
@@ -304,14 +566,7 @@ pub async fn tts_call(
     }
     let client = get_client(&state, &session_id)?;
 
-    let to: Jid = if request.to.contains('@') {
-        request
-            .to
-            .parse()
-            .map_err(|_| ApiError::InvalidJid(request.to.clone()))?
-    } else {
-        Jid::pn(&request.to)
-    };
+    let to = resolve_call_recipient(client.clone(), parse_jid(&request.to)?).await;
 
     let voice = request
         .voice
@@ -322,52 +577,15 @@ pub async fn tts_call(
     let grace_ms = request.answer_grace_ms.unwrap_or(6000);
     let silence_prefix = build_silence(grace_ms as usize);
 
-    let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
-
-    let handle = client
-        .voip()
-        .call(&to)
-        .audio(mic_rx, spk_tx)
-        .start()
-        .await
-        .map_err(|e| ApiError::Internal(format!("place_call failed: {e}")))?;
-
-    let call_id = handle.call_id().to_string();
-    let handle_arc = Arc::new(handle);
-    state
-        .active_calls()
-        .insert(call_id.clone(), handle_arc.clone());
-    state.call_audio_channels().insert(
-        call_id.clone(),
-        ActiveCallAudio {
-            mic_tx: mic_tx.clone(),
-            spk_rx,
-        },
-    );
-
-    let call_id_bg = call_id.clone();
-    let state_bg = state.clone();
-
-    tokio::spawn(async move {
-        const CHUNK: usize = 320;
-        let mut full = silence_prefix;
-        full.extend_from_slice(&pcm);
-        for chunk in full.chunks(CHUNK) {
-            if mic_tx.send(chunk.to_vec()).await.is_err() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        handle_arc.hangup().await;
-        state_bg.active_calls().remove(&call_id_bg);
-        state_bg.call_audio_channels().remove(&call_id_bg);
-    });
-
+    let opus_frames = encode_pcm_to_mlow_native(&silence_prefix, &pcm)
+        .map_err(|e| ApiError::Internal(format!("mlow encode failed: {e}")))?;
+    let record = request.record.unwrap_or(false);
+    let (call_id, to_jid, recording_url) =
+        place_encoded_audio_call(state, to, client, opus_frames, session_id, record).await?;
     Ok(Json(TtsCallResponse {
         call_id,
-        to: to.to_string(),
+        to: to_jid.to_string(),
+        recording_url,
     }))
 }
 
@@ -397,14 +615,7 @@ pub async fn play_call(
     }
     let client = get_client(&state, &session_id)?;
 
-    let to: Jid = if request.to.contains('@') {
-        request
-            .to
-            .parse()
-            .map_err(|_| ApiError::InvalidJid(request.to.clone()))?
-    } else {
-        Jid::pn(&request.to)
-    };
+    let to = resolve_call_recipient(client.clone(), parse_jid(&request.to)?).await;
 
     let pcm = decode_url_to_pcm(&request.audio_url)
         .await
@@ -412,52 +623,15 @@ pub async fn play_call(
     let grace_ms = request.answer_grace_ms.unwrap_or(6000);
     let silence_prefix = build_silence(grace_ms as usize);
 
-    let (mic_rx, spk_tx, mic_tx, spk_rx) = make_dummy_audio();
-
-    let handle = client
-        .voip()
-        .call(&to)
-        .audio(mic_rx, spk_tx)
-        .start()
-        .await
-        .map_err(|e| ApiError::Internal(format!("place_call failed: {e}")))?;
-
-    let call_id = handle.call_id().to_string();
-    let handle_arc = Arc::new(handle);
-    state
-        .active_calls()
-        .insert(call_id.clone(), handle_arc.clone());
-    state.call_audio_channels().insert(
-        call_id.clone(),
-        ActiveCallAudio {
-            mic_tx: mic_tx.clone(),
-            spk_rx,
-        },
-    );
-
-    let call_id_bg = call_id.clone();
-    let state_bg = state.clone();
-
-    tokio::spawn(async move {
-        const CHUNK: usize = 320;
-        let mut full = silence_prefix;
-        full.extend_from_slice(&pcm);
-        for chunk in full.chunks(CHUNK) {
-            if mic_tx.send(chunk.to_vec()).await.is_err() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        handle_arc.hangup().await;
-        state_bg.active_calls().remove(&call_id_bg);
-        state_bg.call_audio_channels().remove(&call_id_bg);
-    });
-
+    let opus_frames = encode_pcm_to_mlow_native(&silence_prefix, &pcm)
+        .map_err(|e| ApiError::Internal(format!("mlow encode failed: {e}")))?;
+    let record = request.record.unwrap_or(false);
+    let (call_id, to_jid, recording_url) =
+        place_encoded_audio_call(state, to, client, opus_frames, session_id, record).await?;
     Ok(Json(PlayCallResponse {
         call_id,
-        to: to.to_string(),
+        to: to_jid.to_string(),
+        recording_url,
     }))
 }
 
@@ -505,11 +679,54 @@ async fn decode_url_to_pcm(url: &str) -> anyhow::Result<Vec<i16>> {
 /// Edge readaloud endpoint. Nothing external is required on the server
 /// (no `edge-tts` CLI, no Python interpreter), just `ffmpeg` for the
 /// MP3 → PCM decode step.
+/// Prepare TTS text for embedding into SSML.
+///
+/// `msedge-tts` builds its SSML by string-formatting the caller's text
+/// straight into the `<prosody>…</prosody>` payload with no escaping. Any
+/// `<`, `>`, `&`, `"`, or `'` in the text corrupts the SSML XML and the
+/// Microsoft backend responds with an empty audio blob (0 bytes) — the
+/// failure we saw in the field. Escape those characters here so the SSML
+/// stays well-formed regardless of what the operator pasted in.
+///
+/// Also strip characters that Microsoft's neural voices choke on silently
+/// (control chars, U+FEFF byte-order marks) and normalise runs of
+/// whitespace to a single space.
+fn sanitize_ssml_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last_was_space = false;
+    for ch in text.chars() {
+        if ch == '\u{FEFF}' || (ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t') {
+            continue;
+        }
+        let mapped = match ch {
+            '<' => Some("&lt;"),
+            '>' => Some("&gt;"),
+            '&' => Some("&amp;"),
+            '"' => Some("&quot;"),
+            '\'' => Some("&apos;"),
+            _ => None,
+        };
+        if let Some(entity) = mapped {
+            out.push_str(entity);
+            last_was_space = false;
+        } else if ch.is_whitespace() {
+            if !last_was_space {
+                out.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            out.push(ch);
+            last_was_space = false;
+        }
+    }
+    out.trim().to_string()
+}
+
 async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
-    let text_owned = text.to_string();
+    let text_owned = sanitize_ssml_text(text);
     let voice_owned = voice.to_string();
 
     let mp3 = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
@@ -530,19 +747,66 @@ async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
             })?;
 
         let config = SpeechConfig::from(matched);
-        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
-        let audio = client
-            .synthesize(&text_owned, &config)
-            .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
-        Ok(audio.audio_bytes)
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 1..=3 {
+            let mut client = match connect() {
+                Ok(c) => c,
+                Err(e) => {
+                    last_err = Some(anyhow::anyhow!("edge tts connect (attempt {attempt}): {e}"));
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    continue;
+                }
+            };
+            match client.synthesize(&text_owned, &config) {
+                Ok(audio) if !audio.audio_bytes.is_empty() => {
+                    if attempt > 1 {
+                        tracing::info!(
+                            target: "waxum::tts",
+                            attempt,
+                            bytes = audio.audio_bytes.len(),
+                            "edge tts synth recovered after retry"
+                        );
+                    }
+                    return Ok(audio.audio_bytes);
+                }
+                Ok(_) => {
+                    last_err = Some(anyhow::anyhow!(
+                        "edge tts returned 0 audio bytes on attempt {attempt} — probably transient upstream"
+                    ));
+                }
+                Err(e) => {
+                    last_err = Some(anyhow::anyhow!("edge tts synth (attempt {attempt}): {e}"));
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("edge tts failed after 3 attempts")))
     })
     .await??;
+
+    if mp3.len() < 32 {
+        anyhow::bail!(
+            "edge-tts returned an unusually small audio blob ({} bytes) — probably an upstream error response, retry",
+            mp3.len()
+        );
+    }
+    let looks_like_mp3 =
+        mp3.starts_with(b"ID3") || (mp3.len() >= 2 && mp3[0] == 0xFF && (mp3[1] & 0xE0) == 0xE0);
+    if !looks_like_mp3 {
+        anyhow::bail!(
+            "edge-tts payload does not look like MP3 (first bytes {:02x?}) — Microsoft may have returned an error page. Retry, and if it persists, check that the voice ID exists in `edge-tts --list-voices`.",
+            &mp3[..mp3.len().min(16)]
+        );
+    }
 
     let mut ffmpeg = tokio::process::Command::new("ffmpeg")
         .args([
             "-hide_banner",
             "-loglevel",
             "error",
+            "-f",
+            "mp3",
             "-i",
             "pipe:0",
             "-f",
@@ -557,7 +821,7 @@ async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -571,7 +835,17 @@ async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
     }
     let out = ffmpeg.wait_with_output().await?;
     if !out.status.success() {
-        anyhow::bail!("ffmpeg exited with status {}", out.status);
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        anyhow::bail!(
+            "ffmpeg exited with status {} (mp3 was {} bytes). stderr: {}",
+            out.status,
+            mp3.len(),
+            if stderr.is_empty() {
+                "<empty>".into()
+            } else {
+                stderr
+            }
+        );
     }
     let buf = out.stdout;
 
@@ -580,6 +854,81 @@ async fn generate_tts_pcm(text: &str, voice: &str) -> anyhow::Result<Vec<i16>> {
         samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
     }
     Ok(samples)
+}
+
+/// Resolve a recipient JID to a form that the VoIP media pipeline can
+/// derive keys for. WhatsApp VoIP requires the LID of the peer; a raw
+/// `phone@s.whatsapp.net` fails at the media-offer step with
+/// "no known LID for the PN callee".
+///
+/// This walks two lookups in order:
+///
+/// 1. `Contacts::is_on_whatsapp` — the same call used by
+///    `/contacts/check`. It hits WA's usync graph, learns the PN↔LID
+///    mapping, and persists it into the client's `lid_pn_cache` so the
+///    next call skips this step.
+/// 2. Existing local cache via `get_user_info`, as a fallback when the
+///    server response is missing the LID.
+///
+/// Non-PN inputs (`@lid`, `@g.us`, already-resolved) are returned as
+/// is. A JID that has no LID on WhatsApp's side is returned unchanged —
+/// the caller then surfaces the same "no LID" error to the user, but
+/// with an accurate cause.
+pub(crate) async fn resolve_call_recipient(
+    client: Arc<whatsapp_rust::Client>,
+    jid: wacore_binary::jid::Jid,
+) -> wacore_binary::jid::Jid {
+    use wacore_binary::jid::SERVER_JID;
+    if jid.server != SERVER_JID {
+        return jid;
+    }
+    let probe = vec![jid.clone()];
+    struct AssertSend<F>(F);
+    unsafe impl<F: std::future::Future> Send for AssertSend<F> {}
+    impl<F: std::future::Future> std::future::Future for AssertSend<F> {
+        type Output = F::Output;
+        fn poll(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Self::Output> {
+            unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+        }
+    }
+
+    let client_for_check = client.clone();
+    let probe_for_check = probe.clone();
+    let via_usync = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        AssertSend(async move {
+            client_for_check
+                .contacts()
+                .is_on_whatsapp(&probe_for_check)
+                .await
+        }),
+    )
+    .await;
+    if let Ok(Ok(results)) = via_usync {
+        if let Some(r) = results.iter().find(|r| r.jid == jid) {
+            if let Some(lid) = r.lid.clone() {
+                return lid;
+            }
+        }
+    }
+
+    let via_info = tokio::time::timeout(
+        std::time::Duration::from_secs(4),
+        AssertSend(async move { client.contacts().get_user_info(&probe).await }),
+    )
+    .await;
+    if let Ok(Ok(map)) = via_info {
+        if let Some(info) = map.get(&jid) {
+            if let Some(lid) = info.lid.clone() {
+                return lid;
+            }
+        }
+    }
+
+    jid
 }
 
 fn get_client(state: &AppState, session_id: &str) -> Result<Arc<whatsapp_rust::Client>, ApiError> {
@@ -604,12 +953,7 @@ pub async fn media_stream_ws(
     ws: WebSocketUpgrade,
 ) -> Result<AxumResponse, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let to: Jid = if q.to.contains('@') {
-        q.to.parse()
-            .map_err(|_| ApiError::InvalidJid(q.to.clone()))?
-    } else {
-        Jid::pn(&q.to)
-    };
+    let to = resolve_call_recipient(client.clone(), parse_jid(&q.to)?).await;
     let kind = q.kind.as_deref().unwrap_or("audio").to_string();
     if kind != "audio" {
         return Err(ApiError::BadRequest(

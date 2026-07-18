@@ -107,6 +107,7 @@ pub fn console_router() -> Router<AppState> {
         .route("/logout", post(handlers::logout))
         .route("/drawer/{sid}", get(handlers::drawer))
         .route("/s/{sid}", get(handlers::session_page))
+        .route("/qr-svg/{sid}", get(handlers::qr_svg))
         .route("/sessions", post(handlers::create_session_proxy))
         .route("/sessions/{sid}/{op}", post(handlers::session_action_proxy))
         .route("/assets/console.css", get(handlers::css))
@@ -127,6 +128,7 @@ pub fn is_console_path(path: &str) -> bool {
             | "/assets/playground.js"
             | "/assets/logo.png"
     ) || path.starts_with("/drawer/")
+        || path.starts_with("/qr-svg/")
         || path.starts_with("/s/")
         || (path.starts_with("/sessions") && !path.starts_with("/api/"))
 }

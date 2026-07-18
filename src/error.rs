@@ -73,6 +73,20 @@ pub enum ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        match &self {
+            ApiError::Internal(_)
+            | ApiError::SessionError(_)
+            | ApiError::MediaUploadFailed(_)
+            | ApiError::MediaDownloadFailed(_)
+            | ApiError::NatsError(_) => {
+                tracing::error!(target: "waxum::api_error", "{}", self);
+            }
+            ApiError::BadRequest(_) | ApiError::InvalidJid(_) => {
+                tracing::warn!(target: "waxum::api_error", "{}", self);
+            }
+            _ => {}
+        }
+
         let (status, error_message) = match &self {
             ApiError::NotAuthenticated => (StatusCode::UNAUTHORIZED, self.to_string()),
             ApiError::NotConnected => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
