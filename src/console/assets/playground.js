@@ -24,7 +24,10 @@
         path: '/api/v1/sessions/{sid}/qr', fields: [] },
       { key: 'pair', label: 'Pair by phone code', method: 'POST',
         path: '/api/v1/sessions/{sid}/pair',
-        fields: [{ name: 'phone', label: 'Phone number', type: 'text', required: true, placeholder: '6285117822731' }] },
+        fields: [
+          { name: 'phone_number', label: 'Phone number', type: 'text', required: true, placeholder: '6285117822731' },
+          { name: 'show_push_notification', label: 'Show push notification on phone', type: 'checkbox' },
+        ] },
       { key: 'connect', label: 'Connect', method: 'POST',
         path: '/api/v1/sessions/{sid}/connect', fields: [] },
       { key: 'disconnect', label: 'Disconnect', method: 'POST',
