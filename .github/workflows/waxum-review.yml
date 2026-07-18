@@ -31,13 +31,13 @@ jobs:
         id: collect
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -eu
 
-          # Truncate to keep the prompt reasonable. 40k chars ≈ 10k tokens.
+          # Kimi's coder tier accepts ~130k input tokens on kimi-k2. 40k chars of
+          # diff ≈ 10k tokens — well under the model limit, roomy for context.
           MAX_DIFF_CHARS=40000
 
           DIFF_FILE=$(mktemp)
@@ -47,8 +47,7 @@ jobs:
           DIFF_BYTES=$(wc -c < "$DIFF_FILE")
           if [ "$DIFF_BYTES" -gt "$MAX_DIFF_CHARS" ]; then
             head -c "$MAX_DIFF_CHARS" "$DIFF_FILE" > diff_trimmed.txt
-            echo "" >> diff_trimmed.txt
-            echo "[truncated: full diff was $DIFF_BYTES bytes]" >> diff_trimmed.txt
+            printf '\n[truncated: full diff was %s bytes]\n' "$DIFF_BYTES" >> diff_trimmed.txt
             mv diff_trimmed.txt "$DIFF_FILE"
           fi
 
@@ -61,17 +60,15 @@ jobs:
             printf '```\n'
           } > pr_bundle.md
 
-          echo "bundle=$PWD/pr_bundle.md" >> "$GITHUB_OUTPUT"
-
-      - name: Call Anthropic
+      - name: Call Kimi
         id: llm
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
           set -eu
 
-          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "::warning::ANTHROPIC_API_KEY not set — skipping review"
+          if [ -z "${KIMI_API_KEY:-}" ]; then
+            echo "::warning::KIMI_API_KEY not set — skipping review"
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -83,25 +80,26 @@ jobs:
             --arg system "$SYSTEM_PROMPT" \
             --arg user "$BUNDLE" \
             '{
-              model: "claude-sonnet-5",
-              max_tokens: 3000,
-              system: $system,
+              model: "kimi-k2-0905-preview",
+              temperature: 1,
               messages: [
-                { role: "user", content: $user }
+                { role: "system", content: $system },
+                { role: "user",   content: $user }
               ]
             }')
 
-          RESPONSE=$(curl -sS https://api.anthropic.com/v1/messages \
+          # Kimi's coder endpoint is chatty on completion for large diffs (~2-3
+          # minutes end-to-end) so leave a generous curl timeout.
+          RESPONSE=$(curl -sS --max-time 300 https://api.kimi.com/coding/v1/chat/completions \
             -H "content-type: application/json" \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
+            -H "Authorization: Bearer $KIMI_API_KEY" \
             -d "$REQUEST")
 
           echo "$RESPONSE" > response.json
 
-          TEXT=$(jq -r '.content[0].text // empty' response.json)
+          TEXT=$(jq -r '.choices[0].message.content // empty' response.json)
           if [ -z "$TEXT" ]; then
-            echo "::warning::Anthropic returned no text"
+            echo "::warning::Kimi returned no message content"
             jq -r '.error // .' response.json | head -c 2000
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -120,16 +118,18 @@ jobs:
 
           RAW=$(cat review.md)
 
-          # Try to parse as JSON. If not JSON, post raw prose as the comment.
-          if echo "$RAW" | jq -e . >/dev/null 2>&1; then
-            SUMMARY=$(echo "$RAW" | jq -r '.summary // "No summary provided."')
+          # Kimi likes to wrap JSON in a ```json fence. Strip it before parsing.
+          STRIPPED=$(printf '%s' "$RAW" | sed -E '1{s/^```(json)?[[:space:]]*//;}; ${s/[[:space:]]*```[[:space:]]*$//;}')
 
-            FINDINGS_MD=$(echo "$RAW" | jq -r '
+          if echo "$STRIPPED" | jq -e . >/dev/null 2>&1; then
+            SUMMARY=$(echo "$STRIPPED" | jq -r '.summary // "No summary provided."')
+
+            FINDINGS_MD=$(echo "$STRIPPED" | jq -r '
               (.findings // [])
               | map(
-                  "- **[" + (.severity | ascii_upcase) + "] " + .title + "** — "
-                  + (if (.file // "") != "" then "`" + .file + (if (.line // null) != null then ":" + (.line|tostring) else "" end) + "` — " else "" end)
-                  + .body
+                  "- **[" + (.severity | ascii_upcase) + "] " + .title + "**"
+                  + (if (.file // "") != "" then " — `" + .file + (if (.line // null) != null then ":" + (.line|tostring) else "" end) + "`" else "" end)
+                  + "\n    " + .body
                 )
               | if length == 0 then "_No findings._" else join("\n") end
             ')
@@ -138,13 +138,13 @@ jobs:
               printf '### Waxum Review\n\n'
               printf '%s\n\n' "$SUMMARY"
               printf '**Findings**\n\n%s\n\n' "$FINDINGS_MD"
-              printf '<sub>Anthropic Claude, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+              printf '<sub>Kimi K2 coder, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
             } > comment.md
           else
             {
               printf '### Waxum Review\n\n'
               printf '%s\n\n' "$RAW"
-              printf '<sub>Anthropic Claude, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+              printf '<sub>Kimi K2 coder, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
             } > comment.md
           fi
 
