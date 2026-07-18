@@ -252,14 +252,6 @@ pub async fn get_session_status(
         if runtime.is_alive() {
             (SessionStatus::LoggedIn, true, pair)
         } else {
-            // Socket is not currently alive, but auto-reconnect is on
-            // by default. If the cached status still says `LoggedIn`
-            // then the peer paired successfully and the drop is
-            // transient; report `Connecting` with `is_logged_in: true`
-            // so callers polling /status don't see the account flap
-            // to "logged out" during a network blip. Only an explicit
-            // LoggedOut event turns the cache into Disconnected,
-            // which is passed through unchanged here.
             let s = runtime.get_status();
             let (status, is_logged_in) = if s == SessionStatus::LoggedIn {
                 (SessionStatus::Connecting, true)
@@ -900,18 +892,6 @@ async fn handle_event(
                 .await;
         }
         Event::Disconnected(_) => {
-            // Transient socket drop — the account is still paired at
-            // WA's end, and whatsapp-rust's own `enable_auto_reconnect`
-            // (set to `true` at build time in `connect_client`) will
-            // reopen the WebSocket in the background. Do NOT drop the
-            // cached Client Arc and do NOT flip DB `is_logged_in` to
-            // false: those changes were what made the console flash a
-            // red "OFFLINE" pill during every network blip. Instead,
-            // hold the status at `Connecting` so the UI shows an
-            // amber "reconnecting" state — it flips back to LoggedIn
-            // as soon as the next `Event::Connected` lands, or to
-            // Disconnected only when a real `Event::LoggedOut`
-            // arrives.
             tracing::warn!(
                 "Session {}: socket dropped — auto-reconnect in flight",
                 session_id

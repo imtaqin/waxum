@@ -620,8 +620,6 @@ impl SessionManager {
     }
 }
 
-// === PostgreSQL row mapping ===
-
 fn pg_row_to_session(row: &tokio_postgres::Row) -> SessionInfo {
     let created_at: DateTime<Utc> = row.get("created_at");
     let updated_at: DateTime<Utc> = row.get("updated_at");
@@ -664,8 +662,6 @@ fn pg_row_to_webhook(row: &tokio_postgres::Row) -> (String, WebhookConfig) {
         },
     )
 }
-
-// === MySQL row mapping ===
 
 fn my_get_string(row: &mysql_async::Row, col: &str) -> Option<String> {
     use mysql_async::Value;
@@ -751,8 +747,6 @@ fn parse_mysql_timestamp(s: Option<&str>) -> Option<i64> {
     }
     None
 }
-
-// === SQLite row mapping ===
 
 fn sqlite_row_to_session(row: &sqlite_raw::Row) -> SessionInfo {
     let status_str = row
