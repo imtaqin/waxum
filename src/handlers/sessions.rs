@@ -123,7 +123,7 @@ pub async fn list_sessions(
     let mut updated_sessions = Vec::with_capacity(sessions.len());
     for mut session in sessions {
         if let Some(runtime) = state.get_session(&session.id) {
-            session.status = runtime.get_status();
+            session.status = runtime.effective_status();
             session.is_logged_in = session.status == SessionStatus::LoggedIn;
         }
         updated_sessions.push(session);

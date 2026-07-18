@@ -2,6 +2,21 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.9] - 2026-07-17
+
+### Fixed
+
+- **Session status drift between `GET /sessions`, `GET /sessions/{id}`,
+  and the console header vs. `GET /sessions/{id}/status`.** The first
+  three read the cached `SessionStatus` enum, while `/status`
+  reality-checks the live socket via `is_alive()` and downgrades a
+  stale `LoggedIn` to `Disconnected`. This left the UI showing a
+  green **CONNECTED** pill for a session whose `/status` returned
+  `is_logged_in: false` for minutes at a stretch. A new
+  `SessionState::effective_status()` helper does the reconciliation
+  once and is now used by all four call sites, so the four views
+  agree on one truth. Matches the fix already applied to `/status`.
+
 ## [0.7.8] - 2026-07-17
 
 ### Added — browser console

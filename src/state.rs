@@ -175,6 +175,21 @@ impl SessionState {
         *self.status.read()
     }
 
+    /// Reconciled view of the session status. Reads the cached
+    /// `SessionStatus`, then reality-checks it against the live client
+    /// socket via `is_alive()`. When the cache says `LoggedIn` but the
+    /// socket has silently dropped, the return value downgrades to
+    /// `Disconnected` so the console header, the session list, and the
+    /// `/status` endpoint all agree on the same truth.
+    pub fn effective_status(&self) -> SessionStatus {
+        let cached = *self.status.read();
+        if cached == SessionStatus::LoggedIn && !self.is_alive() {
+            SessionStatus::Disconnected
+        } else {
+            cached
+        }
+    }
+
     pub fn set_status(&self, status: SessionStatus) {
         *self.status.write() = status;
     }
