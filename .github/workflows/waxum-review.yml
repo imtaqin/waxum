@@ -123,28 +123,52 @@ jobs:
 
           if echo "$STRIPPED" | jq -e . >/dev/null 2>&1; then
             SUMMARY=$(echo "$STRIPPED" | jq -r '.summary // "No summary provided."')
+            VERDICT=$(echo "$STRIPPED" | jq -r '.verdict // "wait"')
+            KAOMOJI=$(echo "$STRIPPED" | jq -r '.kaomoji // "(´｡• ᵕ •｡`)"')
+
+            case "$VERDICT" in
+              ship)  BADGE="✧ SHIP IT ✧"; TAGLINE="Yoshi. Proceed to merge, nakama." ;;
+              wait)  BADGE="◆ WAIT ◆";     TAGLINE="Not yet. Address the majors first." ;;
+              block) BADGE="！ BLOCK ！";   TAGLINE="Abunai. A blocker must fall before this merges." ;;
+              *)     BADGE="◆ ${VERDICT^^} ◆"; TAGLINE="" ;;
+            esac
 
             FINDINGS_MD=$(echo "$STRIPPED" | jq -r '
               (.findings // [])
               | map(
-                  "- **[" + (.severity | ascii_upcase) + "] " + .title + "**"
+                  (
+                    if   .severity == "blocker" then "！！"
+                    elif .severity == "major"   then "！"
+                    elif .severity == "minor"   then "〜"
+                    elif .severity == "praise"  then "★"
+                    else "◇"
+                    end
+                  ) as $mark
+                  |
+                  "▸ **" + $mark + " [" + (.severity | ascii_upcase) + "] " + .title + "**"
                   + (if (.file // "") != "" then " — `" + .file + (if (.line // null) != null then ":" + (.line|tostring) else "" end) + "`" else "" end)
                   + "\n    " + .body
                 )
-              | if length == 0 then "_No findings._" else join("\n") end
+              | if length == 0 then "_No findings — the diff is clean, nakama. (￣ー￣ )_" else join("\n\n") end
             ')
 
             {
-              printf '### Waxum Review\n\n'
-              printf '%s\n\n' "$SUMMARY"
-              printf '**Findings**\n\n%s\n\n' "$FINDINGS_MD"
-              printf '<sub>Kimi K2 coder, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+              printf '### 神 Waxum-sensei — Code Review 神\n\n'
+              printf '```\n%s   %s\n```\n\n' "$BADGE" "$KAOMOJI"
+              printf '> %s\n\n' "$SUMMARY"
+              if [ -n "$TAGLINE" ]; then
+                printf '_%s_\n\n' "$TAGLINE"
+              fi
+              printf '---\n\n'
+              printf '**Panel — Findings**\n\n%s\n\n' "$FINDINGS_MD"
+              printf '<sub>Kimi K2 coder, persona + invariants in `.github/review-context.md`. Not a merge gate — shihan may still ship.</sub>\n'
             } > comment.md
           else
             {
-              printf '### Waxum Review\n\n'
+              printf '### 神 Waxum-sensei — Code Review 神\n\n'
+              printf '_The scroll refused to parse as JSON — posting the raw text below._\n\n'
               printf '%s\n\n' "$RAW"
-              printf '<sub>Kimi K2 coder, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+              printf '<sub>Kimi K2 coder, persona + invariants in `.github/review-context.md`. Not a merge gate.</sub>\n'
             } > comment.md
           fi
 
