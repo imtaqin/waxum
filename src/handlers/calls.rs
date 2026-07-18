@@ -1,7 +1,13 @@
 use axum::{
-    extract::{Path, State},
+    extract::{
+        ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
+    response::Response as AxumResponse,
     Json,
 };
+use futures::{sink::SinkExt, stream::StreamExt};
+use serde::Deserialize;
 use std::sync::Arc;
 use wacore_binary::jid::Jid;
 
@@ -582,4 +588,130 @@ fn get_client(state: &AppState, session_id: &str) -> Result<Arc<whatsapp_rust::C
         .ok_or(ApiError::NotConnected)?;
 
     runtime.get_live_client().ok_or(ApiError::NotConnected)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MediaWsQuery {
+    pub to: String,
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
+pub async fn media_stream_ws(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Query(q): Query<MediaWsQuery>,
+    ws: WebSocketUpgrade,
+) -> Result<AxumResponse, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let to: Jid = if q.to.contains('@') {
+        q.to.parse()
+            .map_err(|_| ApiError::InvalidJid(q.to.clone()))?
+    } else {
+        Jid::pn(&q.to)
+    };
+    let kind = q.kind.as_deref().unwrap_or("audio").to_string();
+    if kind != "audio" {
+        return Err(ApiError::BadRequest(
+            "only kind=audio is supported over the media WebSocket for now".into(),
+        ));
+    }
+
+    Ok(ws.on_upgrade(move |socket| async move {
+        if let Err(e) = drive_media_socket(state, session_id, client, to, socket).await {
+            tracing::warn!("media ws terminated: {e}");
+        }
+    }))
+}
+
+async fn drive_media_socket(
+    state: AppState,
+    session_id: String,
+    client: Arc<whatsapp_rust::Client>,
+    to: Jid,
+    socket: WebSocket,
+) -> anyhow::Result<()> {
+    let (mut sink, mut stream) = socket.split();
+
+    let (mic_tx, mic_rx) = async_channel::bounded::<Vec<i16>>(64);
+    let (spk_tx, spk_rx) = async_channel::bounded::<Vec<i16>>(64);
+
+    let handle = client
+        .voip()
+        .call(&to)
+        .audio(mic_rx, spk_tx)
+        .start()
+        .await
+        .map_err(|e| anyhow::anyhow!("place_call failed: {e}"))?;
+
+    let call_id = handle.call_id().to_string();
+    let handle_arc = Arc::new(handle);
+    state
+        .active_calls()
+        .insert(call_id.clone(), handle_arc.clone());
+    state.call_audio_channels().insert(
+        call_id.clone(),
+        ActiveCallAudio {
+            mic_tx: mic_tx.clone(),
+            spk_rx: spk_rx.clone(),
+        },
+    );
+
+    let sess_meta = serde_json::json!({
+        "type": "call_started",
+        "call_id": call_id,
+        "session_id": session_id,
+        "to": to.to_string(),
+        "sample_rate": whatsapp_rust::voip::audio::WA_SAMPLE_RATE,
+        "frame_samples": whatsapp_rust::voip::audio::WA_FRAME_SAMPLES,
+        "encoding": "pcm_s16le_mono_16khz",
+    });
+    let _ = sink
+        .send(WsMessage::Text(sess_meta.to_string().into()))
+        .await;
+
+    let mut peer_task = tokio::spawn(async move {
+        while let Ok(pcm) = spk_rx.recv().await {
+            let mut bytes = Vec::with_capacity(pcm.len() * 2);
+            for s in &pcm {
+                bytes.extend_from_slice(&s.to_le_bytes());
+            }
+            if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                break;
+            }
+        }
+        let _ = sink.close().await;
+    });
+
+    let inbound = async {
+        while let Some(msg) = stream.next().await {
+            match msg {
+                Ok(WsMessage::Binary(bytes)) => {
+                    if bytes.len() < 2 {
+                        continue;
+                    }
+                    let mut samples = Vec::with_capacity(bytes.len() / 2);
+                    for chunk in bytes.chunks_exact(2) {
+                        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
+                    }
+                    if mic_tx.send(samples).await.is_err() {
+                        break;
+                    }
+                }
+                Ok(WsMessage::Close(_)) | Err(_) => break,
+                _ => {}
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = inbound => {}
+        _ = &mut peer_task => {}
+    }
+
+    peer_task.abort();
+    handle_arc.hangup().await;
+    state.active_calls().remove(&call_id);
+    state.call_audio_channels().remove(&call_id);
+    Ok(())
 }

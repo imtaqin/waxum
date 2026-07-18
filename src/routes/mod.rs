@@ -314,6 +314,10 @@ fn session_routes() -> Router<AppState> {
         .route("/{session_id}/calls/tts", post(handlers::calls::tts_call))
         .route("/{session_id}/calls/play", post(handlers::calls::play_call))
         .route(
+            "/{session_id}/calls/media/ws",
+            get(handlers::calls::media_stream_ws),
+        )
+        .route(
             "/{session_id}/calls/accept",
             post(handlers::calls::accept_call),
         )
