@@ -1,0 +1,151 @@
+name: Waxum Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: waxum-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base
+        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+
+      - name: Collect PR diff + metadata
+        id: collect
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -eu
+
+          # Truncate to keep the prompt reasonable. 40k chars ≈ 10k tokens.
+          MAX_DIFF_CHARS=40000
+
+          DIFF_FILE=$(mktemp)
+          git diff --stat "origin/$BASE_REF"...HEAD > diff_stat.txt
+          git diff --no-color "origin/$BASE_REF"...HEAD > "$DIFF_FILE"
+
+          DIFF_BYTES=$(wc -c < "$DIFF_FILE")
+          if [ "$DIFF_BYTES" -gt "$MAX_DIFF_CHARS" ]; then
+            head -c "$MAX_DIFF_CHARS" "$DIFF_FILE" > diff_trimmed.txt
+            echo "" >> diff_trimmed.txt
+            echo "[truncated: full diff was $DIFF_BYTES bytes]" >> diff_trimmed.txt
+            mv diff_trimmed.txt "$DIFF_FILE"
+          fi
+
+          {
+            printf '# PR #%s: %s\n\n' "$PR_NUMBER" "$PR_TITLE"
+            printf '## Diff stat\n\n```\n'
+            cat diff_stat.txt
+            printf '```\n\n## Diff\n\n```diff\n'
+            cat "$DIFF_FILE"
+            printf '```\n'
+          } > pr_bundle.md
+
+          echo "bundle=$PWD/pr_bundle.md" >> "$GITHUB_OUTPUT"
+
+      - name: Call Anthropic
+        id: llm
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -eu
+
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::warning::ANTHROPIC_API_KEY not set — skipping review"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SYSTEM_PROMPT=$(cat .github/review-context.md)
+          BUNDLE=$(cat pr_bundle.md)
+
+          REQUEST=$(jq -n \
+            --arg system "$SYSTEM_PROMPT" \
+            --arg user "$BUNDLE" \
+            '{
+              model: "claude-sonnet-5",
+              max_tokens: 3000,
+              system: $system,
+              messages: [
+                { role: "user", content: $user }
+              ]
+            }')
+
+          RESPONSE=$(curl -sS https://api.anthropic.com/v1/messages \
+            -H "content-type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$REQUEST")
+
+          echo "$RESPONSE" > response.json
+
+          TEXT=$(jq -r '.content[0].text // empty' response.json)
+          if [ -z "$TEXT" ]; then
+            echo "::warning::Anthropic returned no text"
+            jq -r '.error // .' response.json | head -c 2000
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s' "$TEXT" > review.md
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Format + post PR comment
+        if: steps.llm.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+
+          RAW=$(cat review.md)
+
+          # Try to parse as JSON. If not JSON, post raw prose as the comment.
+          if echo "$RAW" | jq -e . >/dev/null 2>&1; then
+            SUMMARY=$(echo "$RAW" | jq -r '.summary // "No summary provided."')
+
+            FINDINGS_MD=$(echo "$RAW" | jq -r '
+              (.findings // [])
+              | map(
+                  "- **[" + (.severity | ascii_upcase) + "] " + .title + "** — "
+                  + (if (.file // "") != "" then "`" + .file + (if (.line // null) != null then ":" + (.line|tostring) else "" end) + "` — " else "" end)
+                  + .body
+                )
+              | if length == 0 then "_No findings._" else join("\n") end
+            ')
+
+            {
+              printf '### Waxum Review\n\n'
+              printf '%s\n\n' "$SUMMARY"
+              printf '**Findings**\n\n%s\n\n' "$FINDINGS_MD"
+              printf '<sub>Anthropic Claude, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+            } > comment.md
+          else
+            {
+              printf '### Waxum Review\n\n'
+              printf '%s\n\n' "$RAW"
+              printf '<sub>Anthropic Claude, project-specific prompt in `.github/review-context.md`. Not a merge gate.</sub>\n'
+            } > comment.md
+          fi
+
+          gh pr comment "$PR_NUMBER" --body-file comment.md
