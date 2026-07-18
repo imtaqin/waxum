@@ -126,7 +126,7 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
     for s in &db_sessions {
         let runtime_status = state
             .get_session(&s.id)
-            .map(|r| r.get_status())
+            .map(|r| r.effective_status())
             .unwrap_or(s.status);
         let (cls, label) = status_row(runtime_status);
         match cls {
@@ -305,7 +305,7 @@ pub async fn drawer(
     let runtime = state.get_session(&sid);
     let status = runtime
         .as_ref()
-        .map(|r| r.get_status())
+        .map(|r| r.effective_status())
         .unwrap_or(info.status);
     let (cls, label) = status_row(status);
     let is_connected = matches!(status, SessionStatus::Connected | SessionStatus::LoggedIn);
@@ -367,7 +367,7 @@ pub async fn session_page(
 
     let runtime_status = state
         .get_session(&sid)
-        .map(|r| r.get_status())
+        .map(|r| r.effective_status())
         .unwrap_or(info.status);
     let (cls, label) = status_row(runtime_status);
 

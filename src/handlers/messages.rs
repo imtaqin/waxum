@@ -1023,8 +1023,14 @@ pub async fn send_cta_url(
         None
     };
 
+    let header_title = request
+        .header_text
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| request.display_text.clone());
+
     let header = waproto::whatsapp::message::interactive_message::Header {
-        title: Some(request.display_text.clone()),
+        title: Some(header_title),
         has_media_attachment: Some(header_media.is_some()),
         media: header_media.map(|img| {
             waproto::whatsapp::__buffa::oneof::message::interactive_message::header::Media::ImageMessage(

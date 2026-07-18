@@ -103,7 +103,6 @@ fn bind(stmt: *mut sqlite3_stmt, idx: c_int, v: &Value) -> anyhow::Result<()> {
             Value::Text(s) => {
                 let n = s.len() as c_int;
                 let ptr = s.as_ptr() as *const std::os::raw::c_char;
-                // SQLITE_TRANSIENT = -1 cast, makes SQLite copy the bytes.
                 sqlite3_bind_text(stmt, idx, ptr, n, SQLITE_TRANSIENT())
             }
         }
@@ -226,7 +225,6 @@ fn errmsg(handle: *mut sqlite3) -> String {
     }
 }
 
-// SQLITE_TRANSIENT lives as a constant function pointer in C; expose it.
 #[allow(non_snake_case)]
 fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
     Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1) })

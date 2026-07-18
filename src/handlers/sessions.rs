@@ -123,7 +123,7 @@ pub async fn list_sessions(
     let mut updated_sessions = Vec::with_capacity(sessions.len());
     for mut session in sessions {
         if let Some(runtime) = state.get_session(&session.id) {
-            session.status = runtime.get_status();
+            session.status = runtime.effective_status();
             session.is_logged_in = session.status == SessionStatus::LoggedIn;
         }
         updated_sessions.push(session);
@@ -253,12 +253,12 @@ pub async fn get_session_status(
             (SessionStatus::LoggedIn, true, pair)
         } else {
             let s = runtime.get_status();
-            let downgraded = if s == SessionStatus::LoggedIn {
-                SessionStatus::Disconnected
+            let (status, is_logged_in) = if s == SessionStatus::LoggedIn {
+                (SessionStatus::Connecting, true)
             } else {
-                s
+                (s, false)
             };
-            (downgraded, false, pair)
+            (status, is_logged_in, pair)
         }
     } else {
         (
@@ -707,7 +707,10 @@ async fn connect_client(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_client(Some(bot.client()));
+        let c = bot.client();
+        c.enable_auto_reconnect
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        runtime.set_client(Some(c));
         runtime.set_status(SessionStatus::WaitingForQr);
     }
 
@@ -799,7 +802,10 @@ async fn connect_client_with_pair_code(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_client(Some(bot.client()));
+        let c = bot.client();
+        c.enable_auto_reconnect
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        runtime.set_client(Some(c));
     }
 
     bot.run().await;
@@ -886,13 +892,11 @@ async fn handle_event(
                 .await;
         }
         Event::Disconnected(_) => {
-            tracing::warn!("Session {}: Disconnected", session_id);
-            runtime.set_status(SessionStatus::Disconnected);
-            runtime.set_client(None);
-            let _ = state
-                .session_manager()
-                .update_session_status(session_id, SessionStatus::Disconnected, false)
-                .await;
+            tracing::warn!(
+                "Session {}: socket dropped — auto-reconnect in flight",
+                session_id
+            );
+            runtime.set_status(SessionStatus::Connecting);
         }
         Event::LoggedOut(logged_out) => {
             if let Some(client) = runtime.get_client() {

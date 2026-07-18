@@ -2,6 +2,54 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.9] - 2026-07-17
+
+### Added — CTA URL header + optional body
+
+- **`POST /messages/cta-url` now accepts a `header_text` field** so
+  the header line above the body can carry a different string than
+  the button label. When omitted it falls back to `display_text` for
+  backward compatibility with existing callers.
+- **`body_text` is now optional.** Setting it to `""` (or leaving it
+  out) produces a header + button-only interactive block — useful
+  when the image + header + CTA are all the message needs to say.
+
+### Changed — session status semantics
+
+- **Auto-reconnect is now on by default** on every freshly built
+  Client. The `Client::enable_auto_reconnect` flag was previously
+  opt-in via `PUT /reconnect`; new sessions and every restart now
+  set it to `true` at build time. Whoever wants the old opt-in
+  behaviour can flip it off with the same endpoint.
+- **Transient socket drops no longer show up as "OFFLINE".** A
+  `LoggedIn` session whose WebSocket has died surfaces as
+  **`Connecting`** across `GET /sessions`, `GET /sessions/{id}`,
+  `GET /sessions/{id}/status`, and the console header — not
+  `Disconnected`. The account is still paired at WhatsApp's end
+  and whatsapp-rust is rebuilding the socket in the background;
+  the UI should say so instead of scaring the operator. Only an
+  explicit `LoggedOut` event (three flaps → purge) leaves the
+  cache in `Disconnected` and stops the polling loop from
+  auto-repairing the state.
+- **`Event::Disconnected` handler no longer drops the cached Client
+  Arc** or writes `is_logged_in = false` to the metadata DB. That
+  earlier eager-drop was what turned every 3-second network blip
+  into a red pill on the console and a "session gone" row in the
+  operator's tail. The Client Arc lives so whatsapp-rust can
+  reopen the WebSocket in place; the DB row keeps the previous
+  `is_logged_in` value until a real `LoggedOut` arrives.
+
+### Fixed
+
+- **Session status drift between `GET /sessions`, `GET /sessions/{id}`,
+  and the console header vs. `GET /sessions/{id}/status`.** The first
+  three read the cached `SessionStatus` enum straight from
+  `SessionState`, which drifted whenever the socket dropped
+  silently — the runtime kept `LoggedIn` on file even though the
+  live client said otherwise. Only `/status` did the right thing.
+  A new `SessionState::effective_status()` helper does the
+  reconciliation once and is now used by all four call sites.
+
 ## [0.7.8] - 2026-07-17
 
 ### Added — browser console
