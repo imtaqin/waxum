@@ -252,13 +252,21 @@ pub async fn get_session_status(
         if runtime.is_alive() {
             (SessionStatus::LoggedIn, true, pair)
         } else {
+            // Socket is not currently alive, but auto-reconnect is on
+            // by default. If the cached status still says `LoggedIn`
+            // then the peer paired successfully and the drop is
+            // transient; report `Connecting` with `is_logged_in: true`
+            // so callers polling /status don't see the account flap
+            // to "logged out" during a network blip. Only an explicit
+            // LoggedOut event turns the cache into Disconnected,
+            // which is passed through unchanged here.
             let s = runtime.get_status();
-            let downgraded = if s == SessionStatus::LoggedIn {
-                SessionStatus::Disconnected
+            let (status, is_logged_in) = if s == SessionStatus::LoggedIn {
+                (SessionStatus::Connecting, true)
             } else {
-                s
+                (s, false)
             };
-            (downgraded, false, pair)
+            (status, is_logged_in, pair)
         }
     } else {
         (
@@ -707,7 +715,10 @@ async fn connect_client(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_client(Some(bot.client()));
+        let c = bot.client();
+        c.enable_auto_reconnect
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        runtime.set_client(Some(c));
         runtime.set_status(SessionStatus::WaitingForQr);
     }
 
@@ -799,7 +810,10 @@ async fn connect_client_with_pair_code(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_client(Some(bot.client()));
+        let c = bot.client();
+        c.enable_auto_reconnect
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        runtime.set_client(Some(c));
     }
 
     bot.run().await;
@@ -886,13 +900,23 @@ async fn handle_event(
                 .await;
         }
         Event::Disconnected(_) => {
-            tracing::warn!("Session {}: Disconnected", session_id);
-            runtime.set_status(SessionStatus::Disconnected);
-            runtime.set_client(None);
-            let _ = state
-                .session_manager()
-                .update_session_status(session_id, SessionStatus::Disconnected, false)
-                .await;
+            // Transient socket drop — the account is still paired at
+            // WA's end, and whatsapp-rust's own `enable_auto_reconnect`
+            // (set to `true` at build time in `connect_client`) will
+            // reopen the WebSocket in the background. Do NOT drop the
+            // cached Client Arc and do NOT flip DB `is_logged_in` to
+            // false: those changes were what made the console flash a
+            // red "OFFLINE" pill during every network blip. Instead,
+            // hold the status at `Connecting` so the UI shows an
+            // amber "reconnecting" state — it flips back to LoggedIn
+            // as soon as the next `Event::Connected` lands, or to
+            // Disconnected only when a real `Event::LoggedOut`
+            // arrives.
+            tracing::warn!(
+                "Session {}: socket dropped — auto-reconnect in flight",
+                session_id
+            );
+            runtime.set_status(SessionStatus::Connecting);
         }
         Event::LoggedOut(logged_out) => {
             if let Some(client) = runtime.get_client() {

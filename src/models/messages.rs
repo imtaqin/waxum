@@ -381,7 +381,18 @@ pub struct SendCtaUrlRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
-    /// Body text shown above the button.
+    /// Optional header title rendered *above* the body — the bold line
+    /// at the top of the interactive block. When omitted, the header
+    /// falls back to `display_text` (the button label) so the layout
+    /// still has a header line. Set this explicitly when the button
+    /// label and the eye-catcher should say different things (e.g.
+    /// button = "Shop now", header = "Ramadan drop is live").
+    pub header_text: Option<String>,
+
+    /// Body text shown between the header and the button. Optional —
+    /// when omitted (or set to `""`) the interactive block skips the
+    /// body line and the message becomes header + button only.
+    #[serde(default)]
     pub body_text: String,
 
     /// Optional footer text shown beneath the body.

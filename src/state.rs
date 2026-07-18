@@ -177,14 +177,22 @@ impl SessionState {
 
     /// Reconciled view of the session status. Reads the cached
     /// `SessionStatus`, then reality-checks it against the live client
-    /// socket via `is_alive()`. When the cache says `LoggedIn` but the
-    /// socket has silently dropped, the return value downgrades to
-    /// `Disconnected` so the console header, the session list, and the
-    /// `/status` endpoint all agree on the same truth.
+    /// socket via `is_alive()`.
+    ///
+    /// When the cache says `LoggedIn` but the socket is not currently
+    /// alive, the return value degrades to **`Connecting`** — not
+    /// `Disconnected` — because the whatsapp-rust client has
+    /// auto-reconnect on by default, so a dead socket almost always
+    /// means "the peer is rebuilding the WebSocket right now" rather
+    /// than "the account is gone". Only an explicit `LoggedOut` event
+    /// (which the event loop turns into a cached `Disconnected`)
+    /// yields a real `Disconnected` here. This prevents the console
+    /// header from flashing a red OFFLINE pill during every network
+    /// blip.
     pub fn effective_status(&self) -> SessionStatus {
         let cached = *self.status.read();
         if cached == SessionStatus::LoggedIn && !self.is_alive() {
-            SessionStatus::Disconnected
+            SessionStatus::Connecting
         } else {
             cached
         }

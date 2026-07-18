@@ -118,7 +118,8 @@
         path: '/api/v1/sessions/{sid}/messages/cta-url',
         fields: [
           { name: 'to', label: 'To', type: 'text', required: true },
-          { name: 'body_text', label: 'Body', type: 'textarea', required: true },
+          { name: 'header_text', label: 'Header (title above body, optional)', type: 'text' },
+          { name: 'body_text', label: 'Body (optional — leave empty for header + button only)', type: 'textarea' },
           { name: 'footer_text', label: 'Footer', type: 'text' },
           { name: 'display_text', label: 'Button label', type: 'text', required: true },
           { name: 'url', label: 'URL', type: 'text', required: true },
