@@ -104,7 +104,7 @@ jobs:
             --arg system "$SYSTEM_PROMPT" \
             --arg user "$BUNDLE" \
             '{
-              model: "kimi-k3-preview",
+              model: "k3",
               temperature: 1,
               messages: [
                 { role: "system", content: $system },
