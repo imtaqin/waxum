@@ -18,6 +18,25 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
+      - name: Waxum-sensei App token (falls back to GITHUB_TOKEN)
+        id: app_token
+        if: ${{ vars.WAXUM_SENSEI_APP_ID != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.WAXUM_SENSEI_APP_ID }}
+          private-key: ${{ secrets.WAXUM_SENSEI_APP_PRIVATE_KEY }}
+
+      - name: Resolve GH token to use for the review comment
+        id: token
+        run: |
+          if [ -n "${{ steps.app_token.outputs.token }}" ]; then
+            echo "value=${{ steps.app_token.outputs.token }}" >> "$GITHUB_OUTPUT"
+            echo "using Waxum-sensei App token"
+          else
+            echo "value=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+            echo "using default GITHUB_TOKEN (no App configured)"
+          fi
+
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:
@@ -38,9 +57,12 @@ jobs:
         run: |
           set -eu
 
-          # Kimi's coder tier accepts ~130k input tokens on kimi-k2. 40k chars of
-          # diff ≈ 10k tokens — well under the model limit, roomy for context.
-          MAX_DIFF_CHARS=40000
+          # Kimi's coder tier is generous on context but its wall-clock
+          # response time scales with the diff size — a 40k-char diff can
+          # push completion past the 300 s curl budget below. Cap at 20k
+          # (≈5k tokens) so a normal PR fits and a huge one still gets a
+          # (trimmed) review.
+          MAX_DIFF_CHARS=20000
 
           DIFF_FILE=$(mktemp)
           git diff --stat "origin/$BASE_REF"...HEAD > diff_stat.txt
@@ -90,12 +112,22 @@ jobs:
               ]
             }')
 
-          # Kimi's coder endpoint is chatty on completion for large diffs (~2-3
-          # minutes end-to-end) so leave a generous curl timeout.
-          RESPONSE=$(curl -sS --max-time 300 https://api.kimi.com/coding/v1/chat/completions \
+          # Kimi's coder endpoint takes 60-180 s to reply for a normal
+          # PR (12-20k tokens). Allow up to 8 min end-to-end; if it still
+          # times out, the job downgrades to a warning instead of failing.
+          set +e
+          RESPONSE=$(curl -sS --max-time 480 https://api.kimi.com/coding/v1/chat/completions \
             -H "content-type: application/json" \
             -H "Authorization: Bearer $KIMI_API_KEY" \
             -d "$REQUEST")
+          CURL_STATUS=$?
+          set -e
+
+          if [ $CURL_STATUS -ne 0 ] || [ -z "$RESPONSE" ]; then
+            echo "::warning::Kimi request failed or timed out (curl exit=$CURL_STATUS) — skipping review"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           echo "$RESPONSE" > response.json
 
@@ -113,7 +145,7 @@ jobs:
       - name: Format + post PR comment
         if: steps.llm.outputs.skipped != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.token.outputs.value }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -eu
