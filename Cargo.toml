@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.7.11"
+version = "0.7.12"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -76,6 +76,7 @@ futures = "0.3"
 
 prometheus = { version = "0.13", default-features = false }
 async-channel = "2"
+tokio-stream = "0.1"
 
 # Console (server-rendered dashboard) — Handlebars templates + tiny
 # static asset bundle baked into the binary via `include_str!`. No

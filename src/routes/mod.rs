@@ -36,6 +36,9 @@ fn api_routes() -> Router<AppState> {
             "/webhooks/reenable-all",
             post(handlers::bulk::reenable_circuits),
         )
+        .route("/events/tail", get(handlers::events::events_tail))
+        .route("/voices", get(handlers::calls::list_voices))
+        .route("/tts/preview", get(handlers::calls::tts_preview))
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
 }
