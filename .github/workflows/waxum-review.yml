@@ -193,7 +193,7 @@ jobs:
               if [ -n "$TAGLINE" ]; then
                 printf '_%s_\n\n' "$TAGLINE"
               fi
-              printf '---\n\n'
+              printf '%s\n\n' '---'
               printf '**Panel — Findings**\n\n%s\n\n' "$FINDINGS_MD"
               printf '<sub>Kimi K2 coder, persona + invariants in `.github/review-context.md`. Not a merge gate — shihan may still ship.</sub>\n'
             } > comment.md
