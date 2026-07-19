@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -296,4 +296,46 @@ jobs:
             echo "::warning::inline review post failed, falling back to a plain PR comment"
             echo "$POST_OUT" | head -c 2000
             gh pr comment "$PR_NUMBER" --body-file body.md
+          fi
+
+          # Auto-merge on a clean ship. Waxum-sensei approves and enables
+          # auto-merge only when:
+          #   - verdict == "ship"
+          #   - there are zero blocker/major findings (inline or cross-cutting)
+          #   - the base branch is `main` (never auto-merge into an
+          #     unmergeable branch like `dev` — reviews on a preview PR
+          #     should not silently land).
+          #
+          # `gh pr merge --auto` waits for required checks to pass. If they
+          # never do, nothing merges. If branch protection allows the App
+          # to bypass reviews, `--admin` sidesteps the "1 approval" gate;
+          # otherwise the earlier APPROVE review satisfies it.
+          BLOCKER_MAJOR=$(echo "$STRIPPED" | jq '(.findings // []) | map(select(.severity == "blocker" or .severity == "major")) | length')
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+
+          if [ "$VERDICT" = "ship" ] && [ "$BLOCKER_MAJOR" = "0" ] && [ "$BASE_BRANCH" = "main" ]; then
+            echo "verdict=ship, no blocker/major findings — approving + enabling auto-merge"
+
+            APPROVE_PAYLOAD=$(jq -n \
+              --arg commit "$HEAD_SHA" \
+              --arg body "Yoshi. (￣ー￣ ) All invariants held; the diff is clean, nakama. Auto-merge armed." \
+              '{ commit_id: $commit, event: "APPROVE", body: $body }')
+
+            set +e
+            APPROVE_OUT=$(echo "$APPROVE_PAYLOAD" | gh api \
+              -X POST \
+              "/repos/$REPO/pulls/$PR_NUMBER/reviews" \
+              --input - 2>&1)
+            APPROVE_STATUS=$?
+            set -e
+            if [ $APPROVE_STATUS -ne 0 ]; then
+              echo "::warning::approval post failed"
+              echo "$APPROVE_OUT" | head -c 2000
+            fi
+
+            set +e
+            gh pr merge "$PR_NUMBER" --auto --squash --delete-branch 2>&1 | head -c 2000
+            set -e
+          else
+            echo "verdict=$VERDICT, blocker+major=$BLOCKER_MAJOR, base=$BASE_BRANCH — not auto-merging"
           fi
