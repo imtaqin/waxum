@@ -2471,12 +2471,20 @@ pub(crate) fn get_client(
 }
 
 pub(crate) fn parse_jid(jid_str: &str) -> Result<Jid, ApiError> {
-    if jid_str.contains('@') {
-        jid_str
+    let trimmed = jid_str.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::InvalidJid(jid_str.to_string()));
+    }
+    if trimmed.contains('@') {
+        trimmed
             .parse()
-            .map_err(|_| ApiError::InvalidJid(jid_str.to_string()))
+            .map_err(|_| ApiError::InvalidJid(trimmed.to_string()))
     } else {
-        Ok(Jid::pn(jid_str))
+        let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            return Err(ApiError::InvalidJid(trimmed.to_string()));
+        }
+        Ok(Jid::pn(&digits))
     }
 }
 

@@ -251,8 +251,6 @@ pub struct SuccessResponse {
     pub success: bool,
 }
 
-// --- Poll Messages ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendPollRequest {
@@ -271,8 +269,6 @@ pub struct SendPollRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Buttons Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -297,8 +293,6 @@ pub struct ButtonItem {
     pub button_id: String,
     pub display_text: String,
 }
-
-// --- List Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -335,8 +329,6 @@ pub struct ListRow {
     pub description: Option<String>,
 }
 
-// --- Interactive Messages (Native Flow) ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendInteractiveRequest {
@@ -372,8 +364,6 @@ pub struct NativeFlowButtonItem {
     pub name: String,
     pub button_params_json: String,
 }
-
-// --- CTA URL button (single call-to-action that opens a URL) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -418,8 +408,6 @@ pub struct SendCtaUrlRequest {
     pub reply_to: Option<String>,
 }
 
-// --- Quick Reply buttons (modern native-flow replacement for legacy ButtonsMessage) ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendQuickReplyRequest {
@@ -445,8 +433,6 @@ pub struct QuickReplyButtonItem {
     pub display_text: String,
 }
 
-// --- Template Messages ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendTemplateRequest {
@@ -458,8 +444,6 @@ pub struct SendTemplateRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Newsletter Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -492,8 +476,6 @@ pub struct SendNewsletterFollowerInviteRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Business Messages ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -553,8 +535,6 @@ pub struct SendPaymentInviteRequest {
     pub reply_to: Option<String>,
 }
 
-// --- Pin Message ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendPinMessageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -571,8 +551,6 @@ fn default_pin_duration() -> i64 {
     86400
 }
 
-// --- Forward Message ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ForwardMessageRequest {
@@ -583,8 +561,6 @@ pub struct ForwardMessageRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Poll Update (Vote) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
@@ -605,8 +581,6 @@ pub struct SendPollUpdateRequest {
     pub enc_payload: Option<String>,
 }
 
-// --- Buttons Response ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendButtonsResponseRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -620,8 +594,6 @@ pub struct SendButtonsResponseRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- List Response ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendListResponseRequest {
@@ -637,8 +609,6 @@ pub struct SendListResponseRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Interactive Response ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendInteractiveResponseRequest {
@@ -665,8 +635,6 @@ fn default_version() -> i32 {
     3
 }
 
-// --- Highly Structured Message (HSM) ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendHighlyStructuredRequest {
@@ -687,8 +655,6 @@ pub struct SendHighlyStructuredRequest {
     pub reply_to: Option<String>,
 }
 
-// --- Template Button Reply ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendTemplateButtonReplyRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -702,8 +668,6 @@ pub struct SendTemplateButtonReplyRequest {
 
     pub reply_to: Option<String>,
 }
-
-// --- Comment Message (Groups) ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendCommentRequest {
@@ -727,8 +691,6 @@ pub struct SendCommentRequest {
     /// it from the locally-stored message secret.
     pub target_participant: Option<String>,
 }
-
-// --- Scheduled Call ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendScheduledCallRequest {
@@ -766,8 +728,6 @@ fn default_edit_type() -> String {
     "cancel".to_string()
 }
 
-// --- Send Payment ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendPaymentRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -782,8 +742,6 @@ pub struct SendPaymentRequest {
     /// Transaction data (JSON string)
     pub transaction_data: Option<String>,
 }
-
-// --- Request Payment ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RequestPaymentRequest {
@@ -804,8 +762,6 @@ pub struct RequestPaymentRequest {
     pub expiry_timestamp: Option<i64>,
 }
 
-// --- Cancel Payment Request ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CancelPaymentRequestRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -815,8 +771,6 @@ pub struct CancelPaymentRequestRequest {
     pub request_message_id: String,
 }
 
-// --- Decline Payment Request ---
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct DeclinePaymentRequestRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -825,8 +779,6 @@ pub struct DeclinePaymentRequestRequest {
     /// Message ID of the payment request to decline
     pub request_message_id: String,
 }
-
-// --- Newsletter Forward ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendNewsletterForwardRequest {
@@ -848,8 +800,6 @@ pub struct SendNewsletterForwardRequest {
     /// Content type: "update", "update_card", "link_card"
     pub content_type: Option<String>,
 }
-
-// --- Spam Report ---
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SpamReportRequest {

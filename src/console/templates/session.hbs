@@ -33,6 +33,41 @@
     </div>
   </section>
 
+  <section id="pair-panel" class="pair-panel panel" hidden>
+    <header class="panel-head">
+      <span class="panel-title">Pair session</span>
+      <span class="panel-serial">PANEL.00</span>
+    </header>
+    <div class="pair-body">
+      <div class="pair-left">
+        <div class="pair-eyebrow">SCAN QR</div>
+        <div id="pair-qr" class="pair-qr">
+          <div class="empty" style="padding:24px">Waiting for QR from WhatsApp…</div>
+        </div>
+        <div class="pair-caption">
+          Open WhatsApp on your phone → <b>Linked devices</b> → <b>Link a device</b>, then point the camera at this code. Refreshes every 20 s.
+        </div>
+      </div>
+      <div class="pair-divider">or</div>
+      <div class="pair-right">
+        <div class="pair-eyebrow">PAIR BY CODE</div>
+        <div class="field">
+          <label for="pair-phone">Phone number (international format)</label>
+          <input id="pair-phone" type="text" placeholder="6285117822731" autocomplete="off">
+        </div>
+        <button id="pair-request" type="button" class="btn primary">
+          <svg class="icon sm"><use href="#i-arrow"/></svg>
+          Request pair code
+        </button>
+        <div id="pair-code" class="pair-code" hidden></div>
+        <div id="pair-code-hint" class="pair-caption" hidden>
+          Enter this code on your phone: <b>Linked devices → Link with phone number instead</b>.
+        </div>
+        <div id="pair-error" class="err" hidden></div>
+      </div>
+    </div>
+  </section>
+
   <div class="playground">
     <nav class="pg-tabs" id="pg-tabs" aria-label="Playground tabs"></nav>
 
@@ -191,7 +226,9 @@
           try { values[el.name] = JSON.parse(el.value); }
           catch (e) { throw new Error('Field "' + el.name + '" is not valid JSON: ' + e.message); }
         }
-      } else values[el.name] = el.value;
+      }
+      else if (t === 'textarea') values[el.name] = el.value;
+      else values[el.name] = (el.value || '').trim();
     });
     return values;
   }
@@ -248,11 +285,13 @@
     try {
       const res = await fetch(path, opts);
       const text = await res.text();
+      let parsed = null;
       let pretty = text;
-      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* not JSON */ }
+      try { parsed = JSON.parse(text); pretty = JSON.stringify(parsed, null, 2); } catch (e) { /* not JSON */ }
       resStatusEl.textContent = res.status + ' ' + res.statusText;
       resStatusEl.style.color = res.ok ? 'var(--jade-deep)' : 'var(--sakura)';
       resBodyEl.textContent = pretty;
+      renderRecordingPlayer(parsed);
     } catch (e) {
       resStatusEl.textContent = 'NETWORK';
       resStatusEl.style.color = 'var(--sakura)';
@@ -260,7 +299,136 @@
     }
   }
 
+  function renderRecordingPlayer(body) {
+    let host = document.getElementById('pg-recording');
+    if (host) host.remove();
+    if (!body || typeof body.recording_url !== 'string' || !body.recording_url) return;
+
+    host = document.createElement('div');
+    host.id = 'pg-recording';
+    host.className = 'pg-recording';
+    host.innerHTML =
+      '<div class="pg-recording-head">' +
+      '<span class="panel-serial mono">PEER AUDIO</span>' +
+      '<button type="button" class="btn" id="pg-recording-reload">' +
+      '<svg class="icon sm"><use href="#i-refresh"/></svg> Load / reload' +
+      '</button>' +
+      '</div>' +
+      '<div class="pg-recording-hint">Ready after the peer hangs up. Click <b>Load / reload</b> once the call ends; the WAV lives at <code>' + body.recording_url + '</code>.</div>' +
+      '<audio id="pg-recording-audio" controls preload="none" src="' + body.recording_url + '" style="width:100%;margin-top:12px"></audio>';
+
+    const parent = document.getElementById('pg-result-body').parentElement;
+    parent.appendChild(host);
+
+    document.getElementById('pg-recording-reload').addEventListener('click', () => {
+      const audio = document.getElementById('pg-recording-audio');
+      audio.src = body.recording_url + '?t=' + Date.now();
+      audio.load();
+      audio.play().catch(() => {});
+    });
+  }
+
   renderTabs();
   renderList();
+
+  const pairPanel   = document.getElementById('pair-panel');
+  const pairQr      = document.getElementById('pair-qr');
+  const pairPhone   = document.getElementById('pair-phone');
+  const pairRequest = document.getElementById('pair-request');
+  const pairCode    = document.getElementById('pair-code');
+  const pairHint    = document.getElementById('pair-code-hint');
+  const pairError   = document.getElementById('pair-error');
+
+  let qrTimer = null;
+
+  async function refreshStatus() {
+    try {
+      const res = await fetch('/api/v1/sessions/' + encodeURIComponent(sid) + '/status', {
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      const paired = body.is_logged_in === true && body.status === 'logged_in';
+      pairPanel.hidden = paired;
+      if (paired && qrTimer) { clearInterval(qrTimer); qrTimer = null; }
+    } catch (_) {}
+  }
+
+  async function refreshQr() {
+    try {
+      const res = await fetch('/qr-svg/' + encodeURIComponent(sid) + '?t=' + Date.now(), {
+        credentials: 'same-origin',
+      });
+      if (res.status === 204) {
+        pairQr.innerHTML = '<div class="empty" style="padding:24px">No QR yet — session is not requesting one right now. Click <b>Connect</b> under Info &amp; Pair, or fill in the phone below.</div>';
+        return;
+      }
+      if (!res.ok) return;
+      const svg = await res.text();
+      if (svg && svg.startsWith('<')) {
+        pairQr.innerHTML = svg;
+      }
+    } catch (_) {}
+  }
+
+  pairRequest.addEventListener('click', async () => {
+    pairError.hidden = true;
+    pairCode.hidden = true;
+    pairHint.hidden = true;
+    const phone = pairPhone.value.trim();
+    if (!phone) {
+      pairError.textContent = 'Enter a phone number first.';
+      pairError.hidden = false;
+      return;
+    }
+    pairRequest.disabled = true;
+    try {
+      const res = await fetch('/api/v1/sessions/' + encodeURIComponent(sid) + '/pair', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone, show_push_notification: true }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        pairError.textContent = body.error?.message || ('Pair request failed (' + res.status + ')');
+        pairError.hidden = false;
+        return;
+      }
+      const code = (body.code || '').trim().toUpperCase();
+      if (!code) {
+        pairError.innerHTML = 'Waxum is still connecting to WhatsApp for this session — the pair code has not been issued yet. Click <b>Request pair code</b> again in about 5 s; on retry the client is already up so the code lands instantly.';
+        pairError.hidden = false;
+        return;
+      }
+      const pretty = code.length === 8 ? code.slice(0, 4) + '-' + code.slice(4) : code;
+      const validity = Number(body.timeout_seconds) || 180;
+      pairCode.textContent = pretty;
+      pairCode.hidden = false;
+      pairHint.hidden = false;
+      pairHint.innerHTML = 'Enter this code on your phone: <b>Linked devices → Link with phone number instead</b>. Valid for <span id="pair-remain">' + validity + '</span> s.';
+      const start = Date.now();
+      if (window.__pairCountdown__) clearInterval(window.__pairCountdown__);
+      window.__pairCountdown__ = setInterval(() => {
+        const remain = Math.max(0, validity - Math.floor((Date.now() - start) / 1000));
+        const el = document.getElementById('pair-remain');
+        if (el) el.textContent = remain;
+        if (remain === 0) {
+          clearInterval(window.__pairCountdown__);
+          window.__pairCountdown__ = null;
+          pairCode.style.opacity = '0.4';
+        }
+      }, 1000);
+    } catch (e) {
+      pairError.textContent = String(e);
+      pairError.hidden = false;
+    } finally {
+      pairRequest.disabled = false;
+    }
+  });
+
+  refreshStatus();
+  refreshQr();
+  qrTimer = setInterval(() => { refreshQr(); refreshStatus(); }, 20000);
 })();
 </script>

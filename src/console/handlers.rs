@@ -492,6 +492,40 @@ pub async fn playground_js() -> Response {
     r
 }
 
+pub async fn qr_svg(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(sid): Path<String>,
+) -> Response {
+    if let Err(r) = require_auth(&headers) {
+        return *r;
+    }
+
+    let code = state
+        .get_session(&sid)
+        .and_then(|r| r.get_qr_codes().first().cloned());
+
+    let body: String = match code {
+        Some(c) => render_qr(&c).unwrap_or_else(|_| String::new()),
+        None => String::new(),
+    };
+
+    if body.is_empty() {
+        let mut r = Response::new(Body::from(""));
+        *r.status_mut() = StatusCode::NO_CONTENT;
+        return r;
+    }
+
+    let mut r = Response::new(Body::from(body));
+    r.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("image/svg+xml"),
+    );
+    r.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    r
+}
+
 pub async fn logo() -> Response {
     let mut r = Response::new(Body::from(crate::console::LOGO_PNG));
     r.headers_mut()

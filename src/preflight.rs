@@ -141,6 +141,6 @@ pub fn session_startup_stagger() -> Duration {
     let ms = std::env::var("SESSION_STARTUP_STAGGER_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(500);
+        .unwrap_or(100);
     Duration::from_millis(ms)
 }

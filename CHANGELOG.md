@@ -2,7 +2,35 @@
 
 All notable changes to **waxum** will be documented in this file.
 
-## [0.7.9] - 2026-07-17
+## [0.7.9] - 2026-07-19
+
+### Added — voice calls actually work now
+
+- **Native MLOW audio codec on `/calls/tts` and `/calls/play`.**
+  Waxum encodes PCM straight to WhatsApp's proprietary MLOW frames
+  via `wacore::voip::MlowEncoder` (pure Rust, 960 samples / 60 ms)
+  and uses `AudioFormat::MLOW_16KHZ_60MS` on the outbound call.
+  Earlier iterations were silent on the callee side: the raw
+  `.audio()` PCM path never carried audio, and the Opus MLOW-escape
+  variant reached the peer with zero packet loss yet still refused
+  to play (peer's decoder wanted native MLOW, not Opus/CELT). This
+  is codec parity with meowcaller.
+- **Peer audio recording.** `record: true` on `/calls/tts` and
+  `/calls/play` spawns an MLOW-decoder task that captures the
+  peer's inbound audio and writes it as a 16 kHz mono WAV file at
+  `{WHATSAPP_STORAGE_PATH}/{session_id}/recordings/{call_id}.wav`.
+  The file is served over
+  `GET /api/v1/sessions/{sid}/calls/{cid}/recording.wav`. Empty-audio
+  placeholder is always written so the download endpoint returns
+  `200` right after the call ends even when the peer never spoke.
+- **Bidirectional media WebSocket.**
+  `GET /api/v1/sessions/{sid}/calls/media/ws?to=<phone_or_jid>`
+  upgrades to a WebSocket that carries raw PCM in both directions:
+  client sends 16 kHz mono `s16le`, server pushes peer audio in the
+  same shape as it arrives. First frame back is a JSON metadata
+  blob (sample rate, frame samples, encoding). Ideal for
+  full-duplex voice agents (LLM + STT + TTS loops) driving live WA
+  calls.
 
 ### Added — CTA URL header + optional body
 
@@ -13,6 +41,63 @@ All notable changes to **waxum** will be documented in this file.
 - **`body_text` is now optional.** Setting it to `""` (or leaving it
   out) produces a header + button-only interactive block — useful
   when the image + header + CTA are all the message needs to say.
+
+### Added — browser console pair widget
+
+- **Dedicated `/s/{sid}` Pair panel.** Above the tab bar, visible
+  when the session is not logged in, showing an auto-refreshing
+  QR SVG (fetched from a new `GET /qr-svg/{sid}` console route that
+  renders the runtime QR through the same qrcode helper the drawer
+  uses) and a phone-number → pair-code flow. Pair code displays as
+  hyphenated `XXXX-XXXX` with a live 180-second countdown; grays
+  out on expiry.
+- **`pair_with_code` reuses the running client.** The `/pair`
+  handler used to spawn a fresh Bot on every request, which raced
+  the previous bot's pair state and returned an invalid code half
+  the time. It now calls `Client::pair_with_code` directly on the
+  cached client when one exists, spawns a Bot only for cold
+  sessions, and polls the runtime pair-code cache for up to 20 s
+  before returning. Response `timeout_seconds` corrected from 60 to
+  180 to match upstream.
+
+### Added — playground quality-of-life
+
+- **Live audio player in the response pane** — when a call
+  response includes a `recording_url`, the playground appends an
+  HTML5 `<audio controls>` element that fetches the WAV directly.
+  No curl round-trip to hear the peer.
+- **Pair form** — phone number + "Show push notification" toggle,
+  writes correctly to `POST /pair` (the old form sent `phone` but
+  the server DTO wanted `phone_number`).
+- **Trim + JSON-escape on inputs** — single-line text/select
+  fields are trimmed before submit, JSON fields validated. Trailing
+  whitespace no longer causes a 500 in the send handlers.
+
+### Changed — TTS pipeline hardening
+
+- **SSML text is now XML-escaped** before being passed to
+  `msedge-tts`. The upstream crate string-formats the caller's
+  text straight into the SSML body; any `<`, `>`, `&`, `"`, `'` in
+  the payload silently returned 0-byte audio from Microsoft. Waxum
+  now maps them to entities and strips U+FEFF / control chars.
+- **3× retry with 500 ms backoff** on synth failure or empty
+  response. Reconnect is fresh WebSocket each attempt. Recovery on
+  attempt ≥ 2 is logged at `INFO waxum::tts`.
+- **`ffmpeg` gets `-f mp3` explicitly** so Windows builds don't
+  crash the format autoprobe (the exit-code `0xbebbb1b7` you saw
+  in the field). Its stderr is now captured and surfaced in the
+  API error message.
+
+### Changed — call recipient LID resolution
+
+- **New `resolve_call_recipient` helper** used by every call
+  handler. Walks `is_on_whatsapp` first (which also persists the
+  PN↔LID mapping into `lid_pn_cache` for future calls to skip the
+  round-trip), then `get_user_info` as fallback. Both are bounded
+  by explicit timeouts (8 s / 4 s) so a bad JID or a slow WA
+  server doesn't hang the request. Fixes the "no known LID for the
+  PN callee; cannot derive media keys" error on `/calls/tts`,
+  `/calls/play`, `/calls/ring`, and `/calls/media/ws`.
 
 ### Changed — session status semantics
 
@@ -38,6 +123,25 @@ All notable changes to **waxum** will be documented in this file.
   operator's tail. The Client Arc lives so whatsapp-rust can
   reopen the WebSocket in place; the DB row keeps the previous
   `is_logged_in` value until a real `LoggedOut` arrives.
+- **`Event::Disconnected` now logs the underlying
+  `DisconnectReason`.** Clean recycles (`StreamEnded`,
+  `ServerClose { code: 1000 | 1001 }`) are `INFO`; anything else
+  stays `WARN` so a real transport failure isn't hidden by the
+  reconnect noise.
+
+### Changed — observability
+
+- **`ApiError::into_response` emits a structured tracing event**
+  before axum wraps it into a 5xx/4xx. Internal / SessionError /
+  MediaUploadFailed / MediaDownloadFailed / NatsError fire
+  `tracing::error!(target: "waxum::api_error", ...)`;
+  BadRequest / InvalidJid fire `tracing::warn!`. The `tower_http`
+  on-failure line still shows the status but the actual cause is
+  now on the line above it.
+- **Startup stagger default lowered 500 ms → 100 ms.** A 2-3
+  session fleet no longer waits 1.5 s of nothing between spawns.
+  `SESSION_STARTUP_STAGGER_MS` is still honoured for large fleets
+  that want more headroom against WA rate limits.
 
 ### Fixed
 

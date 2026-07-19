@@ -1,0 +1,299 @@
+name: Waxum Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: waxum-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Waxum-sensei App token (falls back to GITHUB_TOKEN)
+        id: app_token
+        if: ${{ vars.WAXUM_SENSEI_APP_ID != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.WAXUM_SENSEI_APP_ID }}
+          private-key: ${{ secrets.WAXUM_SENSEI_APP_PRIVATE_KEY }}
+
+      - name: Resolve GH token to use for the review comment
+        id: token
+        run: |
+          if [ -n "${{ steps.app_token.outputs.token }}" ]; then
+            echo "value=${{ steps.app_token.outputs.token }}" >> "$GITHUB_OUTPUT"
+            echo "using Waxum-sensei App token"
+          else
+            echo "value=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+            echo "using default GITHUB_TOKEN (no App configured)"
+          fi
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base (unshallow enough to see a merge base)
+        run: |
+          git fetch --no-tags --unshallow origin ${{ github.event.pull_request.base.ref }} 2>/dev/null \
+            || git fetch --no-tags origin ${{ github.event.pull_request.base.ref }}
+
+      - name: Collect PR diff + metadata
+        id: collect
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -eu
+
+          # Kimi's coder tier is generous on context but its wall-clock
+          # response time scales with the diff size — a 40k-char diff can
+          # push completion past the 300 s curl budget below. Cap at 20k
+          # (≈5k tokens) so a normal PR fits and a huge one still gets a
+          # (trimmed) review.
+          MAX_DIFF_CHARS=20000
+
+          DIFF_FILE=$(mktemp)
+          git diff --stat "origin/$BASE_REF"...HEAD > diff_stat.txt
+          git diff --no-color "origin/$BASE_REF"...HEAD > "$DIFF_FILE"
+
+          DIFF_BYTES=$(wc -c < "$DIFF_FILE")
+          if [ "$DIFF_BYTES" -gt "$MAX_DIFF_CHARS" ]; then
+            head -c "$MAX_DIFF_CHARS" "$DIFF_FILE" > diff_trimmed.txt
+            printf '\n[truncated: full diff was %s bytes]\n' "$DIFF_BYTES" >> diff_trimmed.txt
+            mv diff_trimmed.txt "$DIFF_FILE"
+          fi
+
+          {
+            printf '# PR #%s: %s\n\n' "$PR_NUMBER" "$PR_TITLE"
+            printf '## Diff stat\n\n```\n'
+            cat diff_stat.txt
+            printf '```\n\n## Diff\n\n```diff\n'
+            cat "$DIFF_FILE"
+            printf '```\n'
+          } > pr_bundle.md
+
+      - name: Call Kimi
+        id: llm
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: |
+          set -eu
+
+          if [ -z "${KIMI_API_KEY:-}" ]; then
+            echo "::warning::KIMI_API_KEY not set — skipping review"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SYSTEM_PROMPT=$(cat .github/review-context.md)
+          BUNDLE=$(cat pr_bundle.md)
+
+          REQUEST=$(jq -n \
+            --arg system "$SYSTEM_PROMPT" \
+            --arg user "$BUNDLE" \
+            '{
+              model: "kimi-k3-preview",
+              temperature: 1,
+              messages: [
+                { role: "system", content: $system },
+                { role: "user",   content: $user }
+              ]
+            }')
+
+          # Kimi's coder endpoint takes 60-180 s to reply for a normal
+          # PR (12-20k tokens). Allow up to 8 min end-to-end; if it still
+          # times out, the job downgrades to a warning instead of failing.
+          set +e
+          RESPONSE=$(curl -sS --max-time 480 https://api.kimi.com/coding/v1/chat/completions \
+            -H "content-type: application/json" \
+            -H "Authorization: Bearer $KIMI_API_KEY" \
+            -d "$REQUEST")
+          CURL_STATUS=$?
+          set -e
+
+          if [ $CURL_STATUS -ne 0 ] || [ -z "$RESPONSE" ]; then
+            echo "::warning::Kimi request failed or timed out (curl exit=$CURL_STATUS) — skipping review"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$RESPONSE" > response.json
+
+          TEXT=$(jq -r '.choices[0].message.content // empty' response.json)
+          if [ -z "$TEXT" ]; then
+            echo "::warning::Kimi returned no message content"
+            jq -r '.error // .' response.json | head -c 2000
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s' "$TEXT" > review.md
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Format + post inline review
+        if: steps.llm.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.value }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -eu
+
+          RAW=$(cat review.md)
+          STRIPPED=$(printf '%s' "$RAW" | sed -E '1{s/^```(json)?[[:space:]]*//;}; ${s/[[:space:]]*```[[:space:]]*$//;}')
+
+          if ! echo "$STRIPPED" | jq -e . >/dev/null 2>&1; then
+            {
+              printf '### 神 Waxum-sensei — Code Review 神\n\n'
+              printf '_The scroll refused to parse as JSON — posting raw text._\n\n'
+              printf '%s\n\n' "$RAW"
+              printf '<sub>Kimi K3 coder, persona in `.github/review-context.md`.</sub>\n'
+            } > comment.md
+            gh pr comment "$PR_NUMBER" --body-file comment.md
+            exit 0
+          fi
+
+          SUMMARY=$(echo "$STRIPPED" | jq -r '.summary // "No summary provided."')
+          VERDICT=$(echo "$STRIPPED" | jq -r '.verdict // "wait"')
+          KAOMOJI=$(echo "$STRIPPED" | jq -r '.kaomoji // "(´｡• ᵕ •｡`)"')
+
+          case "$VERDICT" in
+            ship)  BADGE="✧ SHIP IT ✧"; TAGLINE="Yoshi. Proceed to merge, nakama." ;;
+            wait)  BADGE="◆ WAIT ◆";     TAGLINE="Not yet. Address the majors first." ;;
+            block) BADGE="！ BLOCK ！";   TAGLINE="Abunai. A blocker must fall before this merges." ;;
+            *)     BADGE="◆ ${VERDICT^^} ◆"; TAGLINE="" ;;
+          esac
+
+          # Build the review body (top-level summary).
+          {
+            printf '### 神 Waxum-sensei — Code Review 神\n\n'
+            printf '```\n%s   %s\n```\n\n' "$BADGE" "$KAOMOJI"
+            printf '> %s\n\n' "$SUMMARY"
+            if [ -n "$TAGLINE" ]; then
+              printf '_%s_\n\n' "$TAGLINE"
+            fi
+            printf '%s\n\n' '---'
+            printf '<sub>Kimi K3 coder — inline findings below. Persona + invariants in `.github/review-context.md`. Not a merge gate.</sub>\n'
+          } > body.md
+          BODY_CONTENT=$(cat body.md)
+
+          # Collect the set of lines that appear in the PR diff on the RIGHT
+          # (added or context lines on the head side). GitHub only accepts
+          # review comments on those; a comment anchored to a line outside
+          # the diff is rejected 422.
+          git diff --unified=0 "origin/$BASE_REF"...HEAD | awk '
+            /^diff --git a\/.+ b\/.+$/ {
+              file = $0
+              sub(/^diff --git a\/[^ ]+ b\//, "", file)
+              next
+            }
+            /^@@/ {
+              n = split($0, parts, " ")
+              for (i=2;i<=n;i++) if (parts[i] ~ /^\+/) {
+                sub(/^\+/, "", parts[i])
+                split(parts[i], hunk, ",")
+                start = hunk[1] + 0
+                len   = (length(hunk[2]) ? hunk[2] : 1) + 0
+                for (k=0;k<len;k++) print file "\t" (start + k)
+              }
+            }
+          ' | sort -u > diff_lines.tsv
+
+          # Partition findings — inline-able (file+line present AND that
+          # (file,line) is in the PR diff) vs summary-only.
+          COMMENTS_JSON='[]'
+          SUMMARY_ONLY_JSON='[]'
+          FINDINGS_COUNT=$(echo "$STRIPPED" | jq -r '(.findings // []) | length')
+          for i in $(seq 0 $((FINDINGS_COUNT - 1))); do
+            [ "$FINDINGS_COUNT" -eq 0 ] && break
+            F=$(echo "$STRIPPED" | jq --argjson i "$i" '.findings[$i]')
+            FILE=$(echo "$F" | jq -r '.file // ""')
+            LINE=$(echo "$F" | jq -r '.line // "null"')
+            SEV=$(echo "$F"  | jq -r '.severity // "minor"')
+            TITLE=$(echo "$F" | jq -r '.title // ""')
+            BODY_TXT=$(echo "$F" | jq -r '.body // ""')
+
+            case "$SEV" in
+              blocker) MARK='！！' ;;
+              major)   MARK='！' ;;
+              minor)   MARK='〜' ;;
+              praise)  MARK='★' ;;
+              *)       MARK='◇' ;;
+            esac
+            COMMENT_TEXT=$(printf '**%s [%s] %s**\n\n%s' "$MARK" "${SEV^^}" "$TITLE" "$BODY_TXT")
+
+            IN_DIFF=no
+            if [ -n "$FILE" ] && [ "$LINE" != "null" ]; then
+              if grep -Fxq "$FILE"$'\t'"$LINE" diff_lines.tsv; then
+                IN_DIFF=yes
+              fi
+            fi
+
+            if [ "$IN_DIFF" = yes ]; then
+              COMMENTS_JSON=$(echo "$COMMENTS_JSON" | jq \
+                --arg path "$FILE" \
+                --argjson line "$LINE" \
+                --arg body "$COMMENT_TEXT" \
+                '. + [{ path: $path, line: $line, side: "RIGHT", body: $body }]')
+            else
+              SUMMARY_ONLY_JSON=$(echo "$SUMMARY_ONLY_JSON" | jq \
+                --arg sev "$SEV" \
+                --arg mark "$MARK" \
+                --arg file "$FILE" \
+                --arg line "$LINE" \
+                --arg title "$TITLE" \
+                --arg body "$BODY_TXT" \
+                '. + [{ sev: $sev, mark: $mark, file: $file, line: $line, title: $title, body: $body }]')
+            fi
+          done
+
+          # Append summary-only findings (praise, cross-cutting, or lines
+          # outside the diff) to the top-level review body so they still
+          # show up somewhere.
+          SUMMARY_ONLY_COUNT=$(echo "$SUMMARY_ONLY_JSON" | jq 'length')
+          if [ "$SUMMARY_ONLY_COUNT" -gt 0 ]; then
+            {
+              printf '\n**Panel — Cross-cutting findings**\n\n'
+              echo "$SUMMARY_ONLY_JSON" | jq -r '.[] |
+                "▸ **" + .mark + " [" + (.sev | ascii_upcase) + "] " + .title + "**"
+                + (if (.file // "") != "" then " — `" + .file + (if (.line // "null") != "null" then ":" + .line else "" end) + "`" else "" end)
+                + "\n    " + .body + "\n"'
+            } >> body.md
+            BODY_CONTENT=$(cat body.md)
+          fi
+
+          # Post the review via the PR reviews endpoint, which accepts a
+          # top-level body plus per-line inline comments in one payload.
+          REVIEW_PAYLOAD=$(jq -n \
+            --arg commit "$HEAD_SHA" \
+            --arg body "$BODY_CONTENT" \
+            --argjson comments "$COMMENTS_JSON" \
+            '{ commit_id: $commit, event: "COMMENT", body: $body, comments: $comments }')
+
+          set +e
+          POST_OUT=$(echo "$REVIEW_PAYLOAD" | gh api \
+            -X POST \
+            "/repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            --input - 2>&1)
+          POST_STATUS=$?
+          set -e
+
+          if [ $POST_STATUS -ne 0 ]; then
+            echo "::warning::inline review post failed, falling back to a plain PR comment"
+            echo "$POST_OUT" | head -c 2000
+            gh pr comment "$PR_NUMBER" --body-file body.md
+          fi
