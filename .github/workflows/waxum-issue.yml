@@ -74,8 +74,8 @@ jobs:
 
           {
             printf '# Issue #%s: %s\n\n' "$ISSUE_NUMBER" "$TITLE"
-            printf '- reporter: @%s\n' "$USER"
-            printf '- labels: %s\n\n' "$LABELS"
+            printf '%s\n' "- reporter: @$USER"
+            printf '%s\n\n' "- labels: $LABELS"
             printf '## Original body\n\n%s\n\n' "$BODY"
             if [ -n "$THREAD" ] && [ "$THREAD" != "null" ]; then
               printf '## Comment thread (Waxum-sensei omitted)\n\n%s\n' "$THREAD"
