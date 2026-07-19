@@ -1,4 +1,5 @@
 pub mod blocking;
+pub mod bulk;
 pub mod calls;
 pub mod chatstate;
 pub mod common;

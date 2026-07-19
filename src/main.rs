@@ -602,6 +602,7 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     let nats_enabled = nats_manager.is_some();
     let state = AppState::new(pool, nats_manager).await;
 
+    handlers::bulk::touch_uptime_anchor();
     preflight::check_fd_limit();
     let _instance_lock = match preflight::acquire_instance_lock(state.base_storage_path()) {
         Ok(guard) => guard,

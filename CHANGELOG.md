@@ -2,6 +2,48 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.11] - 2026-07-19
+
+### Added — fleet-level endpoints
+
+Every REST endpoint before this release was scoped to one session
+via `/api/v1/sessions/{session_id}/...`. Cross-session ops (bulk
+purge, disconnect-all, search-by-phone, aggregate stats) had no
+place. This release adds a `fleet` tab that operates over the whole
+gateway at once.
+
+- **`POST /api/v1/sessions/purge?filter=<inactive|logged_out|disconnected|all>&days=<N>&dry_run=<bool>`** —
+  Bulk delete sessions matching the filter. `inactive` (default) is
+  "not logged in AND last activity older than `days`". `dry_run=true`
+  returns the list without deleting so an operator can review the
+  target set first. Storage directories and metadata rows go
+  together, matching the single-session `DELETE /sessions/{sid}`
+  semantics.
+- **`POST /api/v1/sessions/disconnect-all`** — Force disconnect
+  every session that currently holds a live Client. Used for
+  maintenance windows before a restart. Sessions with no client
+  are reported under `skipped`.
+- **`POST /api/v1/sessions/reconnect-all`** — Trigger the same
+  `reconnect_all_on_startup` routine that runs on boot, without
+  restarting the process. Every session with `is_logged_in = true`
+  gets an auto-reconnect spawn (staggered by
+  `SESSION_STARTUP_STAGGER_MS`).
+- **`GET /api/v1/sessions/search?q=<needle>`** — Substring +
+  case-insensitive match against session id, name, phone number,
+  and push name. Each hit reports which field(s) matched under
+  `match_on`, so operators can tell why a session came back.
+- **`GET /api/v1/stats`** — Fleet aggregate: total / connected /
+  connecting / disconnected / logged-out session counts,
+  webhook total, open circuits, event rate in the last minute,
+  uptime seconds, waxum version, storage path.
+- **`POST /api/v1/webhooks/reenable-all`** — Close every open
+  webhook circuit at once. Used after fixing a mass downstream
+  outage that tripped many circuits.
+
+Playground picks up a new **Fleet** tab with all six endpoints;
+purge and disconnect-all are marked as `danger` in the form so a
+double-click is required.
+
 ## [0.7.10] - 2026-07-19
 
 ### Added — voice calls actually work now

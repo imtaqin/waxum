@@ -22,6 +22,7 @@
 //!   [`fake_reply`] — smaller domains.
 
 pub mod blocking;
+pub mod bulk;
 pub mod calls;
 pub mod chatstate;
 pub mod contacts;

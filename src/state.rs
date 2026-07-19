@@ -442,6 +442,27 @@ impl AppState {
         self.inner.webhooks.remove(session_id);
     }
 
+    /// Bulk close-and-reset every open circuit. Used by
+    /// `POST /api/v1/webhooks/reenable-all` so an operator does not have
+    /// to walk every session's URL list by hand after fixing a mass
+    /// downstream outage. Returns the URLs whose state was actually
+    /// cleared (open circuits only; healthy circuits are left alone).
+    pub fn reenable_all_open_circuits(&self) -> Vec<String> {
+        let now = std::time::Instant::now();
+        let mut reset: Vec<String> = Vec::new();
+        for mut entry in self.inner.webhook_circuits.iter_mut() {
+            let opened = entry.value().opened_until.map(|u| now < u).unwrap_or(false);
+            if opened {
+                let e = entry.value_mut();
+                e.failures = 0;
+                e.opened_until = None;
+                e.last_event = now;
+                reset.push(entry.key().clone());
+            }
+        }
+        reset
+    }
+
     pub fn nats(&self) -> Option<&NatsManager> {
         self.inner.nats.as_ref()
     }
