@@ -42,11 +42,7 @@ pub struct EventsTailQuery {
     pub event: Option<String>,
 }
 
-fn matches(
-    e: &ConsoleEvent,
-    session_filter: Option<&str>,
-    event_filter: Option<&str>,
-) -> bool {
+fn matches(e: &ConsoleEvent, session_filter: Option<&str>, event_filter: Option<&str>) -> bool {
     if let Some(s) = session_filter {
         if e.session_id != s {
             return false;

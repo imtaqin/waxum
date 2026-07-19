@@ -1070,9 +1070,7 @@ pub struct TtsPreviewQuery {
     pub voice: String,
 }
 
-pub async fn tts_preview(
-    Query(q): Query<TtsPreviewQuery>,
-) -> Result<AxumResponse, ApiError> {
+pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumResponse, ApiError> {
     let text = q.text.trim();
     if text.is_empty() {
         return Err(ApiError::BadRequest("text is empty".into()));
@@ -1095,8 +1093,7 @@ pub async fn tts_preview(
             .find(|v| v.short_name.as_deref() == Some(voice_owned.as_str()))
             .ok_or_else(|| anyhow::anyhow!("voice '{}' not found", voice_owned))?;
         let config = SpeechConfig::from(matched);
-        let mut client =
-            connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
+        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
         let audio = client
             .synthesize(&text_owned, &config)
             .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
