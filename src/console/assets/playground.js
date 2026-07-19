@@ -396,6 +396,28 @@
           { name: 'reason', label: 'Reason', type: 'text' },
         ] },
     ),
+
+    // ---------- fleet (cross-session ops) ----------
+    ...R('fleet',
+      { key: 'stats', label: 'Fleet stats', method: 'GET',
+        path: '/api/v1/stats', fields: [] },
+      { key: 'search', label: 'Search sessions (id/name/phone/push_name)', method: 'GET',
+        path: '/api/v1/sessions/search',
+        fields: [{ name: 'q', label: 'Query', type: 'text', required: true, placeholder: '628117' }] },
+      { key: 'purge', label: 'Purge inactive sessions', method: 'POST',
+        path: '/api/v1/sessions/purge',
+        fields: [
+          { name: 'filter', label: 'Filter', type: 'select', options: ['inactive', 'logged_out', 'disconnected', 'all'], default: 'inactive' },
+          { name: 'days', label: 'Idle days (for `inactive`)', type: 'number', default: 30 },
+          { name: 'dry_run', label: 'Dry run (preview only)', type: 'checkbox' },
+        ], danger: true },
+      { key: 'disconnect-all', label: 'Disconnect ALL sessions', method: 'POST',
+        path: '/api/v1/sessions/disconnect-all', fields: [], danger: true },
+      { key: 'reconnect-all', label: 'Reconnect all paired sessions', method: 'POST',
+        path: '/api/v1/sessions/reconnect-all', fields: [] },
+      { key: 'reenable-circuits', label: 'Re-enable all open webhook circuits', method: 'POST',
+        path: '/api/v1/webhooks/reenable-all', fields: [] },
+    ),
   ];
 
   window.__GROUP_META__ = {
@@ -408,5 +430,6 @@
     blocking: { title: 'Blocking',      icon: 'i-x' },
     webhooks: { title: 'Webhooks',      icon: 'i-refresh' },
     ops:      { title: 'Operations',    icon: 'i-refresh' },
+    fleet:    { title: 'Fleet',         icon: 'i-signal' },
   };
 })();

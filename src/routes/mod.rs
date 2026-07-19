@@ -31,6 +31,11 @@ pub fn create_router() -> Router<AppState> {
 
 fn api_routes() -> Router<AppState> {
     Router::new()
+        .route("/stats", get(handlers::bulk::fleet_stats))
+        .route(
+            "/webhooks/reenable-all",
+            post(handlers::bulk::reenable_circuits),
+        )
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
 }
@@ -52,6 +57,10 @@ fn session_routes() -> Router<AppState> {
     Router::new()
         .route("/", post(handlers::sessions::create_session))
         .route("/", get(handlers::sessions::list_sessions))
+        .route("/purge", post(handlers::bulk::purge_sessions))
+        .route("/disconnect-all", post(handlers::bulk::disconnect_all))
+        .route("/reconnect-all", post(handlers::bulk::reconnect_all))
+        .route("/search", get(handlers::bulk::search_sessions))
         .route("/{session_id}", get(handlers::sessions::get_session))
         .route("/{session_id}", delete(handlers::sessions::delete_session))
         .route(
