@@ -1,0 +1,153 @@
+name: Waxum Sensei Issue Triage
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: waxum-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  reply:
+    # Skip PR comments (issue_comment fires on both) and comments Waxum-sensei
+    # itself wrote — otherwise the bot would reply to its own greeting on
+    # a `@waxum-sensei` mention loop.
+    if: |
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login != 'waxum-sensei[bot]' &&
+      (
+        github.event_name == 'issues' ||
+        contains(github.event.comment.body, '@waxum-sensei') ||
+        contains(github.event.comment.body, '/waxum-sensei')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout for context files
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Waxum-sensei App token
+        id: app_token
+        if: ${{ vars.WAXUM_SENSEI_APP_ID != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.WAXUM_SENSEI_APP_ID }}
+          private-key: ${{ secrets.WAXUM_SENSEI_APP_PRIVATE_KEY }}
+
+      - name: Resolve GH token
+        id: token
+        run: |
+          if [ -n "${{ steps.app_token.outputs.token }}" ]; then
+            echo "value=${{ steps.app_token.outputs.token }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect issue + thread
+        id: collect
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.value }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -eu
+
+          # Issue metadata.
+          gh api "/repos/$REPO/issues/$ISSUE_NUMBER" > issue.json
+          gh api "/repos/$REPO/issues/$ISSUE_NUMBER/comments" > comments.json
+
+          TITLE=$(jq -r '.title' issue.json)
+          USER=$(jq -r '.user.login' issue.json)
+          BODY=$(jq -r '.body // ""' issue.json)
+          LABELS=$(jq -r '[.labels[].name] | join(", ")' issue.json)
+
+          # Skip Waxum-sensei's own comments in the thread.
+          THREAD=$(jq -r '[.[] | select(.user.login != "waxum-sensei[bot]") | "**@" + .user.login + ":** " + (.body // "")] | join("\n\n---\n\n")' comments.json)
+
+          {
+            printf '# Issue #%s: %s\n\n' "$ISSUE_NUMBER" "$TITLE"
+            printf '- reporter: @%s\n' "$USER"
+            printf '- labels: %s\n\n' "$LABELS"
+            printf '## Original body\n\n%s\n\n' "$BODY"
+            if [ -n "$THREAD" ] && [ "$THREAD" != "null" ]; then
+              printf '## Comment thread (Waxum-sensei omitted)\n\n%s\n' "$THREAD"
+            fi
+          } > bundle.md
+
+          echo "reporter=$USER" >> "$GITHUB_OUTPUT"
+
+      - name: Call Kimi
+        id: llm
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: |
+          set -eu
+
+          if [ -z "${KIMI_API_KEY:-}" ]; then
+            echo "::warning::KIMI_API_KEY not set — skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SYSTEM_PROMPT=$(cat .github/issue-context.md)
+          BUNDLE=$(cat bundle.md)
+
+          REQUEST=$(jq -n \
+            --arg system "$SYSTEM_PROMPT" \
+            --arg user "$BUNDLE" \
+            '{
+              model: "kimi-k3-preview",
+              temperature: 1,
+              messages: [
+                { role: "system", content: $system },
+                { role: "user",   content: $user }
+              ]
+            }')
+
+          set +e
+          RESPONSE=$(curl -sS --max-time 480 https://api.kimi.com/coding/v1/chat/completions \
+            -H "content-type: application/json" \
+            -H "Authorization: Bearer $KIMI_API_KEY" \
+            -d "$REQUEST")
+          CURL_STATUS=$?
+          set -e
+
+          if [ $CURL_STATUS -ne 0 ] || [ -z "$RESPONSE" ]; then
+            echo "::warning::Kimi request failed (curl exit=$CURL_STATUS)"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+          if [ -z "$TEXT" ]; then
+            echo "::warning::Kimi returned no content"
+            echo "$RESPONSE" | jq -r '.error // .' | head -c 1000
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s' "$TEXT" > reply.md
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Post reply
+        if: steps.llm.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.value }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -eu
+
+          {
+            cat reply.md
+            printf '\n\n<sub>Kimi K3 coder — persona in `.github/issue-context.md`. The maintainer (@fdciabdul) will follow up if this reply misses.</sub>\n'
+          } > post.md
+
+          gh issue comment "$ISSUE_NUMBER" --body-file post.md
