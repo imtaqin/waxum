@@ -2,7 +2,7 @@
 
 All notable changes to **waxum** will be documented in this file.
 
-## [0.7.9] - 2026-07-19
+## [0.7.10] - 2026-07-19
 
 ### Added — voice calls actually work now
 
