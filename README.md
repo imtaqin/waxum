@@ -18,7 +18,133 @@
 
 Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Swagger. Prometheus. NATS JetStream (optional).
 
-Production-grade.
+Production-grade. **110+ REST endpoints across 21 feature modules.**
+
+## Features
+
+### Messaging
+
+| Feature | Endpoint prefix |
+|---|---|
+| Text, image, video, audio, document, sticker | `POST /sessions/{sid}/messages/*` |
+| Location, contact card, poll | `POST /sessions/{sid}/messages/{location,contact,poll}` |
+| Reactions, forward, edit, revoke, star | `POST /sessions/{sid}/messages/{react,forward,edit,delete,star}` |
+| Reply / quote with context | `POST /sessions/{sid}/messages/text` (`quoted_id`) |
+| Fake-reply (spoofed quote metadata) | `POST /sessions/{sid}/fake-reply/*` |
+| CTA URL with image + header/footer | `POST /sessions/{sid}/messages/cta-url` |
+| Broadcast lists | `POST /sessions/{sid}/broadcast` |
+| Chat state (typing / recording / paused) | `POST /sessions/{sid}/chat-state` |
+| Read receipts, mark as read | `POST /sessions/{sid}/messages/read` |
+| MEX GraphQL passthrough (server queries) | `POST /sessions/{sid}/mex` |
+
+### Voice calls
+
+| Feature | Endpoint |
+|---|---|
+| Ring / hangup / accept / reject | `POST /sessions/{sid}/calls/*` |
+| Text-to-speech call (Edge TTS, 300+ voices) | `POST /sessions/{sid}/calls/tts` |
+| Audio playback call (MP3/WAV upload or URL) | `POST /sessions/{sid}/calls/play` |
+| Native MLOW codec (WA proprietary, pure Rust) | internal |
+| Peer audio recording (WAV) | `GET /sessions/{sid}/calls/{cid}/recording.wav` |
+| Bidirectional media WebSocket stream | `WS /sessions/{sid}/calls/media?to=` |
+
+### Session management
+
+| Feature | Endpoint |
+|---|---|
+| Multi-session on one process | `POST /sessions` |
+| Pair via QR (PNG + SVG) | `GET /sessions/{sid}/qr`, `/qr-svg` |
+| Pair via 8-char code | `POST /sessions/{sid}/pair` |
+| Auto-reconnect on start | env `WA_AUTO_RECONNECT_ON_START=1` |
+| Fleet stats (uptime, per-status counts) | `GET /stats` |
+| Search sessions (name/phone/JID) | `GET /sessions/search?q=` |
+| Bulk purge (by status, older-than, dry-run) | `POST /sessions/purge` |
+| Bulk disconnect / reconnect | `POST /sessions/{disconnect,reconnect}-all` |
+| Re-enable all tripped webhook circuits | `POST /webhooks/reenable-all` |
+
+### Groups
+
+| Feature | Endpoint prefix |
+|---|---|
+| Create / leave / info / settings | `POST /sessions/{sid}/groups/*` |
+| Member add / remove / promote / demote | `POST /sessions/{sid}/groups/{gid}/*` |
+| Invite link create / revoke / join | `POST /sessions/{sid}/groups/{gid}/{invite,revoke,join}` |
+| Description / subject / picture / announce / lock | `PATCH /sessions/{sid}/groups/{gid}/*` |
+| Pending join requests approval | `POST /sessions/{sid}/groups/{gid}/requests` |
+
+### Contacts / privacy / presence
+
+| Feature | Endpoint |
+|---|---|
+| `is_on_whatsapp` batch check | `POST /sessions/{sid}/contacts/check` |
+| Contact info + profile picture | `GET /sessions/{sid}/contacts/{jid}` |
+| Sync device contacts | `POST /sessions/{sid}/contacts/sync` |
+| Block / unblock / list blocked | `POST /sessions/{sid}/blocking/*` |
+| Privacy settings (last-seen, profile, status) | `PATCH /sessions/{sid}/privacy` |
+| Presence broadcast (online / offline) | `POST /sessions/{sid}/presence` |
+
+### Media & storage
+
+| Feature | Endpoint |
+|---|---|
+| Multipart upload (image/video/audio/document) | `POST /sessions/{sid}/media/upload` |
+| Direct URL send (server downloads on your behalf) | `POST /sessions/{sid}/messages/image?url=` |
+| Download inbound media by message id | `GET /sessions/{sid}/media/{mid}` |
+| Media storage on disk (configurable path) | env `WA_MEDIA_DIR` |
+
+### Webhooks
+
+| Feature | Endpoint |
+|---|---|
+| Per-session webhook URL + secret | `POST /sessions/{sid}/webhooks` |
+| HMAC-SHA256 signature (`X-Webhook-Signature`) | header |
+| Event filter mask (message, receipt, call, presence, …) | `event_mask` field |
+| Circuit breaker (auto-trip on Nx 5xx) | env `WEBHOOK_CB_THRESHOLD` |
+| Dead-letter queue + replay | `GET /webhooks/dlq`, `POST /webhooks/dlq/replay` |
+| Re-enable all tripped circuits (bulk) | `POST /webhooks/reenable-all` |
+
+### Ops / observability
+
+| Feature | Endpoint |
+|---|---|
+| Server-rendered ops console (Handlebars, no SPA) | `/` |
+| Per-session playground covering 60+ endpoints | `/s/{sid}` |
+| Swagger UI + OpenAPI 3.1 schema | `/swagger-ui` |
+| Liveness / readiness probes | `/livez`, `/readyz` |
+| Prometheus metrics (counters + gauges) | `/metrics` |
+| Event ring buffer for terminal-style log | `/api/v1/events/tail` |
+| Instance-lock file (single-writer safety) | on-boot |
+| FD-limit warning at start (nofile < 65536) | on-boot |
+| JWT + static Bearer auth, per-token IP allowlist (planned) | header |
+| NATS JetStream event fan-out (optional) | env `NATS_URL` |
+
+### Storage backends
+
+| Feature | Notes |
+|---|---|
+| SQLite (default, single-binary friendly) | `WA_DB=sqlite:///path.db` |
+| Postgres (recommended for prod, > 50 sessions) | `WA_DB=postgres://…` |
+| MySQL | `WA_DB=mysql://…` |
+
+## Roadmap / on-going
+
+| Feature | Status |
+|---|---|
+| Video call media pipeline (MLOW video) | planning |
+| Group voice call | planning |
+| Local STT on recording (whisper.cpp) | planning |
+| Message search via SQLite FTS | planning |
+| Blast queue engine (bulk send, dedup, retry, DLQ) | scoped |
+| Scheduled send (`send_at` ISO) | scoped |
+| S3 backend for media & recordings | scoped |
+| Session tags / groups | scoped |
+| TypeScript SDK (auto-gen from OpenAPI) | scoped |
+| Rust client crate | scoped |
+| n8n community node | scoped |
+| Chatwoot bridge | idea |
+| Distributed mode (multi-instance + leader elect) | idea |
+| Session migration between instances | idea |
+| Signal-store encryption at rest (sqlcipher) | idea |
 
 ## Console
 
