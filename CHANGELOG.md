@@ -2,6 +2,41 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.12] - 2026-07-19
+
+### Added — event tail + TTS discovery
+
+Two operator-focused endpoints and a new discovery surface for the
+Edge-TTS pipeline that already backs `/calls/tts`.
+
+- **`GET /api/v1/events/tail`** — server-sent event stream over the
+  in-memory event ring. Every event that reaches
+  `broadcast_to_webhooks` is emitted as an SSE line
+  (`event:` = event type, `id:` = epoch ms, `data:` = JSON preview).
+  Supports `?session=<sid>` and `?event=<name>` filters so an
+  operator can `curl -N /api/v1/events/tail?session=foo` and watch
+  one session in isolation. Sends the last 50 items as backlog on
+  connect so late subscribers see a tail immediately; keep-alive
+  every 15 s to survive intermediary idle-timeouts. Complements
+  webhooks — no delivery guarantees, but no config either.
+- **`GET /api/v1/voices`** — list every voice Edge-TTS exposes
+  (~600 entries). Fields returned: `name`, `short_name` (the value
+  callers pass to `/calls/tts`), `locale`, `gender`,
+  `friendly_name`. Cache aggressively client-side; the list is
+  stable per Edge-TTS release.
+- **`GET /api/v1/tts/preview?text=<t>&voice=<v>`** — audition a
+  voice without placing a call. Returns the raw MP3 that Edge-TTS
+  produced (`Content-Type: audio/mpeg`), so an operator can hit the
+  endpoint straight from the console `<audio>` tag and hear the
+  voice before wiring it to a live call. `text` is capped at 500
+  chars — this is a preview, not the send path.
+
+### Notes
+
+Console updates that surface these endpoints in the playground land
+alongside the v0.7.12 binary; nothing existing is behind a feature
+flag or breaking.
+
 ## [0.7.11] - 2026-07-19
 
 ### Added — fleet-level endpoints

@@ -1059,3 +1059,94 @@ async fn drive_media_socket(
     state.call_audio_channels().remove(&call_id);
     Ok(())
 }
+
+/// Preview a TTS voice without placing a call — synthesize `text` with
+/// `voice` and return the MP3 that Edge-TTS produced, before the ffmpeg
+/// resample step. Cheap way for a caller to audition voices in the
+/// browser before wiring one to `tts_call`.
+#[derive(Debug, serde::Deserialize)]
+pub struct TtsPreviewQuery {
+    pub text: String,
+    pub voice: String,
+}
+
+pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumResponse, ApiError> {
+    let text = q.text.trim();
+    if text.is_empty() {
+        return Err(ApiError::BadRequest("text is empty".into()));
+    }
+    if text.chars().count() > 500 {
+        return Err(ApiError::BadRequest(
+            "text is over 500 chars — not a preview, use /calls/tts".into(),
+        ));
+    }
+    let text_owned = sanitize_ssml_text(text);
+    let voice_owned = q.voice.clone();
+
+    let mp3 = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+        use msedge_tts::tts::client::connect;
+        use msedge_tts::tts::SpeechConfig;
+        use msedge_tts::voice::get_voices_list;
+        let voices = get_voices_list().map_err(|e| anyhow::anyhow!("edge tts voice list: {e}"))?;
+        let matched = voices
+            .iter()
+            .find(|v| v.short_name.as_deref() == Some(voice_owned.as_str()))
+            .ok_or_else(|| anyhow::anyhow!("voice '{}' not found", voice_owned))?;
+        let config = SpeechConfig::from(matched);
+        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
+        let audio = client
+            .synthesize(&text_owned, &config)
+            .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
+        if audio.audio_bytes.is_empty() {
+            anyhow::bail!("edge tts returned 0 bytes");
+        }
+        Ok(audio.audio_bytes)
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("tts task join: {e}")))?
+    .map_err(|e| ApiError::Internal(format!("tts preview failed: {e}")))?;
+
+    let resp = axum::response::Response::builder()
+        .status(200)
+        .header("content-type", "audio/mpeg")
+        .header("cache-control", "public, max-age=3600")
+        .header("x-waxum-tts-voice", q.voice)
+        .body(axum::body::Body::from(mp3))
+        .map_err(|e| ApiError::Internal(format!("response build: {e}")))?;
+    Ok(resp)
+}
+
+/// List every voice Edge-TTS exposes. Response shape mirrors what the
+/// upstream `get_voices_list` returns, with just the fields a caller
+/// actually needs (short name, locale, gender, display name). Cached
+/// on the caller side is fine — the list is stable per Edge-TTS
+/// release.
+#[derive(serde::Serialize)]
+pub struct VoiceEntry {
+    pub name: String,
+    pub short_name: Option<String>,
+    pub locale: Option<String>,
+    pub gender: Option<String>,
+    pub friendly_name: Option<String>,
+}
+
+pub async fn list_voices() -> Result<Json<Vec<VoiceEntry>>, ApiError> {
+    let voices = tokio::task::spawn_blocking(|| -> anyhow::Result<Vec<VoiceEntry>> {
+        use msedge_tts::voice::get_voices_list;
+        let raw = get_voices_list().map_err(|e| anyhow::anyhow!("voice list: {e}"))?;
+        Ok(raw
+            .into_iter()
+            .map(|v| VoiceEntry {
+                name: v.name,
+                short_name: v.short_name,
+                locale: v.locale,
+                gender: v.gender,
+                friendly_name: v.friendly_name,
+            })
+            .collect())
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("voice task join: {e}")))?
+    .map_err(|e| ApiError::Internal(format!("voice list failed: {e}")))?;
+    Ok(Json(voices))
+}

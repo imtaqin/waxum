@@ -26,6 +26,7 @@ pub mod bulk;
 pub mod calls;
 pub mod chatstate;
 pub mod contacts;
+pub mod events;
 pub mod fake_reply;
 pub mod groups;
 pub mod groups_management;

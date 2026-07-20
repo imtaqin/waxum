@@ -112,7 +112,9 @@ Production-grade. **110+ REST endpoints across 21 feature modules.**
 | Swagger UI + OpenAPI 3.1 schema | `/swagger-ui` |
 | Liveness / readiness probes | `/livez`, `/readyz` |
 | Prometheus metrics (counters + gauges) | `/metrics` |
-| Event ring buffer for terminal-style log | `/api/v1/events/tail` |
+| SSE event tail (filter by session / event) | `GET /api/v1/events/tail` |
+| List Edge-TTS voices | `GET /api/v1/voices` |
+| TTS voice preview (returns MP3) | `GET /api/v1/tts/preview?text=&voice=` |
 | Instance-lock file (single-writer safety) | on-boot |
 | FD-limit warning at start (nofile < 65536) | on-boot |
 | JWT + static Bearer auth, per-token IP allowlist (planned) | header |
