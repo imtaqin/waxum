@@ -39,6 +39,7 @@ fn api_routes() -> Router<AppState> {
         .route("/events/tail", get(handlers::events::events_tail))
         .route("/voices", get(handlers::calls::list_voices))
         .route("/tts/preview", get(handlers::calls::tts_preview))
+        .route("/tags", get(handlers::tags::list_all_tags))
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
 }
@@ -419,6 +420,16 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/webhooks/{webhook_id}/enable",
             post(handlers::webhooks::reenable_webhook),
+        )
+        .route(
+            "/{session_id}/tags",
+            get(handlers::tags::list_session_tags)
+                .put(handlers::tags::replace_session_tags)
+                .post(handlers::tags::add_session_tag),
+        )
+        .route(
+            "/{session_id}/tags/{tag}",
+            delete(handlers::tags::remove_session_tag),
         )
 }
 
