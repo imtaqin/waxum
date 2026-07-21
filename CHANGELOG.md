@@ -2,6 +2,45 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.7.13] - 2026-07-20
+
+### Added — session tags
+
+Operators managing tens or hundreds of sessions have had no way to
+group them for filtering. This release adds a lightweight tag
+system: any short label (`cs`, `blast-campaign-2`, `client:acme`,
+`region:jkt`) can be attached to a session, and the session listing
+gains a `?tag=` filter.
+
+Tags are held in-memory on `AppState` and snapshotted to
+`{WHATSAPP_STORAGE_PATH}/session_tags.json` on every mutation, so a
+restart preserves organisation. A future release will promote them
+to first-class DB rows once the surface stabilises; for now the
+JSON file is authoritative on disk and read once at startup.
+
+- **`GET /api/v1/sessions/{sid}/tags`** — list the tags on a
+  session. Returns `{session_id, tags: [...]}` with tags sorted
+  alphabetically.
+- **`PUT /api/v1/sessions/{sid}/tags`** — replace the full tag
+  set. Body `{"tags": ["cs", "team:jakarta"]}`. Empty strings and
+  whitespace-only entries are dropped; sending an empty array
+  removes the session from the tag map entirely.
+- **`POST /api/v1/sessions/{sid}/tags`** — add one tag. Body
+  `{"tag": "vip"}`. Response reports `changed: true|false` so the
+  caller can distinguish a real add from an already-present tag.
+- **`DELETE /api/v1/sessions/{sid}/tags/{tag}`** — remove one
+  tag. Session drops out of the map once its last tag is gone.
+- **`GET /api/v1/tags`** — enumerate every distinct tag across
+  the fleet with the number of sessions carrying it, sorted by
+  count then name. Powers a "tag cloud" in the console.
+- **`GET /api/v1/sessions?tag=<t>`** — the existing session
+  listing accepts `?tag=<name>` and returns only sessions carrying
+  that tag. Case-sensitive, trimmed on both sides.
+
+Deleting a session (`DELETE /api/v1/sessions/{sid}`) now also
+drops any tags associated with it, so the JSON snapshot does not
+accumulate orphans.
+
 ## [0.7.12] - 2026-07-19
 
 ### Added — event tail + TTS discovery

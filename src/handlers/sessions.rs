@@ -102,6 +102,11 @@ pub async fn create_session(
     Ok(Json(CreateSessionResponse { session }))
 }
 
+#[derive(serde::Deserialize)]
+pub struct ListSessionsQuery {
+    pub tag: Option<String>,
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/sessions",
@@ -113,6 +118,7 @@ pub async fn create_session(
 )]
 pub async fn list_sessions(
     State(state): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<ListSessionsQuery>,
 ) -> Result<Json<SessionListResponse>, ApiError> {
     let sessions = state
         .session_manager()
@@ -120,8 +126,17 @@ pub async fn list_sessions(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
+    let tag_filter = q.tag.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
+    let allowed: Option<std::collections::HashSet<String>> =
+        tag_filter.map(|t| state.sessions_with_tag(t).into_iter().collect());
+
     let mut updated_sessions = Vec::with_capacity(sessions.len());
     for mut session in sessions {
+        if let Some(ref set) = allowed {
+            if !set.contains(&session.id) {
+                continue;
+            }
+        }
         if let Some(runtime) = state.get_session(&session.id) {
             session.status = runtime.effective_status();
             session.is_logged_in = session.status == SessionStatus::LoggedIn;
@@ -193,6 +208,7 @@ pub async fn delete_session(
 
     state.remove_session(&session_id);
     state.purge_webhooks_for_session(&session_id);
+    state.drop_tags_for(&session_id).await;
 
     if let Some(storage_path) = state
         .session_manager()

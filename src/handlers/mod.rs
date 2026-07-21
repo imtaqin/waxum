@@ -40,4 +40,5 @@ pub mod presence;
 pub mod privacy;
 pub mod sessions;
 pub mod status;
+pub mod tags;
 pub mod webhooks;

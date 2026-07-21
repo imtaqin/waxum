@@ -236,6 +236,12 @@ struct AppStateInner {
 
     pub call_audio_channels: DashMap<String, ActiveCallAudio>,
 
+    /// In-memory tag membership per session. `DashMap<session_id, HashSet<tag>>`.
+    /// Persisted as `{base_storage_path}/session_tags.json` on every mutation
+    /// so restarts do not wipe organisation. Not on the hot path — tags are
+    /// only read on the console + session listing filters.
+    pub session_tags: DashMap<String, std::collections::HashSet<String>>,
+
     /// Bounded ring of the last N events crossing `broadcast_to_webhooks`.
     /// Backs the console overview "Live events" panel and also serves as
     /// the source for the terminal event log line.
@@ -297,7 +303,7 @@ impl AppState {
 
         let session_manager = SessionManager::new(pool);
 
-        Self {
+        let state = Self {
             inner: Arc::new(AppStateInner {
                 session_manager,
                 sessions: DashMap::new(),
@@ -309,7 +315,143 @@ impl AppState {
                 active_calls: DashMap::new(),
                 call_audio_channels: DashMap::new(),
                 event_ring: parking_lot::Mutex::new(std::collections::VecDeque::with_capacity(200)),
+                session_tags: DashMap::new(),
             }),
+        };
+
+        let path = Self::tags_file_path(&state.inner.base_storage_path);
+        if let Ok(bytes) = tokio::fs::read(&path).await {
+            if let Ok(map) =
+                serde_json::from_slice::<std::collections::HashMap<String, Vec<String>>>(&bytes)
+            {
+                for (sid, tags) in map {
+                    state
+                        .inner
+                        .session_tags
+                        .insert(sid, tags.into_iter().collect());
+                }
+                tracing::info!(
+                    target: "waxum::tags",
+                    entries = state.inner.session_tags.len(),
+                    "loaded session tags from {}",
+                    path.display()
+                );
+            }
+        }
+
+        state
+    }
+
+    fn tags_file_path(base: &str) -> std::path::PathBuf {
+        std::path::Path::new(base).join("session_tags.json")
+    }
+
+    async fn persist_tags(&self) {
+        let snapshot: std::collections::HashMap<String, Vec<String>> = self
+            .inner
+            .session_tags
+            .iter()
+            .map(|kv| (kv.key().clone(), kv.value().iter().cloned().collect()))
+            .collect();
+        let path = Self::tags_file_path(&self.inner.base_storage_path);
+        match serde_json::to_vec_pretty(&snapshot) {
+            Ok(bytes) => {
+                if let Err(e) = tokio::fs::write(&path, bytes).await {
+                    tracing::warn!(target: "waxum::tags", "persist tags failed: {e}");
+                }
+            }
+            Err(e) => tracing::warn!(target: "waxum::tags", "serialise tags failed: {e}"),
+        }
+    }
+
+    pub fn list_tags(&self, session_id: &str) -> Vec<String> {
+        self.inner
+            .session_tags
+            .get(session_id)
+            .map(|kv| {
+                let mut v: Vec<String> = kv.value().iter().cloned().collect();
+                v.sort();
+                v
+            })
+            .unwrap_or_default()
+    }
+
+    pub async fn set_tags(&self, session_id: &str, tags: Vec<String>) {
+        let cleaned: std::collections::HashSet<String> = tags
+            .into_iter()
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect();
+        if cleaned.is_empty() {
+            self.inner.session_tags.remove(session_id);
+        } else {
+            self.inner
+                .session_tags
+                .insert(session_id.to_string(), cleaned);
+        }
+        self.persist_tags().await;
+    }
+
+    pub async fn add_tag(&self, session_id: &str, tag: &str) -> bool {
+        let tag = tag.trim().to_string();
+        if tag.is_empty() {
+            return false;
+        }
+        let inserted = self
+            .inner
+            .session_tags
+            .entry(session_id.to_string())
+            .or_default()
+            .insert(tag);
+        if inserted {
+            self.persist_tags().await;
+        }
+        inserted
+    }
+
+    pub async fn remove_tag(&self, session_id: &str, tag: &str) -> bool {
+        let mut changed = false;
+        let mut drop_key = false;
+        if let Some(mut entry) = self.inner.session_tags.get_mut(session_id) {
+            changed = entry.remove(tag);
+            if entry.is_empty() {
+                drop_key = true;
+            }
+        }
+        if drop_key {
+            self.inner.session_tags.remove(session_id);
+        }
+        if changed {
+            self.persist_tags().await;
+        }
+        changed
+    }
+
+    pub fn sessions_with_tag(&self, tag: &str) -> Vec<String> {
+        self.inner
+            .session_tags
+            .iter()
+            .filter_map(|kv| {
+                if kv.value().contains(tag) {
+                    Some(kv.key().clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn all_session_ids_with_tags(&self) -> Vec<String> {
+        self.inner
+            .session_tags
+            .iter()
+            .map(|kv| kv.key().clone())
+            .collect()
+    }
+
+    pub async fn drop_tags_for(&self, session_id: &str) {
+        if self.inner.session_tags.remove(session_id).is_some() {
+            self.persist_tags().await;
         }
     }
 

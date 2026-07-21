@@ -112,6 +112,7 @@ Production-grade. **110+ REST endpoints across 21 feature modules.**
 | Swagger UI + OpenAPI 3.1 schema | `/swagger-ui` |
 | Liveness / readiness probes | `/livez`, `/readyz` |
 | Prometheus metrics (counters + gauges) | `/metrics` |
+| Session tags (in-memory + JSON snapshot) | `GET/PUT/POST /api/v1/sessions/{sid}/tags`, `DELETE .../tags/{tag}`, `GET /api/v1/tags`, `GET /api/v1/sessions?tag=` |
 | SSE event tail (filter by session / event) | `GET /api/v1/events/tail` |
 | List Edge-TTS voices | `GET /api/v1/voices` |
 | TTS voice preview (returns MP3) | `GET /api/v1/tts/preview?text=&voice=` |
@@ -139,7 +140,7 @@ Production-grade. **110+ REST endpoints across 21 feature modules.**
 | Blast queue engine (bulk send, dedup, retry, DLQ) | scoped |
 | Scheduled send (`send_at` ISO) | scoped |
 | S3 backend for media & recordings | scoped |
-| Session tags / groups | scoped |
+| ~~Session tags / groups~~ | shipped 0.7.13 |
 | TypeScript SDK (auto-gen from OpenAPI) | scoped |
 | Rust client crate | scoped |
 | n8n community node | scoped |
