@@ -82,6 +82,23 @@ body forced off.
 - **`BLAST_POLL_MS`** — worker poll interval in milliseconds
   (default 1000).
 
+### Added — message history + full-text search
+
+Inbound and outbound messages are now persisted to a `messages` table
+(tri-backend Postgres / MySQL / SQLite) with a body-indexed FTS
+projection. SQLite uses native `FTS5`; Postgres uses `tsvector` +
+`GIN`; MySQL uses `FULLTEXT`. Snippet highlighting and rank ordering
+are returned in the same shape across all three.
+
+- **`GET /api/v1/sessions/{sid}/messages/search?q=&limit=&before=`** —
+  per-session search, newest-first, with highlighted snippet and
+  rank score.
+- **`GET /api/v1/messages/search?q=&session=&limit=`** — fleet-wide
+  search across every session.
+- **Schema** — new `messages` table (id, session_id, chat_jid,
+  sender_jid, direction, body, mime, timestamp) with matching FTS
+  index per backend; migrations run automatically on boot.
+
 ### Changed — TypeScript SDK split out
 
 The auto-generated TypeScript SDK now lives in its own repository,

@@ -18,7 +18,7 @@
 
 Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Swagger. Prometheus. NATS JetStream (optional).
 
-Production-grade. **110+ REST endpoints across 21 feature modules.**
+Production-grade. **130+ REST endpoints across 22 feature modules.**
 
 ## Features
 
@@ -36,6 +36,7 @@ Production-grade. **110+ REST endpoints across 21 feature modules.**
 | Chat state (typing / recording / paused) | `POST /sessions/{sid}/chat-state` |
 | Read receipts, mark as read | `POST /sessions/{sid}/messages/read` |
 | MEX GraphQL passthrough (server queries) | `POST /sessions/{sid}/mex` |
+| Message history + full-text search (SQLite FTS5) | `GET /sessions/{sid}/messages/search?q=`, `GET /messages/search?q=` |
 
 ### Scheduling & bulk send
 
@@ -143,7 +144,7 @@ Production-grade. **110+ REST endpoints across 21 feature modules.**
 | Video call media pipeline (MLOW video) | planning |
 | Group voice call | planning |
 | Local STT on recording (whisper.cpp) | planning |
-| Message search via SQLite FTS | planning |
+| ~~Message search via SQLite FTS~~ | shipped 0.8.0 |
 | ~~Blast queue engine (bulk send, dedup, retry, DLQ)~~ | shipped 0.8.0 |
 | ~~Scheduled send (`send_at` ISO)~~ | shipped 0.8.0 |
 | S3 backend for media & recordings | scoped |
