@@ -64,6 +64,14 @@ pub enum WebhookEvent {
     OfflineSyncPreview,
 
     OfflineSyncCompleted,
+
+    ScheduledSent,
+
+    ScheduledFailed,
+
+    BlastProgress,
+
+    BlastCompleted,
 }
 
 impl WebhookEvent {
@@ -94,6 +102,10 @@ impl WebhookEvent {
             WebhookEvent::ClientOutdated => event == "client_outdated",
             WebhookEvent::OfflineSyncPreview => event == "offline_sync_preview",
             WebhookEvent::OfflineSyncCompleted => event == "offline_sync_completed",
+            WebhookEvent::ScheduledSent => event == "scheduled_sent",
+            WebhookEvent::ScheduledFailed => event == "scheduled_failed",
+            WebhookEvent::BlastProgress => event == "blast_progress",
+            WebhookEvent::BlastCompleted => event == "blast_completed",
         }
     }
 
@@ -124,6 +136,10 @@ impl WebhookEvent {
             WebhookEvent::ClientOutdated => "client_outdated",
             WebhookEvent::OfflineSyncPreview => "offline_sync_preview",
             WebhookEvent::OfflineSyncCompleted => "offline_sync_completed",
+            WebhookEvent::ScheduledSent => "scheduled_sent",
+            WebhookEvent::ScheduledFailed => "scheduled_failed",
+            WebhookEvent::BlastProgress => "blast_progress",
+            WebhookEvent::BlastCompleted => "blast_completed",
         }
     }
 
@@ -157,6 +173,10 @@ impl WebhookEvent {
             "client_outdated" => Some(WebhookEvent::ClientOutdated),
             "offline_sync_preview" => Some(WebhookEvent::OfflineSyncPreview),
             "offline_sync_completed" => Some(WebhookEvent::OfflineSyncCompleted),
+            "scheduled_sent" => Some(WebhookEvent::ScheduledSent),
+            "scheduled_failed" => Some(WebhookEvent::ScheduledFailed),
+            "blast_progress" => Some(WebhookEvent::BlastProgress),
+            "blast_completed" => Some(WebhookEvent::BlastCompleted),
             _ => None,
         }
     }

@@ -34,9 +34,17 @@ pub struct SendTextRequest {
     pub reply_to: Option<String>,
 
     pub fake_reply: Option<FakeReplyConfig>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendImageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -49,9 +57,17 @@ pub struct SendImageRequest {
     pub reply_to: Option<String>,
 
     pub fake_reply: Option<FakeReplyConfig>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendVideoRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -64,9 +80,17 @@ pub struct SendVideoRequest {
     pub reply_to: Option<String>,
 
     pub fake_reply: Option<FakeReplyConfig>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendAudioRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -78,9 +102,17 @@ pub struct SendAudioRequest {
     pub ptt: bool,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendDocumentRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -96,9 +128,17 @@ pub struct SendDocumentRequest {
     pub reply_to: Option<String>,
 
     pub fake_reply: Option<FakeReplyConfig>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendStickerRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -107,9 +147,17 @@ pub struct SendStickerRequest {
     pub sticker: MediaData,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendLocationRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -126,9 +174,17 @@ pub struct SendLocationRequest {
     pub address: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendContactRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -137,9 +193,17 @@ pub struct SendContactRequest {
     pub contact: ContactCard,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ContactCard {
     pub display_name: String,
 
@@ -148,7 +212,7 @@ pub struct ContactCard {
     pub organization: Option<String>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ContactPhone {
     pub number: String,
 
@@ -181,7 +245,7 @@ pub struct SendReactionRequest {
     pub emoji: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(untagged)]
 #[allow(dead_code)]
 pub enum MediaData {
@@ -251,7 +315,7 @@ pub struct SuccessResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendPollRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -268,9 +332,17 @@ pub struct SendPollRequest {
     pub selectable_count: u32,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendButtonsRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -286,6 +358,14 @@ pub struct SendButtonsRequest {
     pub header_text: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -294,7 +374,7 @@ pub struct ButtonItem {
     pub display_text: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendListRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -314,6 +394,14 @@ pub struct SendListRequest {
     pub footer: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -329,7 +417,7 @@ pub struct ListRow {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendInteractiveRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -353,6 +441,14 @@ pub struct SendInteractiveRequest {
     /// consumer WhatsApp accounts (unverified business). Defaults to true.
     #[serde(default = "default_true")]
     pub view_once: bool,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn default_true() -> bool {
@@ -365,7 +461,7 @@ pub struct NativeFlowButtonItem {
     pub button_params_json: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendCtaUrlRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -406,9 +502,17 @@ pub struct SendCtaUrlRequest {
     pub image: Option<MediaData>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendQuickReplyRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -422,9 +526,17 @@ pub struct SendQuickReplyRequest {
     pub buttons: Vec<QuickReplyButtonItem>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct QuickReplyButtonItem {
     /// Internal ID returned to your webhook when the user taps the button.
     pub id: String,
@@ -445,7 +557,7 @@ pub struct SendTemplateRequest {
     pub reply_to: Option<String>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendNewsletterAdminInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -460,9 +572,17 @@ pub struct SendNewsletterAdminInviteRequest {
     pub invite_expiration: Option<i64>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendNewsletterFollowerInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -475,9 +595,17 @@ pub struct SendNewsletterFollowerInviteRequest {
     pub caption: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendOrderRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -503,9 +631,17 @@ pub struct SendOrderRequest {
     pub total_currency_code: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendInvoiceRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -521,9 +657,17 @@ pub struct SendInvoiceRequest {
     pub attachment_mimetype: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendPaymentInviteRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -533,6 +677,14 @@ pub struct SendPaymentInviteRequest {
     pub service_type: Option<i32>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -551,7 +703,7 @@ fn default_pin_duration() -> i64 {
     86400
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ForwardMessageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -560,9 +712,17 @@ pub struct ForwardMessageRequest {
     pub text: String,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendPollUpdateRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -579,9 +739,17 @@ pub struct SendPollUpdateRequest {
 
     /// Encryption key (base64)
     pub enc_payload: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendButtonsResponseRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -593,9 +761,17 @@ pub struct SendButtonsResponseRequest {
     pub selected_display_text: String,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendListResponseRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -608,9 +784,17 @@ pub struct SendListResponseRequest {
     pub description: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendInteractiveResponseRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -629,13 +813,21 @@ pub struct SendInteractiveResponseRequest {
     pub version: i32,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn default_version() -> i32 {
     3
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SendHighlyStructuredRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
@@ -653,9 +845,17 @@ pub struct SendHighlyStructuredRequest {
     pub fallback_lc: Option<String>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendTemplateButtonReplyRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -667,9 +867,17 @@ pub struct SendTemplateButtonReplyRequest {
     pub selected_index: Option<u32>,
 
     pub reply_to: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendCommentRequest {
     /// JID of the channel / community-announce group the comment lives in
     /// (the same `chat` JID where the parent post was published).
@@ -690,9 +898,17 @@ pub struct SendCommentRequest {
     /// receivers key decryption off this field; if omitted the lib resolves
     /// it from the locally-stored message secret.
     pub target_participant: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendScheduledCallRequest {
     #[schema(example = "120363000000000000@g.us")]
     pub to: String,
@@ -705,13 +921,21 @@ pub struct SendScheduledCallRequest {
     pub call_type: String,
 
     pub title: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn default_call_type() -> String {
     "voice".to_string()
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendScheduledCallEditRequest {
     #[schema(example = "120363000000000000@g.us")]
     pub to: String,
@@ -722,13 +946,21 @@ pub struct SendScheduledCallEditRequest {
     /// "cancel"
     #[serde(default = "default_edit_type")]
     pub edit_type: String,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn default_edit_type() -> String {
     "cancel".to_string()
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendPaymentRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -741,9 +973,17 @@ pub struct SendPaymentRequest {
 
     /// Transaction data (JSON string)
     pub transaction_data: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RequestPaymentRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -760,27 +1000,51 @@ pub struct RequestPaymentRequest {
 
     /// Expiration timestamp
     pub expiry_timestamp: Option<i64>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CancelPaymentRequestRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
     /// Message ID of the payment request to cancel
     pub request_message_id: String,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DeclinePaymentRequestRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
     /// Message ID of the payment request to decline
     pub request_message_id: String,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SendNewsletterForwardRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
@@ -799,6 +1063,14 @@ pub struct SendNewsletterForwardRequest {
 
     /// Content type: "update", "update_card", "link_card"
     pub content_type: Option<String>,
+
+    /// Optional ISO-8601 UTC time to defer delivery until. When set in
+    /// the future the message is parked in the scheduler and the API
+    /// returns `status: "pending"` with a `schedule_id` instead of
+    /// sending immediately.
+    #[serde(default)]
+    #[schema(example = "2026-01-01T12:00:00Z")]
+    pub send_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

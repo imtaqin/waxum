@@ -30,13 +30,20 @@
 //! - `WA_RS_BLOCKING_THREADS` — tokio blocking pool (default 2048).
 //! - `WA_RS_MYSQL_MAX_POOL` — MySQL connections (default 64).
 //! - `WA_RS_PORT` / `WA_RS_HOST` — bind address (default `0.0.0.0:3451`).
+//! - `SCHEDULER_POLL_MS` — scheduled-send dispatcher poll interval in
+//!   milliseconds (default 1000).
+//! - `BLAST_POLL_MS` — blast (bulk-send) worker poll interval in
+//!   milliseconds (default 1000).
+//! - `MESSAGE_HISTORY_ENABLED` — set to `false` to disable best-effort
+//!   message-history ingestion (the search index; default true).
 //!
 //! ## Storage
 //!
 //! - Session storage dirs live at `WHATSAPP_STORAGE_PATH` (default
 //!   `./whatsapp_sessions`), one directory per session id containing the
 //!   upstream `whatsapp.db` SQLite store.
-//! - Registry (`sessions`, `webhooks`, `contacts`, `webhook_dlq`) lives in
+//! - Registry (`sessions`, `webhooks`, `contacts`, `webhook_dlq`,
+//!   `scheduled_messages`, `blast_jobs`, `blast_recipients`) lives in
 //!   whichever DB `DATABASE_URL` points at.
 use anyhow::Result;
 use std::net::SocketAddr;
@@ -203,6 +210,21 @@ use state::AppState;
         handlers::nats_handler::nats_status,
         handlers::nats_handler::nats_purge_stream,
         handlers::nats_handler::nats_list_consumers,
+
+        handlers::schedule::list_session_scheduled,
+        handlers::schedule::cancel_scheduled,
+        handlers::schedule::list_all_scheduled,
+
+        handlers::blast::create_blast,
+        handlers::blast::list_session_blasts,
+        handlers::blast::get_blast,
+        handlers::blast::list_blast_recipients,
+        handlers::blast::cancel_blast,
+        handlers::blast::retry_blast,
+        handlers::blast::list_all_blasts,
+
+        handlers::search::search_session_messages,
+        handlers::search::search_all_messages,
     ),
     components(
         schemas(
@@ -350,6 +372,24 @@ use state::AppState;
             models::webhooks::WebhookListResponse,
             models::webhooks::WebhookRequest,
 
+            models::schedule::ScheduledMessage,
+            models::schedule::ScheduledStatus,
+            models::schedule::ScheduledListResponse,
+            models::schedule::SendResponse,
+
+            models::blast::CreateBlastRequest,
+            models::blast::CreateBlastResponse,
+            models::blast::BlastJob,
+            models::blast::BlastJobStatus,
+            models::blast::BlastJobListResponse,
+            models::blast::BlastOptions,
+            models::blast::BlastRecipient,
+            models::blast::BlastRecipientStatus,
+            models::blast::BlastRecipientListResponse,
+
+            models::search::MessageHit,
+            models::search::MessageSearchResponse,
+
             models::common::SuccessResponse,
 
             nats::models::NatsStatusResponse,
@@ -373,6 +413,8 @@ use state::AppState;
         (name = "mex", description = "GraphQL/MEX operations"),
         (name = "newsletter", description = "Newsletter/Channel messages"),
         (name = "operations", description = "Spam reporting, TCToken, reconnection, and sync operations"),
+        (name = "scheduler", description = "Scheduled (deferred) message sending"),
+        (name = "blast", description = "Bulk-send (blast) jobs with pacing, retry and DLQ"),
         (name = "nats", description = "NATS JetStream management and status")
     )
 )]
@@ -615,6 +657,16 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     let reconnect_state = state.clone();
     tokio::spawn(async move {
         handlers::sessions::reconnect_all_on_startup(reconnect_state).await;
+    });
+
+    let scheduler_state = state.clone();
+    tokio::spawn(async move {
+        handlers::schedule::run_scheduler(scheduler_state).await;
+    });
+
+    let blast_state = state.clone();
+    tokio::spawn(async move {
+        handlers::blast::run_blast_worker(blast_state).await;
     });
 
     if nats_enabled {

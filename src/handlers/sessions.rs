@@ -1038,6 +1038,8 @@ async fn handle_event(
     if let Event::Messages(batch) = event.as_ref() {
         let timestamp = chrono::Utc::now().timestamp();
         for im in batch.messages.iter() {
+            crate::handlers::search::record_incoming(state, session_id, &im.message, &im.info)
+                .await;
             let data = message_event_data(&im.message, &im.info);
             let payload_value = serde_json::json!({
                 "session_id": session_id,
@@ -1229,7 +1231,9 @@ fn message_event_data(
 
 /// Extracts user-visible content from a protobuf Message: best-effort text,
 /// optional caption, the high-level type slug, and the media mimetype if any.
-fn extract_message_content(
+/// Shared with the message-history ingestion in
+/// [`crate::handlers::search`].
+pub(crate) fn extract_message_content(
     msg: &waproto::whatsapp::Message,
 ) -> (Option<String>, Option<String>, String, Option<String>) {
     let mut text: Option<String> = None;

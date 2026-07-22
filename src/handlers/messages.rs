@@ -8,6 +8,7 @@ use waproto::buffa::{Enumeration, MessageField};
 
 use crate::error::ApiError;
 use crate::models::messages::*;
+use crate::models::schedule::SendResponse;
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -20,7 +21,7 @@ use crate::state::AppState;
     ),
     request_body = SendTextRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -30,8 +31,33 @@ pub async fn send_text(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendTextRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "text",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_text(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `text` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_text(
+    state: &AppState,
+    session_id: &str,
+    request: SendTextRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
@@ -59,16 +85,18 @@ pub async fn send_text(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -81,7 +109,7 @@ pub async fn send_text(
     ),
     request_body = SendImageRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -91,8 +119,33 @@ pub async fn send_image(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendImageRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "image",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_image(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `image` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_image(
+    state: &AppState,
+    session_id: &str,
+    request: SendImageRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.image).await?;
@@ -136,16 +189,18 @@ pub async fn send_image(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -158,7 +213,7 @@ pub async fn send_image(
     ),
     request_body = SendVideoRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -168,8 +223,33 @@ pub async fn send_video(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendVideoRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "video",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_video(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `video` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_video(
+    state: &AppState,
+    session_id: &str,
+    request: SendVideoRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.video).await?;
@@ -213,16 +293,18 @@ pub async fn send_video(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -235,7 +317,7 @@ pub async fn send_video(
     ),
     request_body = SendAudioRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -245,8 +327,33 @@ pub async fn send_audio(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendAudioRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "audio",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_audio(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `audio` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_audio(
+    state: &AppState,
+    session_id: &str,
+    request: SendAudioRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.audio).await?;
@@ -276,16 +383,18 @@ pub async fn send_audio(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -298,7 +407,7 @@ pub async fn send_audio(
     ),
     request_body = SendDocumentRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -308,8 +417,33 @@ pub async fn send_document(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendDocumentRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "document",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_document(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `document` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_document(
+    state: &AppState,
+    session_id: &str,
+    request: SendDocumentRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, mimetype) = get_media_data(&request.document).await?;
@@ -354,16 +488,18 @@ pub async fn send_document(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -376,7 +512,7 @@ pub async fn send_document(
     ),
     request_body = SendStickerRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -386,8 +522,33 @@ pub async fn send_sticker(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendStickerRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "sticker",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_sticker(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `sticker` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_sticker(
+    state: &AppState,
+    session_id: &str,
+    request: SendStickerRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let (data, _mimetype) = get_media_data(&request.sticker).await?;
@@ -416,16 +577,18 @@ pub async fn send_sticker(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -438,7 +601,7 @@ pub async fn send_sticker(
     ),
     request_body = SendLocationRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -448,8 +611,33 @@ pub async fn send_location(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendLocationRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "location",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_location(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `location` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_location(
+    state: &AppState,
+    session_id: &str,
+    request: SendLocationRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -464,16 +652,18 @@ pub async fn send_location(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -486,7 +676,7 @@ pub async fn send_location(
     ),
     request_body = SendContactRequest,
     responses(
-        (status = 200, description = "Message sent", body = MessageResponse),
+        (status = 200, description = "Message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -496,8 +686,33 @@ pub async fn send_contact(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendContactRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "contact",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_contact(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `contact` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_contact(
+    state: &AppState,
+    session_id: &str,
+    request: SendContactRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let vcard = build_vcard(&request.contact);
@@ -512,16 +727,18 @@ pub async fn send_contact(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -624,7 +841,7 @@ pub async fn send_reaction(
     ),
     request_body = SendPollRequest,
     responses(
-        (status = 200, description = "Poll sent", body = MessageResponse),
+        (status = 200, description = "Poll sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -634,8 +851,33 @@ pub async fn send_poll(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendPollRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "poll",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_poll(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `poll` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_poll(
+    state: &AppState,
+    session_id: &str,
+    request: SendPollRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
@@ -662,16 +904,18 @@ pub async fn send_poll(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -684,7 +928,7 @@ pub async fn send_poll(
     ),
     request_body = SendButtonsRequest,
     responses(
-        (status = 200, description = "Buttons message sent", body = MessageResponse),
+        (status = 200, description = "Buttons message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -694,8 +938,33 @@ pub async fn send_buttons(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendButtonsRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "buttons",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_buttons(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `buttons` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_buttons(
+    state: &AppState,
+    session_id: &str,
+    request: SendButtonsRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
@@ -737,16 +1006,18 @@ pub async fn send_buttons(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -759,7 +1030,7 @@ pub async fn send_buttons(
     ),
     request_body = SendListRequest,
     responses(
-        (status = 200, description = "List message sent", body = MessageResponse),
+        (status = 200, description = "List message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -769,8 +1040,33 @@ pub async fn send_list(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendListRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "list",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_list(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `list` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_list(
+    state: &AppState,
+    session_id: &str,
+    request: SendListRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let sections_json: Vec<serde_json::Value> = request
@@ -833,16 +1129,18 @@ pub async fn send_list(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -855,7 +1153,7 @@ pub async fn send_list(
     ),
     request_body = SendInteractiveRequest,
     responses(
-        (status = 200, description = "Interactive message sent", body = MessageResponse),
+        (status = 200, description = "Interactive message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -865,8 +1163,33 @@ pub async fn send_interactive(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendInteractiveRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "interactive",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_interactive(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `interactive` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_interactive(
+    state: &AppState,
+    session_id: &str,
+    request: SendInteractiveRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let buttons: Vec<
@@ -942,16 +1265,18 @@ pub async fn send_interactive(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -964,7 +1289,7 @@ pub async fn send_interactive(
     ),
     request_body = SendCtaUrlRequest,
     responses(
-        (status = 200, description = "CTA URL message sent", body = MessageResponse),
+        (status = 200, description = "CTA URL message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -974,8 +1299,33 @@ pub async fn send_cta_url(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendCtaUrlRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "cta-url",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_cta_url(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `cta-url` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_cta_url(
+    state: &AppState,
+    session_id: &str,
+    request: SendCtaUrlRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let merchant_url = request
@@ -1063,16 +1413,18 @@ pub async fn send_cta_url(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1085,7 +1437,7 @@ pub async fn send_cta_url(
     ),
     request_body = SendQuickReplyRequest,
     responses(
-        (status = 200, description = "Quick reply message sent", body = MessageResponse),
+        (status = 200, description = "Quick reply message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1095,8 +1447,33 @@ pub async fn send_quick_reply(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendQuickReplyRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "quick-reply",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_quick_reply(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `quick-reply` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_quick_reply(
+    state: &AppState,
+    session_id: &str,
+    request: SendQuickReplyRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     if request.buttons.is_empty() {
@@ -1149,16 +1526,18 @@ pub async fn send_quick_reply(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1171,7 +1550,7 @@ pub async fn send_quick_reply(
     ),
     request_body = SendNewsletterAdminInviteRequest,
     responses(
-        (status = 200, description = "Newsletter admin invite sent", body = MessageResponse),
+        (status = 200, description = "Newsletter admin invite sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1181,8 +1560,33 @@ pub async fn send_newsletter_admin_invite(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterAdminInviteRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "newsletter-admin-invite",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_newsletter_admin_invite(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `newsletter-admin-invite` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_newsletter_admin_invite(
+    state: &AppState,
+    session_id: &str,
+    request: SendNewsletterAdminInviteRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1199,16 +1603,18 @@ pub async fn send_newsletter_admin_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1221,7 +1627,7 @@ pub async fn send_newsletter_admin_invite(
     ),
     request_body = SendNewsletterFollowerInviteRequest,
     responses(
-        (status = 200, description = "Newsletter follower invite sent", body = MessageResponse),
+        (status = 200, description = "Newsletter follower invite sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1231,8 +1637,33 @@ pub async fn send_newsletter_follower_invite(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterFollowerInviteRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "newsletter-follower-invite",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_newsletter_follower_invite(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `newsletter-follower-invite` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_newsletter_follower_invite(
+    state: &AppState,
+    session_id: &str,
+    request: SendNewsletterFollowerInviteRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1248,16 +1679,18 @@ pub async fn send_newsletter_follower_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1270,7 +1703,7 @@ pub async fn send_newsletter_follower_invite(
     ),
     request_body = SendOrderRequest,
     responses(
-        (status = 200, description = "Order message sent", body = MessageResponse),
+        (status = 200, description = "Order message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1280,8 +1713,33 @@ pub async fn send_order(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendOrderRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "order",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_order(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `order` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_order(
+    state: &AppState,
+    session_id: &str,
+    request: SendOrderRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let status = request.status.as_deref().and_then(|s| match s {
@@ -1308,16 +1766,18 @@ pub async fn send_order(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1330,7 +1790,7 @@ pub async fn send_order(
     ),
     request_body = SendInvoiceRequest,
     responses(
-        (status = 200, description = "Invoice message sent", body = MessageResponse),
+        (status = 200, description = "Invoice message sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1340,8 +1800,33 @@ pub async fn send_invoice(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendInvoiceRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "invoice",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_invoice(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `invoice` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_invoice(
+    state: &AppState,
+    session_id: &str,
+    request: SendInvoiceRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
@@ -1362,16 +1847,18 @@ pub async fn send_invoice(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1384,7 +1871,7 @@ pub async fn send_invoice(
     ),
     request_body = SendPaymentInviteRequest,
     responses(
-        (status = 200, description = "Payment invite sent", body = MessageResponse),
+        (status = 200, description = "Payment invite sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1394,8 +1881,33 @@ pub async fn send_payment_invite(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendPaymentInviteRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "payment-invite",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_payment_invite(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `payment-invite` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_payment_invite(
+    state: &AppState,
+    session_id: &str,
+    request: SendPaymentInviteRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1411,16 +1923,18 @@ pub async fn send_payment_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1469,10 +1983,13 @@ pub async fn send_pin_message(
     };
 
     let message_id = client
-        .send_message(chat_jid.clone(), message)
+        .send_message(chat_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    crate::handlers::search::record_outgoing(&state, &session_id, &chat_jid, &message, &message_id)
+        .await;
 
     Ok(Json(MessageResponse {
         message_id,
@@ -1491,7 +2008,7 @@ pub async fn send_pin_message(
     ),
     request_body = ForwardMessageRequest,
     responses(
-        (status = 200, description = "Message forwarded", body = MessageResponse),
+        (status = 200, description = "Message forwarded", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1501,8 +2018,33 @@ pub async fn forward_message(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<ForwardMessageRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "forward",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_forward_message(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `forward` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_forward_message(
+    state: &AppState,
+    session_id: &str,
+    request: ForwardMessageRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1521,16 +2063,18 @@ pub async fn forward_message(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1543,7 +2087,7 @@ pub async fn forward_message(
     ),
     request_body = SendPollUpdateRequest,
     responses(
-        (status = 200, description = "Poll vote sent", body = MessageResponse),
+        (status = 200, description = "Poll vote sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1553,8 +2097,33 @@ pub async fn send_poll_update(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendPollUpdateRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "poll-update",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_poll_update(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `poll-update` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_poll_update(
+    state: &AppState,
+    session_id: &str,
+    request: SendPollUpdateRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let enc_payload = request.enc_payload.map(|p| {
@@ -1589,16 +2158,18 @@ pub async fn send_poll_update(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1611,7 +2182,7 @@ pub async fn send_poll_update(
     ),
     request_body = SendButtonsResponseRequest,
     responses(
-        (status = 200, description = "Buttons response sent", body = MessageResponse),
+        (status = 200, description = "Buttons response sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1621,8 +2192,33 @@ pub async fn send_buttons_response(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendButtonsResponseRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "buttons-response",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_buttons_response(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `buttons-response` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_buttons_response(
+    state: &AppState,
+    session_id: &str,
+    request: SendButtonsResponseRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1647,16 +2243,18 @@ pub async fn send_buttons_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1669,7 +2267,7 @@ pub async fn send_buttons_response(
     ),
     request_body = SendListResponseRequest,
     responses(
-        (status = 200, description = "List response sent", body = MessageResponse),
+        (status = 200, description = "List response sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1679,8 +2277,33 @@ pub async fn send_list_response(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendListResponseRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "list-response",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_list_response(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `list-response` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_list_response(
+    state: &AppState,
+    session_id: &str,
+    request: SendListResponseRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1710,16 +2333,18 @@ pub async fn send_list_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1732,7 +2357,7 @@ pub async fn send_list_response(
     ),
     request_body = SendInteractiveResponseRequest,
     responses(
-        (status = 200, description = "Interactive response sent", body = MessageResponse),
+        (status = 200, description = "Interactive response sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1742,8 +2367,33 @@ pub async fn send_interactive_response(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendInteractiveResponseRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "interactive-response",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_interactive_response(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `interactive-response` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_interactive_response(
+    state: &AppState,
+    session_id: &str,
+    request: SendInteractiveResponseRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let native_flow =
@@ -1777,16 +2427,18 @@ pub async fn send_interactive_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1799,7 +2451,7 @@ pub async fn send_interactive_response(
     ),
     request_body = SendHighlyStructuredRequest,
     responses(
-        (status = 200, description = "HSM sent", body = MessageResponse),
+        (status = 200, description = "HSM sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1809,8 +2461,33 @@ pub async fn send_highly_structured(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendHighlyStructuredRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "highly-structured",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_highly_structured(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `highly-structured` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_highly_structured(
+    state: &AppState,
+    session_id: &str,
+    request: SendHighlyStructuredRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1828,16 +2505,18 @@ pub async fn send_highly_structured(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1850,7 +2529,7 @@ pub async fn send_highly_structured(
     ),
     request_body = SendTemplateButtonReplyRequest,
     responses(
-        (status = 200, description = "Template button reply sent", body = MessageResponse),
+        (status = 200, description = "Template button reply sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1860,8 +2539,33 @@ pub async fn send_template_button_reply(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendTemplateButtonReplyRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "template-button-reply",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_template_button_reply(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `template-button-reply` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_template_button_reply(
+    state: &AppState,
+    session_id: &str,
+    request: SendTemplateButtonReplyRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -1884,16 +2588,18 @@ pub async fn send_template_button_reply(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1906,7 +2612,7 @@ pub async fn send_template_button_reply(
     ),
     request_body = SendCommentRequest,
     responses(
-        (status = 200, description = "Comment sent", body = MessageResponse),
+        (status = 200, description = "Comment sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1916,8 +2622,33 @@ pub async fn send_comment(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendCommentRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "comment",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_comment(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `comment` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_comment(
+    state: &AppState,
+    session_id: &str,
+    request: SendCommentRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let target_jid = request
@@ -1937,11 +2668,11 @@ pub async fn send_comment(
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -1954,7 +2685,7 @@ pub async fn send_comment(
     ),
     request_body = SendScheduledCallRequest,
     responses(
-        (status = 200, description = "Scheduled call created", body = MessageResponse),
+        (status = 200, description = "Scheduled call created", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -1964,8 +2695,33 @@ pub async fn send_scheduled_call(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendScheduledCallRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "scheduled-call",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_scheduled_call(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `scheduled-call` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_scheduled_call(
+    state: &AppState,
+    session_id: &str,
+    request: SendScheduledCallRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let call_type = match request.call_type.to_lowercase().as_str() {
@@ -1985,16 +2741,18 @@ pub async fn send_scheduled_call(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2007,7 +2765,7 @@ pub async fn send_scheduled_call(
     ),
     request_body = SendScheduledCallEditRequest,
     responses(
-        (status = 200, description = "Scheduled call edited", body = MessageResponse),
+        (status = 200, description = "Scheduled call edited", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2017,8 +2775,33 @@ pub async fn send_scheduled_call_edit(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendScheduledCallEditRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "scheduled-call-edit",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_scheduled_call_edit(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `scheduled-call-edit` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_scheduled_call_edit(
+    state: &AppState,
+    session_id: &str,
+    request: SendScheduledCallEditRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
@@ -2043,16 +2826,18 @@ pub async fn send_scheduled_call_edit(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2065,7 +2850,7 @@ pub async fn send_scheduled_call_edit(
     ),
     request_body = SendPaymentRequest,
     responses(
-        (status = 200, description = "Payment sent", body = MessageResponse),
+        (status = 200, description = "Payment sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2075,8 +2860,33 @@ pub async fn send_payment(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendPaymentRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "send-payment",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_payment(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `send-payment` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_payment(
+    state: &AppState,
+    session_id: &str,
+    request: SendPaymentRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
@@ -2109,16 +2919,18 @@ pub async fn send_payment(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2131,7 +2943,7 @@ pub async fn send_payment(
     ),
     request_body = RequestPaymentRequest,
     responses(
-        (status = 200, description = "Payment request sent", body = MessageResponse),
+        (status = 200, description = "Payment request sent", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2141,8 +2953,33 @@ pub async fn request_payment(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<RequestPaymentRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "request-payment",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_request_payment(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `request-payment` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_request_payment(
+    state: &AppState,
+    session_id: &str,
+    request: RequestPaymentRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
@@ -2170,16 +3007,18 @@ pub async fn request_payment(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2192,7 +3031,7 @@ pub async fn request_payment(
     ),
     request_body = CancelPaymentRequestRequest,
     responses(
-        (status = 200, description = "Payment request cancelled", body = MessageResponse),
+        (status = 200, description = "Payment request cancelled", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2202,8 +3041,33 @@ pub async fn cancel_payment_request(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<CancelPaymentRequestRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "cancel-payment",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_cancel_payment_request(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `cancel-payment` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_cancel_payment_request(
+    state: &AppState,
+    session_id: &str,
+    request: CancelPaymentRequestRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -2222,16 +3086,18 @@ pub async fn cancel_payment_request(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2244,7 +3110,7 @@ pub async fn cancel_payment_request(
     ),
     request_body = DeclinePaymentRequestRequest,
     responses(
-        (status = 200, description = "Payment request declined", body = MessageResponse),
+        (status = 200, description = "Payment request declined", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2254,8 +3120,33 @@ pub async fn decline_payment_request(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<DeclinePaymentRequestRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "decline-payment",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_decline_payment_request(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `decline-payment` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_decline_payment_request(
+    state: &AppState,
+    session_id: &str,
+    request: DeclinePaymentRequestRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let message = waproto::whatsapp::Message {
@@ -2274,16 +3165,18 @@ pub async fn decline_payment_request(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -2296,7 +3189,7 @@ pub async fn decline_payment_request(
     ),
     request_body = SendNewsletterForwardRequest,
     responses(
-        (status = 200, description = "Newsletter message forwarded", body = MessageResponse),
+        (status = 200, description = "Newsletter message forwarded", body = SendResponse),
         (status = 400, description = "Invalid request"),
         (status = 404, description = "Session not found"),
         (status = 503, description = "Not connected")
@@ -2306,8 +3199,33 @@ pub async fn send_newsletter_forward(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterForwardRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
-    let client = get_client(&state, &session_id)?;
+) -> Result<Json<SendResponse>, ApiError> {
+    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+        &state,
+        &session_id,
+        "newsletter-forward",
+        &request,
+        request.send_at,
+    )
+    .await?
+    {
+        return Ok(Json(scheduled));
+    }
+    execute_newsletter_forward(&state, &session_id, request)
+        .await
+        .map(SendResponse::sent)
+        .map(Json)
+}
+
+/// Core send logic for `newsletter-forward` messages, split out of the HTTP handler so
+/// the background scheduler can dispatch a parked request without an
+/// HTTP request in front of it.
+pub async fn execute_newsletter_forward(
+    state: &AppState,
+    session_id: &str,
+    request: SendNewsletterForwardRequest,
+) -> Result<MessageResponse, ApiError> {
+    let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
     let content_type = match request.content_type.as_deref() {
@@ -2348,16 +3266,18 @@ pub async fn send_newsletter_forward(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
-    Ok(Json(MessageResponse {
+    Ok(MessageResponse {
         message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
-    }))
+    })
 }
 
 #[allow(dead_code)]
@@ -2365,7 +3285,7 @@ pub async fn send_message(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<SendMessageRequest>,
-) -> Result<Json<MessageResponse>, ApiError> {
+) -> Result<Json<SendResponse>, ApiError> {
     send_text(
         State(state),
         Path(session_id),
@@ -2374,6 +3294,7 @@ pub async fn send_message(
             text: request.text,
             reply_to: None,
             fake_reply: None,
+            send_at: None,
         }),
     )
     .await

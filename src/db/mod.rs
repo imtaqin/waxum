@@ -16,9 +16,15 @@
 //! - [`session`] — session/webhook registry (the [`SessionManager`] type).
 //! - [`contacts`] — WhatsApp contact directory store.
 //! - [`webhook_dlq`] — dead-letter queue for failed webhook deliveries.
+//! - [`scheduled`] — parked scheduled sends awaiting dispatch.
+//! - [`blast`] — bulk-send jobs and their recipient rows.
+//! - [`messages`] — message history + full-text search.
 //! - [`sqlite_raw`] — hand-rolled safe wrapper over `libsqlite3-sys`.
 
+pub mod blast;
 pub mod contacts;
+pub mod messages;
+pub mod scheduled;
 pub mod schema;
 pub mod session;
 pub mod sqlite_raw;
