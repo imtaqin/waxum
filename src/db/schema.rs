@@ -113,8 +113,32 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 UNIQUE (job_id, recipient) \
              ); \
              CREATE INDEX IF NOT EXISTS idx_blast_recipients_dedup ON blast_recipients(session_id, recipient, status); \
-             CREATE INDEX IF NOT EXISTS idx_blast_recipients_job ON blast_recipients(job_id, status);",
+             CREATE INDEX IF NOT EXISTS idx_blast_recipients_job ON blast_recipients(job_id, status); \
+             CREATE TABLE IF NOT EXISTS messages ( \
+                id INTEGER PRIMARY KEY AUTOINCREMENT, \
+                message_id TEXT NOT NULL, \
+                session_id TEXT NOT NULL, \
+                chat_jid TEXT NOT NULL, \
+                sender_jid TEXT NOT NULL, \
+                direction TEXT NOT NULL, \
+                msg_type TEXT NOT NULL, \
+                body TEXT, \
+                msg_timestamp TEXT NOT NULL, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                UNIQUE (session_id, message_id) \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_messages_session_ts ON messages(session_id, msg_timestamp); \
+             CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(session_id, chat_jid);",
         )?;
+        if let Err(e) = sqlite_raw::exec_batch(
+            conn,
+            "CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(body, session_id UNINDEXED, message_id UNINDEXED);",
+        ) {
+            tracing::warn!(
+                "FTS5 unavailable, message search will use LIKE fallback: {}",
+                e
+            );
+        }
         Ok(())
     })
     .await
@@ -336,6 +360,46 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         )
         .await?;
 
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS messages (
+                id BIGSERIAL PRIMARY KEY,
+                message_id VARCHAR(255) NOT NULL,
+                session_id VARCHAR(255) NOT NULL,
+                chat_jid VARCHAR(255) NOT NULL,
+                sender_jid VARCHAR(255) NOT NULL,
+                direction VARCHAR(8) NOT NULL,
+                msg_type VARCHAR(32) NOT NULL,
+                body TEXT,
+                msg_timestamp TIMESTAMPTZ NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                body_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED,
+                UNIQUE (session_id, message_id)
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_session_ts ON messages(session_id, msg_timestamp)",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(session_id, chat_jid)",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_fts ON messages USING GIN (body_tsv)",
+            &[],
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -480,6 +544,28 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             UNIQUE KEY uniq_blast_recipient (job_id, recipient),
             INDEX idx_blast_recipients_dedup (session_id, recipient, status),
             INDEX idx_blast_recipients_job (job_id, status)
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS messages (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            message_id VARCHAR(255) NOT NULL,
+            session_id VARCHAR(255) NOT NULL,
+            chat_jid VARCHAR(255) NOT NULL,
+            sender_jid VARCHAR(255) NOT NULL,
+            direction VARCHAR(8) NOT NULL,
+            msg_type VARCHAR(32) NOT NULL,
+            body TEXT NULL,
+            msg_timestamp VARCHAR(30) NOT NULL,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            UNIQUE KEY uniq_messages_id (session_id, message_id),
+            INDEX idx_messages_session_ts (session_id, msg_timestamp),
+            INDEX idx_messages_chat (session_id, chat_jid),
+            FULLTEXT INDEX ft_messages_body (body)
         ) DEFAULT CHARSET=utf8mb4
         "#,
     )

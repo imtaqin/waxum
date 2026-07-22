@@ -34,6 +34,8 @@
 //!   milliseconds (default 1000).
 //! - `BLAST_POLL_MS` — blast (bulk-send) worker poll interval in
 //!   milliseconds (default 1000).
+//! - `MESSAGE_HISTORY_ENABLED` — set to `false` to disable best-effort
+//!   message-history ingestion (the search index; default true).
 //!
 //! ## Storage
 //!
@@ -220,6 +222,9 @@ use state::AppState;
         handlers::blast::cancel_blast,
         handlers::blast::retry_blast,
         handlers::blast::list_all_blasts,
+
+        handlers::search::search_session_messages,
+        handlers::search::search_all_messages,
     ),
     components(
         schemas(
@@ -381,6 +386,9 @@ use state::AppState;
             models::blast::BlastRecipient,
             models::blast::BlastRecipientStatus,
             models::blast::BlastRecipientListResponse,
+
+            models::search::MessageHit,
+            models::search::MessageSearchResponse,
 
             models::common::SuccessResponse,
 

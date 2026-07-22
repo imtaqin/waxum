@@ -85,10 +85,12 @@ pub async fn execute_text(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -187,10 +189,12 @@ pub async fn execute_image(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -289,10 +293,12 @@ pub async fn execute_video(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -377,10 +383,12 @@ pub async fn execute_audio(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -480,10 +488,12 @@ pub async fn execute_document(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -567,10 +577,12 @@ pub async fn execute_sticker(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -640,10 +652,12 @@ pub async fn execute_location(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -713,10 +727,12 @@ pub async fn execute_contact(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -888,10 +904,12 @@ pub async fn execute_poll(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -988,10 +1006,12 @@ pub async fn execute_buttons(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1109,10 +1129,12 @@ pub async fn execute_list(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1243,10 +1265,12 @@ pub async fn execute_interactive(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1389,10 +1413,12 @@ pub async fn execute_cta_url(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1500,10 +1526,12 @@ pub async fn execute_quick_reply(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1575,10 +1603,12 @@ pub async fn execute_newsletter_admin_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1649,10 +1679,12 @@ pub async fn execute_newsletter_follower_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1734,10 +1766,12 @@ pub async fn execute_order(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1813,10 +1847,12 @@ pub async fn execute_invoice(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1887,10 +1923,12 @@ pub async fn execute_payment_invite(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1945,10 +1983,13 @@ pub async fn send_pin_message(
     };
 
     let message_id = client
-        .send_message(chat_jid.clone(), message)
+        .send_message(chat_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    crate::handlers::search::record_outgoing(&state, &session_id, &chat_jid, &message, &message_id)
+        .await;
 
     Ok(Json(MessageResponse {
         message_id,
@@ -2022,10 +2063,12 @@ pub async fn execute_forward_message(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2115,10 +2158,12 @@ pub async fn execute_poll_update(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2198,10 +2243,12 @@ pub async fn execute_buttons_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2286,10 +2333,12 @@ pub async fn execute_list_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2378,10 +2427,12 @@ pub async fn execute_interactive_response(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2454,10 +2505,12 @@ pub async fn execute_highly_structured(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2535,10 +2588,12 @@ pub async fn execute_template_button_reply(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2686,10 +2741,12 @@ pub async fn execute_scheduled_call(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2769,10 +2826,12 @@ pub async fn execute_scheduled_call_edit(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2860,10 +2919,12 @@ pub async fn execute_payment(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2946,10 +3007,12 @@ pub async fn execute_request_payment(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3023,10 +3086,12 @@ pub async fn execute_cancel_payment_request(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3100,10 +3165,12 @@ pub async fn execute_decline_payment_request(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3199,10 +3266,12 @@ pub async fn execute_newsletter_forward(
     };
 
     let message_id = client
-        .send_message(to_jid.clone(), message)
+        .send_message(to_jid.clone(), message.clone())
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
+        .await;
 
     Ok(MessageResponse {
         message_id,

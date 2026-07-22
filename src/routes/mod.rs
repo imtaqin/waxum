@@ -42,6 +42,10 @@ fn api_routes() -> Router<AppState> {
         .route("/tags", get(handlers::tags::list_all_tags))
         .route("/scheduled", get(handlers::schedule::list_all_scheduled))
         .route("/blasts", get(handlers::blast::list_all_blasts))
+        .route(
+            "/messages/search",
+            get(handlers::search::search_all_messages),
+        )
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
 }
@@ -238,6 +242,10 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/messages/decline-payment",
             post(handlers::messages::decline_payment_request),
+        )
+        .route(
+            "/{session_id}/messages/search",
+            get(handlers::search::search_session_messages),
         )
         .route(
             "/{session_id}/messages/newsletter-forward",

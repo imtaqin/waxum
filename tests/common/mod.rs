@@ -26,6 +26,8 @@ pub const TEST_TOKEN: &str = "test-superadmin";
 
 pub struct Harness {
     pub app: Router,
+    #[allow(dead_code)]
+    pub pool: DbPool,
     pub _tmp: TempDir,
 }
 
@@ -43,14 +45,18 @@ impl Harness {
         let pool = DbPool::SQLite(sqlite);
         schema::init_schema(&pool).await.expect("init schema");
 
-        let state = AppState::new(pool, None).await;
+        let state = AppState::new(pool.clone(), None).await;
         let app: Router = create_router()
             .layer(axum::middleware::from_fn(
                 middleware::jwt::jwt_auth_middleware,
             ))
             .with_state(state);
 
-        Self { app, _tmp: tmp }
+        Self {
+            app,
+            pool,
+            _tmp: tmp,
+        }
     }
 }
 

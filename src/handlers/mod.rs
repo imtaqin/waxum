@@ -20,6 +20,7 @@
 //! - [`operations`] — bulk ops, tctoken issue, auto-reconnect toggle.
 //! - [`schedule`] — scheduled-send management endpoints + dispatcher loop.
 //! - [`blast`] — bulk-send jobs (create/list/cancel/retry) + worker loop.
+//! - [`search`] — message history ingestion + full-text search endpoints.
 //! - [`blocking`], [`privacy`], [`calls`], [`status`], [`mex`], [`info`],
 //!   [`fake_reply`] — smaller domains.
 
@@ -42,6 +43,7 @@ pub mod operations;
 pub mod presence;
 pub mod privacy;
 pub mod schedule;
+pub mod search;
 pub mod sessions;
 pub mod status;
 pub mod tags;
