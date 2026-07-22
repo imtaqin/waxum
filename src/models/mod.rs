@@ -1,3 +1,4 @@
+pub mod blast;
 pub mod blocking;
 pub mod bulk;
 pub mod calls;
@@ -10,6 +11,7 @@ pub mod messages;
 pub mod mex;
 pub mod presence;
 pub mod privacy;
+pub mod schedule;
 pub mod sessions;
 pub mod status;
 pub mod webhooks;

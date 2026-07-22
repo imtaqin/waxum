@@ -2,6 +2,94 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.8.0] - 2026-07-21
+
+### Added — scheduled send
+
+Every send endpoint now accepts an optional `send_at` ISO-8601 UTC
+timestamp. When it lies more than a couple of seconds in the future
+the request is parked in a new `scheduled_messages` table
+(tri-backend: Postgres / MySQL / SQLite) instead of sending, and a
+background scheduler dispatches it once due — through the same
+`execute_*` send core the immediate path uses, so a parked `text`
+and an immediate `text` are identical on the wire.
+
+- **`send_at` field on all 34 send endpoints** — `text`, `image`,
+  `cta-url`, interactive, payments, and everything in between. A
+  `send_at` inside the 2-second grace window (or in the past) still
+  sends immediately.
+- **Unified `SendResponse`** — immediate sends answer
+  `status: "sent"` with `message_id` / `timestamp` / `to` as before;
+  parked sends answer `status: "pending"` with `schedule_id` and the
+  effective `send_at`.
+- **Scheduler worker** — `tokio::time::interval` loop with a poll
+  period from `SCHEDULER_POLL_MS` (default 1000 ms). Claims due rows
+  atomically (`pending` → `sending`) so a concurrent cancel or a
+  second poller loses the race, then settles each row `sent` or
+  `failed`.
+- **`GET /api/v1/sessions/{sid}/scheduled`** — list parked messages
+  for one session, optional `?status=` filter.
+- **`DELETE /api/v1/sessions/{sid}/scheduled/{id}`** — cancel one
+  that is still `pending`; 400 once the scheduler has claimed it.
+- **`GET /api/v1/scheduled`** — fleet-wide list with `?session=` and
+  `?status=` filters.
+- **`scheduled_sent` / `scheduled_failed` webhook events** — fired on
+  dispatch either way, carrying the schedule id, endpoint, and the
+  message id or the error.
+
+### Added — blast queue engine
+
+Bulk-send one message payload to many recipients with pacing, dedup,
+retry, and a dead-letter queue. A blast job stores the endpoint key
+plus the original JSON body once, and one row per recipient in
+`blast_recipients`; a single sequential worker (deliberate —
+WhatsApp rate-limit and ban safety) drains it in batches of 50,
+replaying each recipient through the same dispatch the scheduler
+uses, with `to` rewritten per recipient and any `send_at` inside the
+body forced off.
+
+- **`POST /api/v1/sessions/{sid}/blast`** — create a job. Body
+  `{endpoint, body, recipients, delay_ms?, jitter_ms?, max_attempts?, dedup_across_jobs?, send_at?}`.
+  `endpoint` is any scheduler dispatch key (`text`, `image`,
+  `cta-url`, …) — unknown keys and bodies that fail the endpoint's
+  shape validation are a 400. Recipients are JID-validated (the 400
+  lists the bad ones) and deduped within the array; with
+  `dedup_across_jobs: true`, recipients any previous blast of the
+  same session already delivered to are skipped too. An optional
+  `send_at` on the job delays the start.
+- **Pacing** — `delay_ms` base pause between sends (default 1000)
+  plus a uniform random `0..=jitter_ms` extra per send.
+- **Retry + DLQ** — a failed send goes back to `pending` until
+  `max_attempts` (default 3) is exhausted, then lands in `dlq` with
+  the last error; only the retry endpoint requeues it.
+- **`GET /api/v1/sessions/{sid}/blasts`** — list jobs for one
+  session, optional `?status=` filter.
+- **`GET /api/v1/sessions/{sid}/blasts/{id}`** — job detail with
+  live counters (total, sent, failed, dlq, skipped_dup).
+- **`GET /api/v1/sessions/{sid}/blasts/{id}/recipients?status=&limit=&offset=`** —
+  paginated recipient list.
+- **`POST /api/v1/sessions/{sid}/blasts/{id}/cancel`** — stop a
+  pending or running job; unprocessed recipients stay `pending` and
+  never send.
+- **`POST /api/v1/sessions/{sid}/blasts/{id}/retry`** — requeue all
+  `dlq` / `failed` recipients with attempts reset and reopen the
+  job.
+- **`GET /api/v1/blasts`** — fleet-wide job list with `?session=`
+  and `?status=` filters.
+- **`blast_progress` / `blast_completed` webhook events** — progress
+  with counters every 25 sends, and a final summary when the job
+  closes (`completed` or `completed_with_failures`).
+- **`BLAST_POLL_MS`** — worker poll interval in milliseconds
+  (default 1000).
+
+### Changed — TypeScript SDK split out
+
+The auto-generated TypeScript SDK now lives in its own repository,
+[imtaqin/waxum-sdk](https://github.com/imtaqin/waxum-sdk). `sdk/`
+and `scripts/gen-sdk.sh` are no longer part of this tree; the
+OpenAPI schema at `/api-docs/openapi.json` remains the source the
+SDK generator consumes.
+
 ## [0.7.13] - 2026-07-20
 
 ### Added — session tags

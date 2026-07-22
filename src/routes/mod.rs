@@ -40,6 +40,8 @@ fn api_routes() -> Router<AppState> {
         .route("/voices", get(handlers::calls::list_voices))
         .route("/tts/preview", get(handlers::calls::tts_preview))
         .route("/tags", get(handlers::tags::list_all_tags))
+        .route("/scheduled", get(handlers::schedule::list_all_scheduled))
+        .route("/blasts", get(handlers::blast::list_all_blasts))
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
 }
@@ -430,6 +432,32 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/tags/{tag}",
             delete(handlers::tags::remove_session_tag),
+        )
+        .route(
+            "/{session_id}/scheduled",
+            get(handlers::schedule::list_session_scheduled),
+        )
+        .route(
+            "/{session_id}/scheduled/{id}",
+            delete(handlers::schedule::cancel_scheduled),
+        )
+        .route("/{session_id}/blast", post(handlers::blast::create_blast))
+        .route(
+            "/{session_id}/blasts",
+            get(handlers::blast::list_session_blasts),
+        )
+        .route("/{session_id}/blasts/{id}", get(handlers::blast::get_blast))
+        .route(
+            "/{session_id}/blasts/{id}/recipients",
+            get(handlers::blast::list_blast_recipients),
+        )
+        .route(
+            "/{session_id}/blasts/{id}/cancel",
+            post(handlers::blast::cancel_blast),
+        )
+        .route(
+            "/{session_id}/blasts/{id}/retry",
+            post(handlers::blast::retry_blast),
         )
 }
 

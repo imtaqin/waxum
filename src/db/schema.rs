@@ -66,7 +66,54 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
                 last_attempt_at TEXT \
              ); \
-             CREATE INDEX IF NOT EXISTS idx_webhook_dlq_session ON webhook_dlq(session_id);",
+             CREATE INDEX IF NOT EXISTS idx_webhook_dlq_session ON webhook_dlq(session_id); \
+             CREATE TABLE IF NOT EXISTS scheduled_messages ( \
+                id TEXT PRIMARY KEY, \
+                session_id TEXT NOT NULL, \
+                endpoint TEXT NOT NULL, \
+                body TEXT NOT NULL, \
+                send_at TEXT NOT NULL, \
+                status TEXT NOT NULL DEFAULT 'pending', \
+                error TEXT, \
+                message_id TEXT, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')) \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_scheduled_messages_due ON scheduled_messages(status, send_at); \
+             CREATE INDEX IF NOT EXISTS idx_scheduled_messages_session ON scheduled_messages(session_id); \
+             CREATE TABLE IF NOT EXISTS blast_jobs ( \
+                id TEXT PRIMARY KEY, \
+                session_id TEXT NOT NULL, \
+                endpoint TEXT NOT NULL, \
+                body TEXT NOT NULL, \
+                options TEXT NOT NULL, \
+                status TEXT NOT NULL DEFAULT 'pending', \
+                total INTEGER NOT NULL DEFAULT 0, \
+                sent_count INTEGER NOT NULL DEFAULT 0, \
+                failed_count INTEGER NOT NULL DEFAULT 0, \
+                dlq_count INTEGER NOT NULL DEFAULT 0, \
+                skipped_dup_count INTEGER NOT NULL DEFAULT 0, \
+                send_at TEXT, \
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                started_at TEXT, \
+                finished_at TEXT \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_blast_jobs_runnable ON blast_jobs(status, send_at); \
+             CREATE INDEX IF NOT EXISTS idx_blast_jobs_session ON blast_jobs(session_id); \
+             CREATE TABLE IF NOT EXISTS blast_recipients ( \
+                id INTEGER PRIMARY KEY AUTOINCREMENT, \
+                job_id TEXT NOT NULL, \
+                session_id TEXT NOT NULL, \
+                recipient TEXT NOT NULL, \
+                status TEXT NOT NULL DEFAULT 'pending', \
+                attempts INTEGER NOT NULL DEFAULT 0, \
+                last_error TEXT, \
+                message_id TEXT, \
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
+                UNIQUE (job_id, recipient) \
+             ); \
+             CREATE INDEX IF NOT EXISTS idx_blast_recipients_dedup ON blast_recipients(session_id, recipient, status); \
+             CREATE INDEX IF NOT EXISTS idx_blast_recipients_job ON blast_recipients(job_id, status);",
         )?;
         Ok(())
     })
@@ -188,6 +235,107 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         )
         .await?;
 
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id VARCHAR(64) PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                endpoint VARCHAR(64) NOT NULL,
+                body TEXT NOT NULL,
+                send_at TIMESTAMPTZ NOT NULL,
+                status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                error TEXT,
+                message_id VARCHAR(255),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_scheduled_messages_due ON scheduled_messages(status, send_at)",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_scheduled_messages_session ON scheduled_messages(session_id)",
+            &[],
+        )
+        .await?;
+
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS blast_jobs (
+                id VARCHAR(64) PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                endpoint VARCHAR(64) NOT NULL,
+                body TEXT NOT NULL,
+                options TEXT NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                total BIGINT NOT NULL DEFAULT 0,
+                sent_count BIGINT NOT NULL DEFAULT 0,
+                failed_count BIGINT NOT NULL DEFAULT 0,
+                dlq_count BIGINT NOT NULL DEFAULT 0,
+                skipped_dup_count BIGINT NOT NULL DEFAULT 0,
+                send_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                started_at TIMESTAMPTZ,
+                finished_at TIMESTAMPTZ
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_blast_jobs_runnable ON blast_jobs(status, send_at)",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_blast_jobs_session ON blast_jobs(session_id)",
+            &[],
+        )
+        .await?;
+
+    client
+        .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS blast_recipients (
+                id BIGSERIAL PRIMARY KEY,
+                job_id VARCHAR(64) NOT NULL,
+                session_id VARCHAR(255) NOT NULL,
+                recipient VARCHAR(255) NOT NULL,
+                status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                attempts BIGINT NOT NULL DEFAULT 0,
+                last_error TEXT,
+                message_id VARCHAR(255),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (job_id, recipient)
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_blast_recipients_dedup ON blast_recipients(session_id, recipient, status)",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            "CREATE INDEX IF NOT EXISTS idx_blast_recipients_job ON blast_recipients(job_id, status)",
+            &[],
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -267,6 +415,71 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
             last_attempt_at VARCHAR(30) NULL,
             INDEX idx_webhook_dlq_session (session_id)
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS scheduled_messages (
+            id VARCHAR(64) PRIMARY KEY,
+            session_id VARCHAR(255) NOT NULL,
+            endpoint VARCHAR(64) NOT NULL,
+            body LONGTEXT NOT NULL,
+            send_at VARCHAR(30) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            error TEXT NULL,
+            message_id VARCHAR(255) NULL,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            INDEX idx_scheduled_messages_due (status, send_at),
+            INDEX idx_scheduled_messages_session (session_id)
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS blast_jobs (
+            id VARCHAR(64) PRIMARY KEY,
+            session_id VARCHAR(255) NOT NULL,
+            endpoint VARCHAR(64) NOT NULL,
+            body LONGTEXT NOT NULL,
+            options TEXT NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            total BIGINT NOT NULL DEFAULT 0,
+            sent_count BIGINT NOT NULL DEFAULT 0,
+            failed_count BIGINT NOT NULL DEFAULT 0,
+            dlq_count BIGINT NOT NULL DEFAULT 0,
+            skipped_dup_count BIGINT NOT NULL DEFAULT 0,
+            send_at VARCHAR(30) NULL,
+            created_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            started_at VARCHAR(30) NULL,
+            finished_at VARCHAR(30) NULL,
+            INDEX idx_blast_jobs_runnable (status, send_at),
+            INDEX idx_blast_jobs_session (session_id)
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS blast_recipients (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            job_id VARCHAR(64) NOT NULL,
+            session_id VARCHAR(255) NOT NULL,
+            recipient VARCHAR(255) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            attempts BIGINT NOT NULL DEFAULT 0,
+            last_error TEXT NULL,
+            message_id VARCHAR(255) NULL,
+            updated_at VARCHAR(30) NOT NULL DEFAULT '1970-01-01 00:00:00',
+            UNIQUE KEY uniq_blast_recipient (job_id, recipient),
+            INDEX idx_blast_recipients_dedup (session_id, recipient, status),
+            INDEX idx_blast_recipients_job (job_id, status)
         ) DEFAULT CHARSET=utf8mb4
         "#,
     )

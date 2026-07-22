@@ -18,9 +18,12 @@
 //! - [`webhooks`] — register / list / delete per-session webhook targets.
 //! - [`nats_handler`] — inspect NATS streams + purge.
 //! - [`operations`] — bulk ops, tctoken issue, auto-reconnect toggle.
+//! - [`schedule`] — scheduled-send management endpoints + dispatcher loop.
+//! - [`blast`] — bulk-send jobs (create/list/cancel/retry) + worker loop.
 //! - [`blocking`], [`privacy`], [`calls`], [`status`], [`mex`], [`info`],
 //!   [`fake_reply`] — smaller domains.
 
+pub mod blast;
 pub mod blocking;
 pub mod bulk;
 pub mod calls;
@@ -38,6 +41,7 @@ pub mod nats_handler;
 pub mod operations;
 pub mod presence;
 pub mod privacy;
+pub mod schedule;
 pub mod sessions;
 pub mod status;
 pub mod tags;
