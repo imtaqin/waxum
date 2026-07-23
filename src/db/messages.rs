@@ -247,8 +247,9 @@ pub async fn search(
                     values.push(SQ::Text(sid.to_string()));
                     where_sql.push_str(" AND f.session_id = ?");
                 }
+                let m_cols = "m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp";
                 let sql = format!(
-                    "SELECT {COLS}, snippet(messages_fts, 0, '<b>', '</b>', '…', 16) FROM messages_fts f JOIN messages m ON m.session_id = f.session_id AND m.message_id = f.message_id WHERE {where_sql} ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?"
+                    "SELECT {m_cols}, snippet(messages_fts, 0, '<b>', '</b>', '…', 16) FROM messages_fts f JOIN messages m ON m.session_id = f.session_id AND m.message_id = f.message_id WHERE {where_sql} ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?"
                 );
                 values.push(SQ::Int(limit));
                 values.push(SQ::Int(offset));
