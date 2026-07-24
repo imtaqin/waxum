@@ -56,7 +56,7 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Peer audio recording (WAV) | `GET /sessions/{sid}/calls/{cid}/recording.wav` |
 | Bidirectional media WebSocket stream (audio) | `WS /sessions/{sid}/calls/media/ws?to=&kind=audio` |
 | Bidirectional media WebSocket stream (audio + video, H.264) | `WS /sessions/{sid}/calls/media/ws?to=&kind=av` — transport only, bring your own H.264 encoder/decoder (e.g. ffmpeg) on the client side |
-| Local transcript of a recording (whisper.cpp) | `POST /sessions/{sid}/calls/{cid}/transcript` — needs `WHISPER_MODEL_PATH` |
+| Transcript of a recording (external whisper.cpp server) | `POST /sessions/{sid}/calls/{cid}/transcript` — needs `WHISPER_API_URL`; waxum stays a pure-Rust single binary, no C++/whisper.cpp is compiled in |
 
 ### Session management
 
@@ -145,7 +145,7 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 |---|---|
 | ~~Video call (H.264 relay over `calls/media/ws?kind=av`)~~ | shipped 0.9.0 |
 | Group voice call | **blocked upstream** — `whatsapp-rust` has no multi-party relay/SFU client at all (single-peer engine only); not a waxum gap, needs its own library-level project |
-| ~~Local STT on recording (whisper.cpp)~~ | shipped 0.9.0 — needs `WHISPER_MODEL_PATH` set to a GGML model file, not zero-setup like the rest of waxum |
+| ~~Transcript of a recording~~ | shipped 0.9.1 — calls an external whisper.cpp-compatible HTTP server (`WHISPER_API_URL`), not bundled into the binary |
 | ~~Message search via SQLite FTS~~ | shipped 0.8.0 |
 | ~~Blast queue engine (bulk send, dedup, retry, DLQ)~~ | shipped 0.8.0 |
 | ~~Scheduled send (`send_at` ISO)~~ | shipped 0.8.0 |

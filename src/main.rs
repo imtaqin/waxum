@@ -342,7 +342,6 @@ use state::AppState;
             models::calls::AcceptCallRequest,
             models::calls::TerminateCallRequest,
             models::calls::TranscriptResponse,
-            models::calls::TranscriptSegment,
 
             models::status::StatusReactionRequest,
 

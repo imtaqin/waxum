@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -58,7 +58,11 @@ dashmap = "6"
 once_cell = "1"
 parking_lot = "0.12"
 async-trait = "0.1"
-reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = [
+    "rustls-tls",
+    "multipart",
+    "json",
+], default-features = false }
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 # Crypto for webhook signatures
@@ -89,12 +93,6 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # directly so `/calls/tts` does not need an external `edge-tts` CLI or
 # Python interpreter installed on the server.
 msedge-tts = "0.4"
-
-# whisper.cpp bindings for local call-recording transcription. Needs a
-# GGML model file at runtime (`WHISPER_MODEL_PATH`) — unlike the rest of
-# waxum this is not a zero-setup feature; see the /calls/*/transcript
-# docs. Compiles whisper.cpp from source (cmake + a C++ toolchain).
-whisper-rs = "0.16"
 
 [dev-dependencies]
 http-body-util = "0.1"
