@@ -25,7 +25,7 @@
       { key: 'pair', label: 'Pair by phone code', method: 'POST',
         path: '/api/v1/sessions/{sid}/pair',
         fields: [
-          { name: 'phone_number', label: 'Phone number', type: 'text', required: true, placeholder: '6285117822731' },
+          { name: 'phone_number', label: 'Phone number', type: 'text', required: true, placeholder: '628123456789' },
           { name: 'show_push_notification', label: 'Show push notification on phone', type: 'checkbox' },
         ] },
       { key: 'connect', label: 'Connect', method: 'POST',
@@ -216,19 +216,19 @@
         path: '/api/v1/sessions/{sid}/contacts/check',
         fields: [
           { name: 'phones', label: 'Phones (JSON array)', type: 'json', required: true,
-            placeholder: '["6285117822731","628123456789"]' },
+            placeholder: '["628123456789","628123456789"]' },
         ] },
       { key: 'info', label: 'Get contact info', method: 'POST',
         path: '/api/v1/sessions/{sid}/contacts/info',
         fields: [
           { name: 'jid', label: 'Contact JID', type: 'text', required: true,
-            placeholder: '6285117822731@s.whatsapp.net' },
+            placeholder: '628123456789@s.whatsapp.net' },
         ] },
       { key: 'users', label: 'Get user profile bundle', method: 'POST',
         path: '/api/v1/sessions/{sid}/contacts/users',
         fields: [
           { name: 'jids', label: 'JIDs (JSON array)', type: 'json', required: true,
-            placeholder: '["6285117822731@s.whatsapp.net"]' },
+            placeholder: '["628123456789@s.whatsapp.net"]' },
         ] },
       { key: 'picture', label: 'Get profile picture', method: 'GET',
         path: '/api/v1/sessions/{sid}/contacts/{jid}/picture',
@@ -244,7 +244,7 @@
         fields: [
           { name: 'subject', label: 'Subject', type: 'text', required: true },
           { name: 'participants', label: 'Participants (JSON array of JIDs)', type: 'json', required: true,
-            placeholder: '["6285117822731@s.whatsapp.net"]' },
+            placeholder: '["628123456789@s.whatsapp.net"]' },
         ] },
       { key: 'info', label: 'Group info', method: 'GET',
         path: '/api/v1/sessions/{sid}/groups/{group_jid}/info',
