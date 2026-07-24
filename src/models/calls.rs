@@ -20,9 +20,9 @@ pub struct RejectCallRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct RingCallRequest {
-    /// Recipient. Bare phone number ("6285117822731") or full JID
-    /// ("6285117822731@s.whatsapp.net"). LID is not supported.
-    #[schema(example = "6285117822731")]
+    /// Recipient. Bare phone number ("628123456789") or full JID
+    /// ("628123456789@s.whatsapp.net"). LID is not supported.
+    #[schema(example = "628123456789")]
     pub to: String,
     /// Optional custom `call-id`. If omitted a UUIDv4 is generated. Return
     /// it back to the caller so they can later `POST /calls/reject`.
@@ -50,7 +50,7 @@ pub struct RingCallResponse {
 #[allow(dead_code)]
 pub struct AcceptCallRequest {
     /// Caller JID as reported in `IncomingCall.from`.
-    #[schema(example = "6285117822731@s.whatsapp.net")]
+    #[schema(example = "628123456789@s.whatsapp.net")]
     pub from: String,
     /// Call id from `IncomingCall.action.call_id()`.
     #[schema(example = "2E3F4A5B6C7D")]
@@ -75,7 +75,7 @@ pub struct AcceptCallRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct TtsCallRequest {
-    #[schema(example = "6285117822731")]
+    #[schema(example = "628123456789")]
     pub to: String,
     #[schema(example = "Halo dari MAUBLAST, pesan otomatis.")]
     pub text: String,
@@ -113,7 +113,7 @@ pub struct TtsCallResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct PlayCallRequest {
-    #[schema(example = "6285117822731")]
+    #[schema(example = "628123456789")]
     pub to: String,
     /// URL of the audio file to fetch and play. Must be reachable from the
     /// waxum process. Any format ffmpeg can demux (mp3, wav, ogg, m4a, opus).
@@ -142,7 +142,7 @@ pub struct PlayCallResponse {
 #[allow(dead_code)]
 pub struct TerminateCallRequest {
     /// Peer JID (caller for incoming, callee for outgoing).
-    #[schema(example = "6285117822731@s.whatsapp.net")]
+    #[schema(example = "628123456789@s.whatsapp.net")]
     pub peer: String,
     #[schema(example = "2E3F4A5B6C7D")]
     pub call_id: String,
