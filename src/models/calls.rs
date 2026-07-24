@@ -152,3 +152,35 @@ pub struct TerminateCallRequest {
     #[serde(default)]
     pub reason: Option<String>,
 }
+
+/// One Edge-TTS voice, as returned by `GET /api/v1/voices`. Field
+/// subset mirrors upstream `msedge_tts::voice::Voice` — just what a
+/// caller needs to pick a voice (short name, locale, gender, display
+/// name).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct VoiceEntry {
+    pub name: String,
+    pub short_name: Option<String>,
+    pub locale: Option<String>,
+    pub gender: Option<String>,
+    pub friendly_name: Option<String>,
+}
+
+/// Local whisper.cpp transcript of a call recording, returned by
+/// `POST /api/v1/sessions/{session_id}/calls/{call_id}/transcript`.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TranscriptResponse {
+    /// Full transcript, segments joined with a single space.
+    pub text: String,
+    pub segments: Vec<TranscriptSegment>,
+}
+
+/// One whisper.cpp segment. Timestamps are milliseconds from the start
+/// of the recording (whisper.cpp reports centiseconds internally; this
+/// is `* 10`).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TranscriptSegment {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}

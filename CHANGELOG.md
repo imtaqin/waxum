@@ -2,6 +2,52 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.9.0] - 2026-07-24
+
+### Added — video calling + local transcription
+
+- **Video calls** — `calls/media/ws?kind=av` places a call with both
+  audio and video, relaying raw H.264 Annex-B access units to/from the
+  peer over the existing media WebSocket. Waxum is transport-only here
+  (matching the upstream `whatsapp-rust` design): the WS client brings
+  its own H.264 encoder/decoder (e.g. ffmpeg). Frames are tagged with a
+  1-byte media type so audio and video share one socket; `kind=audio`
+  keeps the original untagged raw-PCM wire format unchanged.
+- **`POST /sessions/{sid}/calls/{cid}/transcript`** — local
+  speech-to-text on a call recording via `whisper-rs` (whisper.cpp
+  bindings). Needs `WHISPER_MODEL_PATH` pointed at a GGML model file;
+  the model loads once and is cached for the life of the process. Not
+  a zero-setup feature like the rest of waxum — requires a C++
+  toolchain at build time and a model file at runtime.
+- Group voice calls stay off the roadmap: `whatsapp-rust` has no
+  multi-party relay/SFU support at the library level at all, so this
+  isn't implementable as a waxum-side feature without a much larger
+  upstream project first.
+
+### Fixed
+
+- `tokio-stream` was missing the `sync` feature it silently depended
+  on via `ReceiverStream`.
+- `tts_preview` returned 500 for an unknown voice name; now 400, since
+  that's a client input error, not a server fault.
+- `list_voices` re-queried Edge-TTS on every request; the voice list
+  is now cached after first fetch and the response carries a
+  `cache-control` header.
+- SQLite FTS5 search silently fell back to the snippet-less `LIKE`
+  path because the join SELECT used unqualified column names
+  (`ambiguous column name` at prepare time). Columns are now qualified
+  with `m.`.
+
+### Changed
+
+- `whatsapp-rust` pin bumped from `4d9e8ed` to `0077186` (22 upstream
+  commits): buffa 0.9 + `SyncdOperation`, extensible plugin client
+  architecture, typed USync query engine, signal record components +
+  dirty events, typed legacy session interop, targeted retransmission
+  controls, business template/buttons/list/interactive message
+  classification, PN/LID alias resolution for receipts, several
+  allocation/binary-size perf passes.
+
 ## [0.8.0] - 2026-07-21
 
 ### Added — scheduled send

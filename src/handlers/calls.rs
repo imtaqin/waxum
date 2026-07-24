@@ -15,7 +15,8 @@ use crate::error::ApiError;
 use crate::handlers::messages::parse_jid;
 use crate::models::calls::{
     AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
-    RingCallResponse, TerminateCallRequest, TtsCallRequest, TtsCallResponse,
+    RingCallResponse, TerminateCallRequest, TranscriptResponse, TranscriptSegment, TtsCallRequest,
+    TtsCallResponse, VoiceEntry,
 };
 use crate::models::common::SuccessResponse;
 use crate::state::{ActiveCallAudio, AppState};
@@ -305,6 +306,94 @@ pub async fn get_recording(
             .unwrap_or_else(|_| axum::http::HeaderValue::from_static("attachment")),
     );
     Ok(r)
+}
+
+/// Read the raw `i16` samples back out of a WAV file written by
+/// [`build_wav_pcm16_mono_16khz`] and convert to the normalised `f32`
+/// PCM whisper.cpp expects. Only understands that exact fixed 44-byte
+/// header shape — this endpoint only ever reads recordings this
+/// process wrote itself, never arbitrary uploaded WAV files.
+fn wav_pcm16_to_f32(bytes: &[u8]) -> Result<Vec<f32>, ApiError> {
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err(ApiError::Internal(
+            "recording is not a valid WAV file".into(),
+        ));
+    }
+    let data_len = u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]) as usize;
+    let pcm = bytes
+        .get(44..44 + data_len)
+        .ok_or_else(|| ApiError::Internal("recording WAV data chunk is truncated".into()))?;
+    Ok(pcm
+        .chunks_exact(2)
+        .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
+        .collect())
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/calls/{call_id}/transcript",
+    tag = "calls",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("call_id" = String, Path, description = "Call ID whose recording.wav should be transcribed")
+    ),
+    responses(
+        (status = 200, description = "Transcript of the call recording", body = TranscriptResponse),
+        (status = 404, description = "Recording not found — call hasn't ended or was never recorded"),
+        (status = 500, description = "WHISPER_MODEL_PATH not set, or the model failed to load/run")
+    )
+)]
+pub async fn transcribe_call(
+    State(state): State<AppState>,
+    Path((session_id, call_id)): Path<(String, String)>,
+) -> Result<Json<TranscriptResponse>, ApiError> {
+    let base = state.base_storage_path().to_string();
+    let path = std::path::Path::new(&base)
+        .join(&session_id)
+        .join("recordings")
+        .join(format!("{}.wav", call_id));
+    let bytes = tokio::fs::read(&path).await.map_err(|_| {
+        ApiError::Internal(format!(
+            "recording not found for call {call_id} — wait until the peer hangs up, then retry"
+        ))
+    })?;
+    let samples = wav_pcm16_to_f32(&bytes)?;
+
+    let ctx = state.whisper_context().await.map_err(ApiError::Internal)?;
+
+    let transcript = tokio::task::spawn_blocking(move || -> Result<TranscriptResponse, String> {
+        let mut whisper_state = ctx.create_state().map_err(|e| e.to_string())?;
+        let mut params =
+            whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_special(false);
+        params.set_print_timestamps(false);
+        whisper_state
+            .full(params, &samples)
+            .map_err(|e| e.to_string())?;
+
+        let segments: Vec<TranscriptSegment> = whisper_state
+            .as_iter()
+            .map(|seg| TranscriptSegment {
+                start_ms: seg.start_timestamp() * 10,
+                end_ms: seg.end_timestamp() * 10,
+                text: seg.to_str_lossy().unwrap_or_default().trim().to_string(),
+            })
+            .collect();
+        let text = segments
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok(TranscriptResponse { text, segments })
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("transcription task panicked: {e}")))?
+    .map_err(ApiError::Internal)?;
+
+    Ok(Json(transcript))
 }
 
 #[utoipa::path(
@@ -955,18 +1044,31 @@ pub async fn media_stream_ws(
     let client = get_client(&state, &session_id)?;
     let to = resolve_call_recipient(client.clone(), parse_jid(&q.to)?).await;
     let kind = q.kind.as_deref().unwrap_or("audio").to_string();
-    if kind != "audio" {
-        return Err(ApiError::BadRequest(
-            "only kind=audio is supported over the media WebSocket for now".into(),
-        ));
-    }
+    let with_video = match kind.as_str() {
+        "audio" => false,
+        "av" => true,
+        _ => {
+            return Err(ApiError::BadRequest(
+                "kind must be 'audio' or 'av' (audio+video)".into(),
+            ));
+        }
+    };
 
     Ok(ws.on_upgrade(move |socket| async move {
-        if let Err(e) = drive_media_socket(state, session_id, client, to, socket).await {
+        if let Err(e) = drive_media_socket(state, session_id, client, to, socket, with_video).await
+        {
             tracing::warn!("media ws terminated: {e}");
         }
     }))
 }
+
+/// Tag byte prefixing every binary WS media frame, so audio and video can
+/// share one socket. Audio frames carry no extra header (payload is raw
+/// `i16` PCM, matching the pre-video wire format exactly); video frames
+/// add a 2-byte header (`keyframe`, `orientation`) before the raw H.264
+/// Annex-B access unit.
+const MEDIA_TAG_AUDIO: u8 = 0x00;
+const MEDIA_TAG_VIDEO: u8 = 0x01;
 
 async fn drive_media_socket(
     state: AppState,
@@ -974,16 +1076,25 @@ async fn drive_media_socket(
     client: Arc<whatsapp_rust::Client>,
     to: Jid,
     socket: WebSocket,
+    with_video: bool,
 ) -> anyhow::Result<()> {
     let (mut sink, mut stream) = socket.split();
 
     let (mic_tx, mic_rx) = async_channel::bounded::<Vec<i16>>(64);
     let (spk_tx, spk_rx) = async_channel::bounded::<Vec<i16>>(64);
 
-    let handle = client
-        .voip()
-        .call(&to)
-        .audio(mic_rx, spk_tx)
+    let video_channels = with_video.then(|| {
+        let (video_in_tx, video_in_rx) = async_channel::bounded::<Vec<u8>>(32);
+        let (video_out_tx, video_out_rx) = async_channel::bounded::<wacore::voip::VideoFrame>(32);
+        (video_in_tx, video_in_rx, video_out_tx, video_out_rx)
+    });
+
+    let voip = client.voip();
+    let mut builder = voip.call(&to).audio(mic_rx, spk_tx);
+    if let Some((_, video_in_rx, video_out_tx, _)) = &video_channels {
+        builder = builder.video(video_in_rx.clone(), video_out_tx.clone());
+    }
+    let handle = builder
         .start()
         .await
         .map_err(|e| anyhow::anyhow!("place_call failed: {e}"))?;
@@ -1009,19 +1120,59 @@ async fn drive_media_socket(
         "sample_rate": whatsapp_rust::voip::audio::WA_SAMPLE_RATE,
         "frame_samples": whatsapp_rust::voip::audio::WA_FRAME_SAMPLES,
         "encoding": "pcm_s16le_mono_16khz",
+        "video": with_video,
+        "video_encoding": if with_video { Some("h264_annexb") } else { None },
+        "frame_format": if with_video { "tagged" } else { "raw_pcm" },
     });
     let _ = sink
         .send(WsMessage::Text(sess_meta.to_string().into()))
         .await;
 
+    let video_out_rx = video_channels.as_ref().map(|(_, _, _, rx)| rx.clone());
+    let video_in_tx = video_channels.as_ref().map(|(tx, _, _, _)| tx.clone());
+
     let mut peer_task = tokio::spawn(async move {
-        while let Ok(pcm) = spk_rx.recv().await {
-            let mut bytes = Vec::with_capacity(pcm.len() * 2);
-            for s in &pcm {
-                bytes.extend_from_slice(&s.to_le_bytes());
+        // Plain kind=audio keeps the original untagged raw-PCM wire format
+        // for backward compatibility; kind=av prefixes every frame with a
+        // media-type tag byte since the socket now carries two streams.
+        let Some(video_out_rx) = video_out_rx else {
+            while let Ok(pcm) = spk_rx.recv().await {
+                let mut bytes = Vec::with_capacity(pcm.len() * 2);
+                for s in &pcm {
+                    bytes.extend_from_slice(&s.to_le_bytes());
+                }
+                if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                    break;
+                }
             }
-            if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
-                break;
+            let _ = sink.close().await;
+            return;
+        };
+
+        loop {
+            tokio::select! {
+                pcm = spk_rx.recv() => {
+                    let Ok(pcm) = pcm else { break };
+                    let mut bytes = Vec::with_capacity(1 + pcm.len() * 2);
+                    bytes.push(MEDIA_TAG_AUDIO);
+                    for s in &pcm {
+                        bytes.extend_from_slice(&s.to_le_bytes());
+                    }
+                    if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                        break;
+                    }
+                }
+                frame = video_out_rx.recv() => {
+                    let Ok(frame) = frame else { continue };
+                    let mut bytes = Vec::with_capacity(3 + frame.data.len());
+                    bytes.push(MEDIA_TAG_VIDEO);
+                    bytes.push(frame.keyframe as u8);
+                    bytes.push(frame.orientation);
+                    bytes.extend_from_slice(&frame.data);
+                    if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
         let _ = sink.close().await;
@@ -1031,15 +1182,39 @@ async fn drive_media_socket(
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(WsMessage::Binary(bytes)) => {
-                    if bytes.len() < 2 {
+                    let Some(video_in_tx) = &video_in_tx else {
+                        if bytes.len() < 2 {
+                            continue;
+                        }
+                        let mut samples = Vec::with_capacity(bytes.len() / 2);
+                        for chunk in bytes.chunks_exact(2) {
+                            samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
+                        }
+                        if mic_tx.send(samples).await.is_err() {
+                            break;
+                        }
                         continue;
-                    }
-                    let mut samples = Vec::with_capacity(bytes.len() / 2);
-                    for chunk in bytes.chunks_exact(2) {
-                        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
-                    }
-                    if mic_tx.send(samples).await.is_err() {
-                        break;
+                    };
+                    let Some((&tag, payload)) = bytes.split_first() else {
+                        continue;
+                    };
+                    match tag {
+                        MEDIA_TAG_AUDIO => {
+                            if payload.len() < 2 {
+                                continue;
+                            }
+                            let mut samples = Vec::with_capacity(payload.len() / 2);
+                            for chunk in payload.chunks_exact(2) {
+                                samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
+                            }
+                            if mic_tx.send(samples).await.is_err() {
+                                break;
+                            }
+                        }
+                        MEDIA_TAG_VIDEO if video_in_tx.send(payload.to_vec()).await.is_err() => {
+                            break;
+                        }
+                        _ => {}
                     }
                 }
                 Ok(WsMessage::Close(_)) | Err(_) => break,
@@ -1083,28 +1258,29 @@ pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumRespons
     let text_owned = sanitize_ssml_text(text);
     let voice_owned = q.voice.clone();
 
-    let mp3 = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+    let mp3 = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, ApiError> {
         use msedge_tts::tts::client::connect;
         use msedge_tts::tts::SpeechConfig;
         use msedge_tts::voice::get_voices_list;
-        let voices = get_voices_list().map_err(|e| anyhow::anyhow!("edge tts voice list: {e}"))?;
+        let voices = get_voices_list()
+            .map_err(|e| ApiError::Internal(format!("edge tts voice list: {e}")))?;
         let matched = voices
             .iter()
             .find(|v| v.short_name.as_deref() == Some(voice_owned.as_str()))
-            .ok_or_else(|| anyhow::anyhow!("voice '{}' not found", voice_owned))?;
+            .ok_or_else(|| ApiError::BadRequest(format!("voice '{voice_owned}' not found")))?;
         let config = SpeechConfig::from(matched);
-        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
+        let mut client =
+            connect().map_err(|e| ApiError::Internal(format!("edge tts connect: {e}")))?;
         let audio = client
             .synthesize(&text_owned, &config)
-            .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
+            .map_err(|e| ApiError::Internal(format!("edge tts synth: {e}")))?;
         if audio.audio_bytes.is_empty() {
-            anyhow::bail!("edge tts returned 0 bytes");
+            return Err(ApiError::Internal("edge tts returned 0 bytes".into()));
         }
         Ok(audio.audio_bytes)
     })
     .await
-    .map_err(|e| ApiError::Internal(format!("tts task join: {e}")))?
-    .map_err(|e| ApiError::Internal(format!("tts preview failed: {e}")))?;
+    .map_err(|e| ApiError::Internal(format!("tts task join: {e}")))??;
 
     let resp = axum::response::Response::builder()
         .status(200)
@@ -1118,19 +1294,14 @@ pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumRespons
 
 /// List every voice Edge-TTS exposes. Response shape mirrors what the
 /// upstream `get_voices_list` returns, with just the fields a caller
-/// actually needs (short name, locale, gender, display name). Cached
-/// on the caller side is fine — the list is stable per Edge-TTS
-/// release.
-#[derive(serde::Serialize)]
-pub struct VoiceEntry {
-    pub name: String,
-    pub short_name: Option<String>,
-    pub locale: Option<String>,
-    pub gender: Option<String>,
-    pub friendly_name: Option<String>,
-}
+/// actually needs (short name, locale, gender, display name). The list
+/// is stable per Edge-TTS release, so it is fetched once and cached in
+/// [`AppState`] instead of re-querying Edge-TTS on every request.
+pub async fn list_voices(State(state): State<AppState>) -> Result<AxumResponse, ApiError> {
+    if let Some(cached) = state.cached_voices() {
+        return voices_response(cached);
+    }
 
-pub async fn list_voices() -> Result<Json<Vec<VoiceEntry>>, ApiError> {
     let voices = tokio::task::spawn_blocking(|| -> anyhow::Result<Vec<VoiceEntry>> {
         use msedge_tts::voice::get_voices_list;
         let raw = get_voices_list().map_err(|e| anyhow::anyhow!("voice list: {e}"))?;
@@ -1148,5 +1319,44 @@ pub async fn list_voices() -> Result<Json<Vec<VoiceEntry>>, ApiError> {
     .await
     .map_err(|e| ApiError::Internal(format!("voice task join: {e}")))?
     .map_err(|e| ApiError::Internal(format!("voice list failed: {e}")))?;
-    Ok(Json(voices))
+
+    state.set_cached_voices(voices.clone());
+    voices_response(voices)
+}
+
+fn voices_response(voices: Vec<VoiceEntry>) -> Result<AxumResponse, ApiError> {
+    let body = serde_json::to_vec(&voices)
+        .map_err(|e| ApiError::Internal(format!("voice list encode: {e}")))?;
+    axum::response::Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .header("cache-control", "public, max-age=3600")
+        .body(axum::body::Body::from(body))
+        .map_err(|e| ApiError::Internal(format!("response build: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wav_pcm16_round_trips_through_build_and_parse() {
+        let samples: Vec<i16> = vec![0, 100, -100, i16::MAX, i16::MIN, 32];
+        let wav = build_wav_pcm16_mono_16khz(&samples);
+        let decoded = wav_pcm16_to_f32(&wav).expect("valid wav");
+        assert_eq!(decoded.len(), samples.len());
+        for (want, got) in samples.iter().zip(decoded.iter()) {
+            let expected = *want as f32 / 32768.0;
+            assert!(
+                (expected - got).abs() < 1e-6,
+                "sample mismatch: want {want} ({expected}), got {got}"
+            );
+        }
+    }
+
+    #[test]
+    fn wav_pcm16_rejects_bad_header() {
+        assert!(wav_pcm16_to_f32(b"not a wav file").is_err());
+        assert!(wav_pcm16_to_f32(&[0u8; 43]).is_err());
+    }
 }

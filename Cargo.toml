@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -10,13 +10,13 @@ repository = "https://github.com/imtaqin/waxum"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed", default-features = true, features = ["voip", "tracing"] }
-wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
-wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
-waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
-whatsapp-rust-tokio-transport = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
-whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4d9e8ed" }
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9", default-features = true, features = ["voip", "tracing"] }
+wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
+wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
+waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "00771869606379d5bed8066fe220f510ebd120f9" }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
@@ -76,7 +76,7 @@ futures = "0.3"
 
 prometheus = { version = "0.13", default-features = false }
 async-channel = "2"
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 # Console (server-rendered dashboard) — Handlebars templates + tiny
 # static asset bundle baked into the binary via `include_str!`. No
@@ -89,6 +89,12 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # directly so `/calls/tts` does not need an external `edge-tts` CLI or
 # Python interpreter installed on the server.
 msedge-tts = "0.4"
+
+# whisper.cpp bindings for local call-recording transcription. Needs a
+# GGML model file at runtime (`WHISPER_MODEL_PATH`) — unlike the rest of
+# waxum this is not a zero-setup feature; see the /calls/*/transcript
+# docs. Compiles whisper.cpp from source (cmake + a C++ toolchain).
+whisper-rs = "0.16"
 
 [dev-dependencies]
 http-body-util = "0.1"
