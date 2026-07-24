@@ -71,6 +71,7 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Bulk purge (by status, older-than, dry-run) | `POST /sessions/purge` |
 | Bulk disconnect / reconnect | `POST /sessions/{disconnect,reconnect}-all` |
 | Re-enable all tripped webhook circuits | `POST /webhooks/reenable-all` |
+| Export / import a session between instances (zip of local storage) | `POST /sessions/{sid}/export`, `POST /sessions/{sid}/import` |
 
 ### Groups
 
@@ -139,24 +140,12 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Postgres (recommended for prod, > 50 sessions) | `WA_DB=postgres://…` |
 | MySQL | `WA_DB=mysql://…` |
 
-## Roadmap / on-going
+### Known limitations
 
-| Feature | Status |
+| Gap | Why |
 |---|---|
-| ~~Video call (H.264 relay over `calls/media/ws?kind=av`)~~ | shipped 0.9.0 |
-| Group voice call | **blocked upstream** — `whatsapp-rust` has no multi-party relay/SFU client at all (single-peer engine only); not a waxum gap, needs its own library-level project |
-| ~~Transcript of a recording~~ | shipped 0.9.1 — calls an external whisper.cpp-compatible HTTP server (`WHISPER_API_URL`), not bundled into the binary |
-| ~~S3 backend for media & recordings~~ | shipped 0.9.2 — call recordings only (waxum never persists message media locally to begin with; it streams straight through to WhatsApp's own CDN) |
-| ~~Message search via SQLite FTS~~ | shipped 0.8.0 |
-| ~~Blast queue engine (bulk send, dedup, retry, DLQ)~~ | shipped 0.8.0 |
-| ~~Scheduled send (`send_at` ISO)~~ | shipped 0.8.0 |
-| ~~Session tags / groups~~ | shipped 0.7.13 |
-| Rust client crate | scoped |
-| n8n community node | scoped |
-| Chatwoot bridge | idea |
-| Distributed mode (multi-instance + leader elect) | idea |
-| Session migration between instances | idea |
-| Signal-store encryption at rest (sqlcipher) | idea |
+| Group voice call | **Blocked upstream** — `whatsapp-rust` has no multi-party relay/SFU client at all (single-peer engine only). Not a waxum-side gap; would need its own library-level project in `whatsapp-rust` first. |
+| Encryption at rest | Not implemented. `libsqlite3-sys` (shared with `whatsapp-rust-sqlite-storage`) would need a `bundled-sqlcipher` build, which pulls in OpenSSL and breaks single-binary/cross-compile builds. Use OS/disk-level encryption (LUKS, BitLocker, encrypted volumes) instead — the standard approach for encryption at rest, and zero code changes. |
 
 ## Console
 

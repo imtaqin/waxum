@@ -5193,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "waxum"
-version = "0.9.1"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5245,6 +5245,7 @@ dependencies = [
  "whatsapp-rust-sqlite-storage",
  "whatsapp-rust-tokio-transport",
  "whatsapp-rust-ureq-http-client",
+ "zip",
 ]
 
 [[package]]

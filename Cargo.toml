@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.9.2"
+version = "0.9.3"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -98,6 +98,13 @@ msedge-tts = "0.4"
 # against real AWS S3, MinIO, R2, etc.). Pure-Rust + rustls by
 # default, no native TLS/OpenSSL and no C build step.
 s3 = "0.1"
+
+# Packages a session's local storage directory for export/import
+# between instances. Trimmed to the `deflate` feature only (resolves
+# to the pure-Rust `zlib-rs` backend) — the default feature set pulls
+# in bzip2/lzma/xz, some of which wrap native C libraries we don't
+# need for a plain directory archive.
+zip = { version = "3", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 http-body-util = "0.1"

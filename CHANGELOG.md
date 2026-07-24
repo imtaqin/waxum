@@ -2,6 +2,38 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.9.3] - 2026-07-24
+
+### Added — session export/import between instances
+
+- `POST /sessions/{id}/export` — disconnects the session (device
+  credentials must never be live on two instances at once), zips its
+  local storage directory (device identity, Signal protocol keys,
+  noise handshake state — everything `whatsapp-rust` itself persists
+  per session), and streams the archive back.
+- `POST /sessions/{id}/import` — accepts that archive on another
+  instance (or the same one) and restores it into place. Refuses to
+  run over a currently-connected session. Does not auto-reconnect —
+  call `/connect` afterwards.
+- Scope note: `whatsapp-rust`'s only storage backend is local SQLite
+  files (`storages/sqlite-storage`, no Postgres/MySQL option), so a
+  session's live client state is inherently pinned to one instance's
+  disk. True transparent multi-instance session ownership would need
+  a networked storage backend written against `wacore::store::traits`
+  upstream — a separate, much larger project. This is the practical
+  middle ground: explicit, operator-triggered migration.
+- Also fixed: a real phone number had leaked into example values
+  across the API docs, Swagger schema, and console playground UI —
+  replaced with the generic placeholder used everywhere else.
+
+### Changed
+
+- README: removed the separate "Roadmap / on-going" table — shipped
+  items are already listed in their feature tables, and the two
+  genuinely-not-planned items (group voice calls, encryption at rest)
+  moved to a short "Known limitations" note explaining why, instead
+  of sitting in a wishlist.
+
 ## [0.9.2] - 2026-07-24
 
 ### Added — S3 backend for call recordings

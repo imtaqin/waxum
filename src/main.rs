@@ -103,6 +103,8 @@ use state::AppState;
         handlers::sessions::connect_session,
         handlers::sessions::pair_session,
         handlers::sessions::disconnect_session,
+        handlers::sessions::export_session,
+        handlers::sessions::import_session,
         handlers::sessions::get_device_info,
 
         handlers::messages::send_text,

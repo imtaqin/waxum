@@ -88,6 +88,14 @@ fn session_routes() -> Router<AppState> {
             post(handlers::sessions::disconnect_session),
         )
         .route(
+            "/{session_id}/export",
+            post(handlers::sessions::export_session),
+        )
+        .route(
+            "/{session_id}/import",
+            post(handlers::sessions::import_session),
+        )
+        .route(
             "/{session_id}/device",
             get(handlers::sessions::get_device_info),
         )
