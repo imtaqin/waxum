@@ -15,7 +15,7 @@ use crate::error::ApiError;
 use crate::handlers::messages::parse_jid;
 use crate::models::calls::{
     AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
-    RingCallResponse, TerminateCallRequest, TtsCallRequest, TtsCallResponse,
+    RingCallResponse, TerminateCallRequest, TtsCallRequest, TtsCallResponse, VoiceEntry,
 };
 use crate::models::common::SuccessResponse;
 use crate::state::{ActiveCallAudio, AppState};
@@ -1083,28 +1083,29 @@ pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumRespons
     let text_owned = sanitize_ssml_text(text);
     let voice_owned = q.voice.clone();
 
-    let mp3 = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+    let mp3 = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, ApiError> {
         use msedge_tts::tts::client::connect;
         use msedge_tts::tts::SpeechConfig;
         use msedge_tts::voice::get_voices_list;
-        let voices = get_voices_list().map_err(|e| anyhow::anyhow!("edge tts voice list: {e}"))?;
+        let voices = get_voices_list()
+            .map_err(|e| ApiError::Internal(format!("edge tts voice list: {e}")))?;
         let matched = voices
             .iter()
             .find(|v| v.short_name.as_deref() == Some(voice_owned.as_str()))
-            .ok_or_else(|| anyhow::anyhow!("voice '{}' not found", voice_owned))?;
+            .ok_or_else(|| ApiError::BadRequest(format!("voice '{voice_owned}' not found")))?;
         let config = SpeechConfig::from(matched);
-        let mut client = connect().map_err(|e| anyhow::anyhow!("edge tts connect: {e}"))?;
+        let mut client =
+            connect().map_err(|e| ApiError::Internal(format!("edge tts connect: {e}")))?;
         let audio = client
             .synthesize(&text_owned, &config)
-            .map_err(|e| anyhow::anyhow!("edge tts synth: {e}"))?;
+            .map_err(|e| ApiError::Internal(format!("edge tts synth: {e}")))?;
         if audio.audio_bytes.is_empty() {
-            anyhow::bail!("edge tts returned 0 bytes");
+            return Err(ApiError::Internal("edge tts returned 0 bytes".into()));
         }
         Ok(audio.audio_bytes)
     })
     .await
-    .map_err(|e| ApiError::Internal(format!("tts task join: {e}")))?
-    .map_err(|e| ApiError::Internal(format!("tts preview failed: {e}")))?;
+    .map_err(|e| ApiError::Internal(format!("tts task join: {e}")))??;
 
     let resp = axum::response::Response::builder()
         .status(200)
@@ -1118,19 +1119,14 @@ pub async fn tts_preview(Query(q): Query<TtsPreviewQuery>) -> Result<AxumRespons
 
 /// List every voice Edge-TTS exposes. Response shape mirrors what the
 /// upstream `get_voices_list` returns, with just the fields a caller
-/// actually needs (short name, locale, gender, display name). Cached
-/// on the caller side is fine — the list is stable per Edge-TTS
-/// release.
-#[derive(serde::Serialize)]
-pub struct VoiceEntry {
-    pub name: String,
-    pub short_name: Option<String>,
-    pub locale: Option<String>,
-    pub gender: Option<String>,
-    pub friendly_name: Option<String>,
-}
+/// actually needs (short name, locale, gender, display name). The list
+/// is stable per Edge-TTS release, so it is fetched once and cached in
+/// [`AppState`] instead of re-querying Edge-TTS on every request.
+pub async fn list_voices(State(state): State<AppState>) -> Result<AxumResponse, ApiError> {
+    if let Some(cached) = state.cached_voices() {
+        return voices_response(cached);
+    }
 
-pub async fn list_voices() -> Result<Json<Vec<VoiceEntry>>, ApiError> {
     let voices = tokio::task::spawn_blocking(|| -> anyhow::Result<Vec<VoiceEntry>> {
         use msedge_tts::voice::get_voices_list;
         let raw = get_voices_list().map_err(|e| anyhow::anyhow!("voice list: {e}"))?;
@@ -1148,5 +1144,18 @@ pub async fn list_voices() -> Result<Json<Vec<VoiceEntry>>, ApiError> {
     .await
     .map_err(|e| ApiError::Internal(format!("voice task join: {e}")))?
     .map_err(|e| ApiError::Internal(format!("voice list failed: {e}")))?;
-    Ok(Json(voices))
+
+    state.set_cached_voices(voices.clone());
+    voices_response(voices)
+}
+
+fn voices_response(voices: Vec<VoiceEntry>) -> Result<AxumResponse, ApiError> {
+    let body = serde_json::to_vec(&voices)
+        .map_err(|e| ApiError::Internal(format!("voice list encode: {e}")))?;
+    axum::response::Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .header("cache-control", "public, max-age=3600")
+        .body(axum::body::Body::from(body))
+        .map_err(|e| ApiError::Internal(format!("response build: {e}")))
 }

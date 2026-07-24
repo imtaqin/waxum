@@ -246,6 +246,11 @@ struct AppStateInner {
     /// Backs the console overview "Live events" panel and also serves as
     /// the source for the terminal event log line.
     pub event_ring: parking_lot::Mutex<std::collections::VecDeque<ConsoleEvent>>,
+
+    /// Edge-TTS voice list, fetched once on first `GET /api/v1/voices`
+    /// and reused after that — the list is stable per Edge-TTS release,
+    /// so there is no point re-querying it on every request.
+    pub voice_cache: RwLock<Option<Vec<crate::models::calls::VoiceEntry>>>,
 }
 
 /// A structured event captured from `broadcast_to_webhooks` for both the
@@ -316,6 +321,7 @@ impl AppState {
                 call_audio_channels: DashMap::new(),
                 event_ring: parking_lot::Mutex::new(std::collections::VecDeque::with_capacity(200)),
                 session_tags: DashMap::new(),
+                voice_cache: RwLock::new(None),
             }),
         };
 
@@ -481,6 +487,14 @@ impl AppState {
     pub fn recent_events(&self, limit: usize) -> Vec<ConsoleEvent> {
         let ring = self.inner.event_ring.lock();
         ring.iter().rev().take(limit).cloned().collect()
+    }
+
+    pub fn cached_voices(&self) -> Option<Vec<crate::models::calls::VoiceEntry>> {
+        self.inner.voice_cache.read().clone()
+    }
+
+    pub fn set_cached_voices(&self, voices: Vec<crate::models::calls::VoiceEntry>) {
+        *self.inner.voice_cache.write() = Some(voices);
     }
 
     pub fn incoming_calls(&self) -> &DashMap<String, wacore::types::call::IncomingCall> {

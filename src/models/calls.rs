@@ -152,3 +152,16 @@ pub struct TerminateCallRequest {
     #[serde(default)]
     pub reason: Option<String>,
 }
+
+/// One Edge-TTS voice, as returned by `GET /api/v1/voices`. Field
+/// subset mirrors upstream `msedge_tts::voice::Voice` — just what a
+/// caller needs to pick a voice (short name, locale, gender, display
+/// name).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct VoiceEntry {
+    pub name: String,
+    pub short_name: Option<String>,
+    pub locale: Option<String>,
+    pub gender: Option<String>,
+    pub friendly_name: Option<String>,
+}

@@ -76,7 +76,7 @@ futures = "0.3"
 
 prometheus = { version = "0.13", default-features = false }
 async-channel = "2"
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 # Console (server-rendered dashboard) — Handlebars templates + tiny
 # static asset bundle baked into the binary via `include_str!`. No
