@@ -181,6 +181,7 @@ use state::AppState;
         handlers::calls::play_call,
         handlers::calls::accept_call,
         handlers::calls::terminate_call,
+        handlers::calls::transcribe_call,
 
         handlers::status::send_status_reaction,
 
@@ -340,6 +341,8 @@ use state::AppState;
             models::calls::RingCallResponse,
             models::calls::AcceptCallRequest,
             models::calls::TerminateCallRequest,
+            models::calls::TranscriptResponse,
+            models::calls::TranscriptSegment,
 
             models::status::StatusReactionRequest,
 

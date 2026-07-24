@@ -345,6 +345,10 @@ fn session_routes() -> Router<AppState> {
             get(handlers::calls::get_recording),
         )
         .route(
+            "/{session_id}/calls/{call_id}/transcript",
+            post(handlers::calls::transcribe_call),
+        )
+        .route(
             "/{session_id}/calls/accept",
             post(handlers::calls::accept_call),
         )

@@ -251,6 +251,13 @@ struct AppStateInner {
     /// and reused after that — the list is stable per Edge-TTS release,
     /// so there is no point re-querying it on every request.
     pub voice_cache: RwLock<Option<Vec<crate::models::calls::VoiceEntry>>>,
+
+    /// Lazily-loaded whisper.cpp model context for call-recording
+    /// transcription, keyed off `WHISPER_MODEL_PATH`. Loaded at most
+    /// once per process — the model file can be tens to hundreds of MB,
+    /// so every `/calls/*/transcript` request after the first reuses
+    /// the same in-memory context instead of reloading it from disk.
+    pub whisper_ctx: tokio::sync::OnceCell<Arc<whisper_rs::WhisperContext>>,
 }
 
 /// A structured event captured from `broadcast_to_webhooks` for both the
@@ -322,6 +329,7 @@ impl AppState {
                 event_ring: parking_lot::Mutex::new(std::collections::VecDeque::with_capacity(200)),
                 session_tags: DashMap::new(),
                 voice_cache: RwLock::new(None),
+                whisper_ctx: tokio::sync::OnceCell::new(),
             }),
         };
 
@@ -495,6 +503,34 @@ impl AppState {
 
     pub fn set_cached_voices(&self, voices: Vec<crate::models::calls::VoiceEntry>) {
         *self.inner.voice_cache.write() = Some(voices);
+    }
+
+    /// Load the whisper.cpp model from `WHISPER_MODEL_PATH` on first use
+    /// and reuse it after that. Loading happens in `spawn_blocking` since
+    /// it involves synchronous file I/O + GGML tensor allocation, which
+    /// can take a noticeable moment for larger models.
+    pub async fn whisper_context(&self) -> Result<Arc<whisper_rs::WhisperContext>, String> {
+        self.inner
+            .whisper_ctx
+            .get_or_try_init(|| async {
+                let path = std::env::var("WHISPER_MODEL_PATH").map_err(|_| {
+                    "WHISPER_MODEL_PATH is not set — point it at a GGML whisper.cpp model file \
+                     (e.g. ggml-base.en.bin) to enable /calls/*/transcript"
+                        .to_string()
+                })?;
+                tokio::task::spawn_blocking(move || {
+                    whisper_rs::WhisperContext::new_with_params(
+                        &path,
+                        whisper_rs::WhisperContextParameters::default(),
+                    )
+                    .map(Arc::new)
+                    .map_err(|e| format!("failed to load whisper model at {path}: {e}"))
+                })
+                .await
+                .map_err(|e| format!("whisper model load task panicked: {e}"))?
+            })
+            .await
+            .cloned()
     }
 
     pub fn incoming_calls(&self) -> &DashMap<String, wacore::types::call::IncomingCall> {

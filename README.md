@@ -45,7 +45,7 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Scheduled send (`send_at` on all 34 send endpoints) | `GET/DELETE /sessions/{sid}/scheduled`, `GET /scheduled` |
 | Blast queue (bulk send, pacing, dedup, retry, DLQ) | `POST /sessions/{sid}/blast`, `GET /sessions/{sid}/blasts*`, `GET /blasts` |
 
-### Voice calls
+### Voice & video calls
 
 | Feature | Endpoint |
 |---|---|
@@ -54,7 +54,9 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Audio playback call (MP3/WAV upload or URL) | `POST /sessions/{sid}/calls/play` |
 | Native MLOW codec (WA proprietary, pure Rust) | internal |
 | Peer audio recording (WAV) | `GET /sessions/{sid}/calls/{cid}/recording.wav` |
-| Bidirectional media WebSocket stream | `WS /sessions/{sid}/calls/media?to=` |
+| Bidirectional media WebSocket stream (audio) | `WS /sessions/{sid}/calls/media/ws?to=&kind=audio` |
+| Bidirectional media WebSocket stream (audio + video, H.264) | `WS /sessions/{sid}/calls/media/ws?to=&kind=av` — transport only, bring your own H.264 encoder/decoder (e.g. ffmpeg) on the client side |
+| Local transcript of a recording (whisper.cpp) | `POST /sessions/{sid}/calls/{cid}/transcript` — needs `WHISPER_MODEL_PATH` |
 
 ### Session management
 
@@ -141,9 +143,9 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 
 | Feature | Status |
 |---|---|
-| Video call media pipeline (MLOW video) | planning |
-| Group voice call | planning |
-| Local STT on recording (whisper.cpp) | planning |
+| ~~Video call (H.264 relay over `calls/media/ws?kind=av`)~~ | shipped 0.9.0 |
+| Group voice call | **blocked upstream** — `whatsapp-rust` has no multi-party relay/SFU client at all (single-peer engine only); not a waxum gap, needs its own library-level project |
+| ~~Local STT on recording (whisper.cpp)~~ | shipped 0.9.0 — needs `WHISPER_MODEL_PATH` set to a GGML model file, not zero-setup like the rest of waxum |
 | ~~Message search via SQLite FTS~~ | shipped 0.8.0 |
 | ~~Blast queue engine (bulk send, dedup, retry, DLQ)~~ | shipped 0.8.0 |
 | ~~Scheduled send (`send_at` ISO)~~ | shipped 0.8.0 |
