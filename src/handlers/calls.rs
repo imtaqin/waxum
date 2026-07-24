@@ -15,8 +15,8 @@ use crate::error::ApiError;
 use crate::handlers::messages::parse_jid;
 use crate::models::calls::{
     AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
-    RingCallResponse, TerminateCallRequest, TranscriptResponse, TranscriptSegment, TtsCallRequest,
-    TtsCallResponse, VoiceEntry,
+    RingCallResponse, TerminateCallRequest, TranscriptResponse, TtsCallRequest, TtsCallResponse,
+    VoiceEntry,
 };
 use crate::models::common::SuccessResponse;
 use crate::state::{ActiveCallAudio, AppState};
@@ -308,27 +308,6 @@ pub async fn get_recording(
     Ok(r)
 }
 
-/// Read the raw `i16` samples back out of a WAV file written by
-/// [`build_wav_pcm16_mono_16khz`] and convert to the normalised `f32`
-/// PCM whisper.cpp expects. Only understands that exact fixed 44-byte
-/// header shape — this endpoint only ever reads recordings this
-/// process wrote itself, never arbitrary uploaded WAV files.
-fn wav_pcm16_to_f32(bytes: &[u8]) -> Result<Vec<f32>, ApiError> {
-    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
-        return Err(ApiError::Internal(
-            "recording is not a valid WAV file".into(),
-        ));
-    }
-    let data_len = u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]) as usize;
-    let pcm = bytes
-        .get(44..44 + data_len)
-        .ok_or_else(|| ApiError::Internal("recording WAV data chunk is truncated".into()))?;
-    Ok(pcm
-        .chunks_exact(2)
-        .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
-        .collect())
-}
-
 #[utoipa::path(
     post,
     security(("bearer_auth" = [])),
@@ -341,13 +320,22 @@ fn wav_pcm16_to_f32(bytes: &[u8]) -> Result<Vec<f32>, ApiError> {
     responses(
         (status = 200, description = "Transcript of the call recording", body = TranscriptResponse),
         (status = 404, description = "Recording not found — call hasn't ended or was never recorded"),
-        (status = 500, description = "WHISPER_MODEL_PATH not set, or the model failed to load/run")
+        (status = 500, description = "WHISPER_API_URL not set, or the request to it failed")
     )
 )]
 pub async fn transcribe_call(
     State(state): State<AppState>,
     Path((session_id, call_id)): Path<(String, String)>,
 ) -> Result<Json<TranscriptResponse>, ApiError> {
+    let whisper_url = std::env::var("WHISPER_API_URL").map_err(|_| {
+        ApiError::Internal(
+            "WHISPER_API_URL is not set — point it at an external whisper.cpp-compatible \
+             HTTP server (e.g. the whisper.cpp `server` example, run in its own container) \
+             to enable /calls/*/transcript"
+                .into(),
+        )
+    })?;
+
     let base = state.base_storage_path().to_string();
     let path = std::path::Path::new(&base)
         .join(&session_id)
@@ -358,40 +346,29 @@ pub async fn transcribe_call(
             "recording not found for call {call_id} — wait until the peer hangs up, then retry"
         ))
     })?;
-    let samples = wav_pcm16_to_f32(&bytes)?;
 
-    let ctx = state.whisper_context().await.map_err(ApiError::Internal)?;
-
-    let transcript = tokio::task::spawn_blocking(move || -> Result<TranscriptResponse, String> {
-        let mut whisper_state = ctx.create_state().map_err(|e| e.to_string())?;
-        let mut params =
-            whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
-        params.set_print_progress(false);
-        params.set_print_realtime(false);
-        params.set_print_special(false);
-        params.set_print_timestamps(false);
-        whisper_state
-            .full(params, &samples)
-            .map_err(|e| e.to_string())?;
-
-        let segments: Vec<TranscriptSegment> = whisper_state
-            .as_iter()
-            .map(|seg| TranscriptSegment {
-                start_ms: seg.start_timestamp() * 10,
-                end_ms: seg.end_timestamp() * 10,
-                text: seg.to_str_lossy().unwrap_or_default().trim().to_string(),
-            })
-            .collect();
-        let text = segments
-            .iter()
-            .map(|s| s.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-        Ok(TranscriptResponse { text, segments })
-    })
-    .await
-    .map_err(|e| ApiError::Internal(format!("transcription task panicked: {e}")))?
-    .map_err(ApiError::Internal)?;
+    let form = reqwest::multipart::Form::new().part(
+        "file",
+        reqwest::multipart::Part::bytes(bytes)
+            .file_name(format!("{call_id}.wav"))
+            .mime_str("audio/wav")
+            .map_err(|e| ApiError::Internal(format!("multipart build failed: {e}")))?,
+    );
+    let resp = reqwest::Client::new()
+        .post(&whisper_url)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| ApiError::Internal(format!("whisper server request failed: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(ApiError::Internal(format!(
+            "whisper server returned {}",
+            resp.status()
+        )));
+    }
+    let transcript: TranscriptResponse = resp.json().await.map_err(|e| {
+        ApiError::Internal(format!("whisper server response was not valid JSON: {e}"))
+    })?;
 
     Ok(Json(transcript))
 }
@@ -1333,30 +1310,4 @@ fn voices_response(voices: Vec<VoiceEntry>) -> Result<AxumResponse, ApiError> {
         .header("cache-control", "public, max-age=3600")
         .body(axum::body::Body::from(body))
         .map_err(|e| ApiError::Internal(format!("response build: {e}")))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wav_pcm16_round_trips_through_build_and_parse() {
-        let samples: Vec<i16> = vec![0, 100, -100, i16::MAX, i16::MIN, 32];
-        let wav = build_wav_pcm16_mono_16khz(&samples);
-        let decoded = wav_pcm16_to_f32(&wav).expect("valid wav");
-        assert_eq!(decoded.len(), samples.len());
-        for (want, got) in samples.iter().zip(decoded.iter()) {
-            let expected = *want as f32 / 32768.0;
-            assert!(
-                (expected - got).abs() < 1e-6,
-                "sample mismatch: want {want} ({expected}), got {got}"
-            );
-        }
-    }
-
-    #[test]
-    fn wav_pcm16_rejects_bad_header() {
-        assert!(wav_pcm16_to_f32(b"not a wav file").is_err());
-        assert!(wav_pcm16_to_f32(&[0u8; 43]).is_err());
-    }
 }

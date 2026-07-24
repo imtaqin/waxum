@@ -2,9 +2,14 @@
 
 All notable changes to **waxum** will be documented in this file.
 
-## [0.9.0] - 2026-07-24
+## [0.9.1] - 2026-07-24
 
-### Added — video calling + local transcription
+`v0.9.0`'s tag exists but was never actually released — its build
+pulled in `whisper-rs`, which compiles whisper.cpp (C++) into the
+binary and broke the Windows cross-compile job in CI. Superseded by
+this version before any binaries or Docker images went out.
+
+### Added — video calling + call transcription
 
 - **Video calls** — `calls/media/ws?kind=av` places a call with both
   audio and video, relaying raw H.264 Annex-B access units to/from the
@@ -13,12 +18,12 @@ All notable changes to **waxum** will be documented in this file.
   its own H.264 encoder/decoder (e.g. ffmpeg). Frames are tagged with a
   1-byte media type so audio and video share one socket; `kind=audio`
   keeps the original untagged raw-PCM wire format unchanged.
-- **`POST /sessions/{sid}/calls/{cid}/transcript`** — local
-  speech-to-text on a call recording via `whisper-rs` (whisper.cpp
-  bindings). Needs `WHISPER_MODEL_PATH` pointed at a GGML model file;
-  the model loads once and is cached for the life of the process. Not
-  a zero-setup feature like the rest of waxum — requires a C++
-  toolchain at build time and a model file at runtime.
+- **`POST /sessions/{sid}/calls/{cid}/transcript`** — forwards a call
+  recording to an external whisper.cpp-compatible HTTP server
+  (`WHISPER_API_URL`) and relays back its `text`. Keeps waxum a
+  pure-Rust single binary with no C++ toolchain or model file baked
+  in — run whisper.cpp (or any compatible server) as its own service,
+  same shape as the existing Edge-TTS integration.
 - Group voice calls stay off the roadmap: `whatsapp-rust` has no
   multi-party relay/SFU support at the library level at all, so this
   isn't implementable as a waxum-side feature without a much larger

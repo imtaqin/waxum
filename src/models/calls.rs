@@ -166,21 +166,12 @@ pub struct VoiceEntry {
     pub friendly_name: Option<String>,
 }
 
-/// Local whisper.cpp transcript of a call recording, returned by
+/// Transcript of a call recording, returned by
 /// `POST /api/v1/sessions/{session_id}/calls/{call_id}/transcript`.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+/// Produced by an external whisper.cpp-compatible HTTP server (see
+/// `WHISPER_API_URL`) — waxum only forwards the recording and relays
+/// the `text` field back, so the shape stays deliberately minimal.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TranscriptResponse {
-    /// Full transcript, segments joined with a single space.
-    pub text: String,
-    pub segments: Vec<TranscriptSegment>,
-}
-
-/// One whisper.cpp segment. Timestamps are milliseconds from the start
-/// of the recording (whisper.cpp reports centiseconds internally; this
-/// is `* 10`).
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct TranscriptSegment {
-    pub start_ms: i64,
-    pub end_ms: i64,
     pub text: String,
 }
