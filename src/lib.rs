@@ -15,3 +15,4 @@ pub mod net;
 pub mod preflight;
 pub mod routes;
 pub mod state;
+pub mod storage;

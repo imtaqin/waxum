@@ -75,6 +75,7 @@ use waxum::nats;
 use waxum::preflight;
 use waxum::routes;
 use waxum::state;
+use waxum::storage;
 
 use routes::create_router;
 use state::AppState;
@@ -643,8 +644,37 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
         }
     };
 
+    let storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
+        .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
+    let recordings = match storage::S3Config::from_env() {
+        Some(config) => {
+            tracing::info!(
+                "Connecting call recordings to S3 bucket {} at {}",
+                config.bucket,
+                config.endpoint
+            );
+            match storage::RecordingStore::connect_s3(config) {
+                Ok(store) => {
+                    tracing::info!("Call recordings backed by S3");
+                    store
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to set up S3 recording storage: {}. Falling back to local disk.",
+                        e
+                    );
+                    storage::RecordingStore::local(&storage_path)
+                }
+            }
+        }
+        None => {
+            tracing::info!("S3_BUCKET not set — call recordings stored on local disk");
+            storage::RecordingStore::local(&storage_path)
+        }
+    };
+
     let nats_enabled = nats_manager.is_some();
-    let state = AppState::new(pool, nats_manager).await;
+    let state = AppState::new(pool, nats_manager, recordings).await;
 
     handlers::bulk::touch_uptime_anchor();
     preflight::check_fd_limit();

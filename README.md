@@ -53,7 +53,7 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | Text-to-speech call (Edge TTS, 300+ voices) | `POST /sessions/{sid}/calls/tts` |
 | Audio playback call (MP3/WAV upload or URL) | `POST /sessions/{sid}/calls/play` |
 | Native MLOW codec (WA proprietary, pure Rust) | internal |
-| Peer audio recording (WAV) | `GET /sessions/{sid}/calls/{cid}/recording.wav` |
+| Peer audio recording (WAV) | `GET /sessions/{sid}/calls/{cid}/recording.wav` — local disk by default, S3-compatible object storage (AWS S3, MinIO, R2, …) when `S3_BUCKET` is set |
 | Bidirectional media WebSocket stream (audio) | `WS /sessions/{sid}/calls/media/ws?to=&kind=audio` |
 | Bidirectional media WebSocket stream (audio + video, H.264) | `WS /sessions/{sid}/calls/media/ws?to=&kind=av` — transport only, bring your own H.264 encoder/decoder (e.g. ffmpeg) on the client side |
 | Transcript of a recording (external whisper.cpp server) | `POST /sessions/{sid}/calls/{cid}/transcript` — needs `WHISPER_API_URL`; waxum stays a pure-Rust single binary, no C++/whisper.cpp is compiled in |
@@ -146,10 +146,10 @@ Production-grade. **130+ REST endpoints across 22 feature modules.**
 | ~~Video call (H.264 relay over `calls/media/ws?kind=av`)~~ | shipped 0.9.0 |
 | Group voice call | **blocked upstream** — `whatsapp-rust` has no multi-party relay/SFU client at all (single-peer engine only); not a waxum gap, needs its own library-level project |
 | ~~Transcript of a recording~~ | shipped 0.9.1 — calls an external whisper.cpp-compatible HTTP server (`WHISPER_API_URL`), not bundled into the binary |
+| ~~S3 backend for media & recordings~~ | shipped 0.9.2 — call recordings only (waxum never persists message media locally to begin with; it streams straight through to WhatsApp's own CDN) |
 | ~~Message search via SQLite FTS~~ | shipped 0.8.0 |
 | ~~Blast queue engine (bulk send, dedup, retry, DLQ)~~ | shipped 0.8.0 |
 | ~~Scheduled send (`send_at` ISO)~~ | shipped 0.8.0 |
-| S3 backend for media & recordings | scoped |
 | ~~Session tags / groups~~ | shipped 0.7.13 |
 | Rust client crate | scoped |
 | n8n community node | scoped |

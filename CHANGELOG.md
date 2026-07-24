@@ -2,6 +2,26 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.9.2] - 2026-07-24
+
+### Added — S3 backend for call recordings
+
+- Call recordings can now live in S3-compatible object storage (AWS
+  S3, MinIO, R2, Wasabi, …) instead of local disk. Set `S3_BUCKET`
+  (plus `S3_ENDPOINT`, `S3_REGION`, `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`) to switch; omit it and recordings keep
+  writing to `WHATSAPP_STORAGE_PATH` as before. A connection failure
+  at startup logs an error and falls back to local disk rather than
+  aborting the process, matching how NATS is wired up.
+- New `src/storage.rs`, pulled in via the `s3` crate — pure Rust,
+  rustls by default, no native TLS/OpenSSL and no C build step (kept
+  in mind after the whisper-rs incident in 0.9.0/0.9.1).
+- Scope note: this only covers recordings. Message media (images,
+  video, documents) was never persisted to local disk in the first
+  place — it streams straight through to WhatsApp's own CDN via
+  `client.upload`/`download_from_params` — so there was nothing else
+  under "media" to back with S3.
+
 ## [0.9.1] - 2026-07-24
 
 `v0.9.0`'s tag exists but was never actually released — its build

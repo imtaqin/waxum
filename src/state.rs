@@ -228,6 +228,11 @@ struct AppStateInner {
 
     pub nats: Option<NatsManager>,
 
+    /// Where call recordings are read from / written to. Local
+    /// filesystem by default; S3-compatible object storage when
+    /// `S3_BUCKET` is configured. See [`crate::storage`].
+    pub recordings: crate::storage::RecordingStore,
+
     pub webhook_circuits: DashMap<String, CircuitState>,
 
     pub incoming_calls: DashMap<String, wacore::types::call::IncomingCall>,
@@ -300,7 +305,11 @@ pub enum WebhookFailureAction {
 }
 
 impl AppState {
-    pub async fn new(pool: DbPool, nats: Option<NatsManager>) -> Self {
+    pub async fn new(
+        pool: DbPool,
+        nats: Option<NatsManager>,
+        recordings: crate::storage::RecordingStore,
+    ) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
             .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
 
@@ -315,6 +324,7 @@ impl AppState {
                 webhooks: DashMap::new(),
                 base_storage_path,
                 nats,
+                recordings,
                 webhook_circuits: DashMap::new(),
                 incoming_calls: DashMap::new(),
                 active_calls: DashMap::new(),
@@ -621,6 +631,10 @@ impl AppState {
 
     pub fn nats(&self) -> Option<&NatsManager> {
         self.inner.nats.as_ref()
+    }
+
+    pub fn recordings(&self) -> &crate::storage::RecordingStore {
+        &self.inner.recordings
     }
 
     /// Publish an event to NATS JetStream (no-op if NATS not configured).

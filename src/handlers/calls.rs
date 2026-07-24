@@ -119,11 +119,11 @@ async fn place_encoded_audio_call(
         .insert(call_id.clone(), handle_arc.clone());
 
     let recording_url: Option<String> = if record {
-        let base = state.base_storage_path().to_string();
+        let state_rec = state.clone();
         let sid = session_id.clone();
         let cid = call_id.clone();
         tokio::spawn(async move {
-            if let Err(e) = record_peer_task(peer_rx, base, sid, cid).await {
+            if let Err(e) = record_peer_task(peer_rx, state_rec, sid, cid).await {
                 tracing::warn!(target: "waxum::call_audio", "record task ended: {e}");
             }
         });
@@ -192,7 +192,7 @@ async fn place_encoded_audio_call(
 /// closes (i.e. the call has ended).
 async fn record_peer_task(
     rx: async_channel::Receiver<wacore::voip::EncodedAudioFrame>,
-    base_storage: String,
+    state: AppState,
     session_id: String,
     call_id: String,
 ) -> anyhow::Result<()> {
@@ -210,14 +210,11 @@ async fn record_peer_task(
         }
     }
 
-    let dir = std::path::Path::new(&base_storage)
-        .join(&session_id)
-        .join("recordings");
-    tokio::fs::create_dir_all(&dir).await?;
-    let path = dir.join(format!("{}.wav", call_id));
-
     let wav_bytes = build_wav_pcm16_mono_16khz(&pcm_i16);
-    tokio::fs::write(&path, &wav_bytes).await?;
+    state
+        .recordings()
+        .write(&session_id, &call_id, wav_bytes)
+        .await?;
 
     if pcm_i16.is_empty() {
         tracing::info!(
@@ -233,7 +230,6 @@ async fn record_peer_task(
         call_id = %call_id,
         samples = pcm_i16.len(),
         duration_ms = pcm_i16.len() / 16,
-        path = %path.display(),
         "peer audio recorded"
     );
     Ok(())
@@ -276,14 +272,9 @@ pub async fn get_recording(
     State(state): State<AppState>,
     Path((session_id, call_id)): Path<(String, String)>,
 ) -> Result<AxumResponse, ApiError> {
-    let base = state.base_storage_path().to_string();
-    let path = std::path::Path::new(&base)
-        .join(&session_id)
-        .join("recordings")
-        .join(format!("{}.wav", call_id));
-    let bytes = match tokio::fs::read(&path).await {
-        Ok(b) => b,
-        Err(_) => {
+    let bytes = match state.recordings().read(&session_id, &call_id).await {
+        Ok(Some(b)) => b,
+        Ok(None) | Err(_) => {
             let mut r = AxumResponse::new(axum::body::Body::from(
                 "{\"success\":false,\"error\":{\"code\":404,\"message\":\"recording not ready yet — wait until peer hangs up, then reload\"}}",
             ));
@@ -336,16 +327,16 @@ pub async fn transcribe_call(
         )
     })?;
 
-    let base = state.base_storage_path().to_string();
-    let path = std::path::Path::new(&base)
-        .join(&session_id)
-        .join("recordings")
-        .join(format!("{}.wav", call_id));
-    let bytes = tokio::fs::read(&path).await.map_err(|_| {
-        ApiError::Internal(format!(
-            "recording not found for call {call_id} — wait until the peer hangs up, then retry"
-        ))
-    })?;
+    let bytes = state
+        .recordings()
+        .read(&session_id, &call_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("recording lookup failed: {e}")))?
+        .ok_or_else(|| {
+            ApiError::Internal(format!(
+                "recording not found for call {call_id} — wait until the peer hangs up, then retry"
+            ))
+        })?;
 
     let form = reqwest::multipart::Form::new().part(
         "file",

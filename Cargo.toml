@@ -1,6 +1,6 @@
 ﻿[package]
 name = "waxum"
-version = "0.9.1"
+version = "0.9.2"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
@@ -93,6 +93,11 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # directly so `/calls/tts` does not need an external `edge-tts` CLI or
 # Python interpreter installed on the server.
 msedge-tts = "0.4"
+
+# Optional S3-compatible object storage for call recordings (works
+# against real AWS S3, MinIO, R2, etc.). Pure-Rust + rustls by
+# default, no native TLS/OpenSSL and no C build step.
+s3 = "0.1"
 
 [dev-dependencies]
 http-body-util = "0.1"

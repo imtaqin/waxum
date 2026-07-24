@@ -45,7 +45,8 @@ impl Harness {
         let pool = DbPool::SQLite(sqlite);
         schema::init_schema(&pool).await.expect("init schema");
 
-        let state = AppState::new(pool.clone(), None).await;
+        let recordings = waxum::storage::RecordingStore::local(tmp.path().to_str().unwrap());
+        let state = AppState::new(pool.clone(), None, recordings).await;
         let app: Router = create_router()
             .layer(axum::middleware::from_fn(
                 middleware::jwt::jwt_auth_middleware,
