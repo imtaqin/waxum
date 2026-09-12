@@ -1592,6 +1592,18 @@ async fn connect_client_with_pair_code(
     Ok(())
 }
 
+/// Whether incoming calls are auto-rejected instead of registered for
+/// manual `POST .../calls/reject`. Read once from
+/// `AUTO_REJECT_INCOMING_CALLS` (default false) and cached — see #114.
+fn auto_reject_incoming_calls() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("AUTO_REJECT_INCOMING_CALLS")
+            .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false)
+    })
+}
+
 async fn handle_event(
     event: std::sync::Arc<wacore::types::events::Event>,
     state: &AppState,
@@ -1775,7 +1787,16 @@ async fn handle_event(
         }
         Event::IncomingCall(call) => {
             let call_id = call.action.call_id().to_string();
-            if !call_id.is_empty() {
+            if auto_reject_incoming_calls() {
+                if let Err(e) = client.voip().reject(call).await {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        call_id = %call_id,
+                        "AUTO_REJECT_INCOMING_CALLS: failed to reject: {}",
+                        e
+                    );
+                }
+            } else if !call_id.is_empty() {
                 state.incoming_calls().insert(call_id, call.clone());
             }
         }
