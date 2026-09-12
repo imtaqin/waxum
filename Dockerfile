@@ -17,6 +17,7 @@ ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 RUN rustup default nightly
 
 COPY Cargo.toml Cargo.lock* ./
+COPY vendor/ ./vendor/
 
 RUN mkdir -p src && \
     echo 'fn main() { println!("dummy"); }' > src/main.rs
