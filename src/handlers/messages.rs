@@ -128,7 +128,7 @@ pub async fn execute_text(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -236,7 +236,7 @@ pub async fn execute_image(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -344,7 +344,7 @@ pub async fn execute_video(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -438,7 +438,7 @@ pub async fn execute_audio(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -547,7 +547,7 @@ pub async fn execute_document(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -640,7 +640,7 @@ pub async fn execute_sticker(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -719,7 +719,7 @@ pub async fn execute_location(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -798,7 +798,7 @@ pub async fn execute_contact(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -979,7 +979,7 @@ pub async fn execute_poll(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1085,7 +1085,7 @@ pub async fn execute_buttons(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1212,7 +1212,7 @@ pub async fn execute_list(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1352,7 +1352,7 @@ pub async fn execute_interactive(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1504,7 +1504,7 @@ pub async fn execute_cta_url(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1621,7 +1621,7 @@ pub async fn execute_quick_reply(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1702,7 +1702,7 @@ pub async fn execute_newsletter_admin_invite(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1782,7 +1782,7 @@ pub async fn execute_newsletter_follower_invite(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1873,7 +1873,7 @@ pub async fn execute_order(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -1958,7 +1958,7 @@ pub async fn execute_invoice(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2038,7 +2038,7 @@ pub async fn execute_payment_invite(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2102,7 +2102,7 @@ pub async fn send_pin_message(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&chat_jid).await;
+        show_typing_before_send(&client, &chat_jid).await;
     }
 
     let message_id = client
@@ -2186,7 +2186,7 @@ pub async fn execute_forward_message(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2285,7 +2285,7 @@ pub async fn execute_poll_update(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2374,7 +2374,7 @@ pub async fn execute_buttons_response(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2468,7 +2468,7 @@ pub async fn execute_list_response(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2566,7 +2566,7 @@ pub async fn execute_interactive_response(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2648,7 +2648,7 @@ pub async fn execute_highly_structured(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2735,7 +2735,7 @@ pub async fn execute_template_button_reply(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2892,7 +2892,7 @@ pub async fn execute_scheduled_call(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -2981,7 +2981,7 @@ pub async fn execute_scheduled_call_edit(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3078,7 +3078,7 @@ pub async fn execute_payment(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3170,7 +3170,7 @@ pub async fn execute_request_payment(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3253,7 +3253,7 @@ pub async fn execute_cancel_payment_request(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3336,7 +3336,7 @@ pub async fn execute_decline_payment_request(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3441,7 +3441,7 @@ pub async fn execute_newsletter_forward(
     };
 
     if auto_presence_on_send() {
-        let _ = client.chatstate().send_composing(&to_jid).await;
+        show_typing_before_send(&client, &to_jid).await;
     }
 
     let message_id = client
@@ -3705,4 +3705,71 @@ fn auto_presence_on_send() -> bool {
             .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
             .unwrap_or(false)
     })
+}
+
+/// How long the composing indicator is held before the message goes out, in
+/// milliseconds. Read once from `AUTO_PRESENCE_DELAY_MS` (default 1200 ms) so
+/// the recipient's chat UI has time to render "typing..." rather than a
+/// flicker. Only consulted when `AUTO_PRESENCE_ON_SEND` is enabled.
+fn auto_presence_delay_ms() -> u64 {
+    static DELAY: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *DELAY.get_or_init(|| {
+        parse_presence_delay(std::env::var("AUTO_PRESENCE_DELAY_MS").ok().as_deref())
+    })
+}
+
+/// Parses an `AUTO_PRESENCE_DELAY_MS` value. Missing or malformed input falls
+/// back to the default, and the result is capped so a typo cannot stall sends.
+fn parse_presence_delay(raw: Option<&str>) -> u64 {
+    const DEFAULT_MS: u64 = 1200;
+    const MAX_MS: u64 = 10_000;
+    raw.and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_MS)
+        .min(MAX_MS)
+}
+
+/// Shows the composing indicator to `jid` and holds it for
+/// `AUTO_PRESENCE_DELAY_MS` before returning, so the caller's message lands
+/// while the recipient still sees the indicator. Best-effort: a failed
+/// presence send skips the delay and never blocks the message.
+async fn show_typing_before_send(client: &whatsapp_rust::Client, jid: &Jid) {
+    if client.chatstate().send_composing(jid).await.is_err() {
+        return;
+    }
+    let delay_ms = auto_presence_delay_ms();
+    if delay_ms > 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_presence_delay_defaults_on_missing_or_malformed_input() {
+        for raw in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("soon"),
+            Some("-5"),
+            Some("1.5"),
+        ] {
+            assert_eq!(parse_presence_delay(raw), 1200);
+        }
+    }
+
+    #[test]
+    fn parse_presence_delay_accepts_milliseconds() {
+        assert_eq!(parse_presence_delay(Some("0")), 0);
+        assert_eq!(parse_presence_delay(Some("750")), 750);
+        assert_eq!(parse_presence_delay(Some(" 1500 ")), 1500);
+    }
+
+    #[test]
+    fn parse_presence_delay_caps_absurd_values() {
+        assert_eq!(parse_presence_delay(Some("600000")), 10_000);
+        assert_eq!(parse_presence_delay(Some(&u64::MAX.to_string())), 10_000);
+    }
 }

@@ -34,6 +34,7 @@ Production-grade. **180+ REST endpoints across 29 feature modules.**
 | CTA URL with image + header/footer | `POST /sessions/{sid}/messages/cta-url` |
 | Broadcast lists | `POST /sessions/{sid}/broadcast` |
 | Chat state (typing / recording / paused) | `POST /sessions/{sid}/chat-state` |
+| Composing indicator before every send | env `AUTO_PRESENCE_ON_SEND=true`, `AUTO_PRESENCE_DELAY_MS` (default 1200 ms) |
 | Read receipts, mark as read | `POST /sessions/{sid}/messages/read` |
 | MEX GraphQL passthrough (server queries) | `POST /sessions/{sid}/mex` |
 | Message history + full-text search (SQLite FTS5) | `GET /sessions/{sid}/messages/search?q=`, `GET /messages/search?q=` |

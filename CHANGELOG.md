@@ -2,6 +2,22 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `AUTO_PRESENCE_DELAY_MS` - how long the composing indicator sent by
+  `AUTO_PRESENCE_ON_SEND` is held before the message goes out, in
+  milliseconds (default 1200, capped at 10000; `0` keeps the previous
+  send-immediately behaviour).
+
+### Changed
+
+- With `AUTO_PRESENCE_ON_SEND=true`, sends now wait `AUTO_PRESENCE_DELAY_MS`
+  after the composing indicator instead of going out in the same instant, so
+  the recipient's client has time to render it. Set `AUTO_PRESENCE_DELAY_MS=0`
+  to restore the old timing.
+
 ## [0.12.7] - 2026-09-12
 
 ### Fixed
