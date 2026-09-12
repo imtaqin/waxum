@@ -2,6 +2,15 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.12.7] - 2026-09-12
+
+### Fixed
+
+Version bump only — `0.12.6` had already been tagged/released earlier
+(a separate, unrelated `main` commit), so the release workflow saw the
+tag exists and silently skipped build/tag/docker/release for the actual
+0.12.6 changes below. This is the version that actually ships them.
+
 ## [0.12.6] - 2026-09-12
 
 ### Added
