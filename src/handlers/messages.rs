@@ -127,6 +127,10 @@ pub async fn execute_text(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -230,6 +234,10 @@ pub async fn execute_image(
         }),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -335,6 +343,10 @@ pub async fn execute_video(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -424,6 +436,10 @@ pub async fn execute_audio(
         }),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -530,6 +546,10 @@ pub async fn execute_document(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -619,6 +639,10 @@ pub async fn execute_sticker(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -694,6 +718,10 @@ pub async fn execute_location(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -768,6 +796,10 @@ pub async fn execute_contact(
         }),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -946,6 +978,10 @@ pub async fn execute_poll(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1047,6 +1083,10 @@ pub async fn execute_buttons(
         }),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -1170,6 +1210,10 @@ pub async fn execute_list(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -1306,6 +1350,10 @@ pub async fn execute_interactive(
     } else {
         inner
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -1455,6 +1503,10 @@ pub async fn execute_cta_url(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1568,6 +1620,10 @@ pub async fn execute_quick_reply(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1645,6 +1701,10 @@ pub async fn execute_newsletter_admin_invite(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1720,6 +1780,10 @@ pub async fn execute_newsletter_follower_invite(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -1808,6 +1872,10 @@ pub async fn execute_order(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1889,6 +1957,10 @@ pub async fn execute_invoice(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -1965,6 +2037,10 @@ pub async fn execute_payment_invite(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -2024,6 +2100,10 @@ pub async fn send_pin_message(
         }),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&chat_jid).await;
+    }
 
     let message_id = client
         .send_message(chat_jid.clone(), message.clone())
@@ -2104,6 +2184,10 @@ pub async fn execute_forward_message(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2200,6 +2284,10 @@ pub async fn execute_poll_update(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -2284,6 +2372,10 @@ pub async fn execute_buttons_response(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2374,6 +2466,10 @@ pub async fn execute_list_response(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2469,6 +2565,10 @@ pub async fn execute_interactive_response(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -2546,6 +2646,10 @@ pub async fn execute_highly_structured(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2629,6 +2733,10 @@ pub async fn execute_template_button_reply(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2783,6 +2891,10 @@ pub async fn execute_scheduled_call(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -2867,6 +2979,10 @@ pub async fn execute_scheduled_call_edit(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -2961,6 +3077,10 @@ pub async fn execute_payment(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -3049,6 +3169,10 @@ pub async fn execute_request_payment(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -3128,6 +3252,10 @@ pub async fn execute_cancel_payment_request(
         ..Default::default()
     };
 
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
+
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
         .await
@@ -3206,6 +3334,10 @@ pub async fn execute_decline_payment_request(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -3307,6 +3439,10 @@ pub async fn execute_newsletter_forward(
         ),
         ..Default::default()
     };
+
+    if auto_presence_on_send() {
+        let _ = client.chatstate().send_composing(&to_jid).await;
+    }
 
     let message_id = client
         .send_message(to_jid.clone(), message.clone())
@@ -3555,4 +3691,18 @@ fn build_vcard(contact: &ContactCard) -> String {
 
     vcard.push_str("END:VCARD");
     vcard
+}
+
+/// Whether a send simulates a composing indicator first. Read once from
+/// `AUTO_PRESENCE_ON_SEND` (default false) and cached — see #114: gives the
+/// "typing…" UX on every message/media send without a separate
+/// `chatstate/typing` call in front of it. Best-effort: a failed presence
+/// send is swallowed and never blocks the actual message send.
+fn auto_presence_on_send() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("AUTO_PRESENCE_ON_SEND")
+            .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false)
+    })
 }

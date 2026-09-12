@@ -921,8 +921,14 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     println!("\x1b[33m  └─────────────────────────────────────────────────────────────┘\x1b[0m");
     println!();
 
+    let mut openapi = ApiDoc::openapi();
+    if let Ok(public_base_url) = std::env::var("PUBLIC_BASE_URL") {
+        openapi.servers = Some(vec![utoipa::openapi::Server::new(
+            public_base_url.trim_end_matches('/'),
+        )]);
+    }
     let swagger_router: axum::Router<AppState> = SwaggerUi::new("/swagger-ui")
-        .url("/api-docs/openapi.json", ApiDoc::openapi())
+        .url("/api-docs/openapi.json", openapi)
         .into();
 
     let mut app = create_router()
