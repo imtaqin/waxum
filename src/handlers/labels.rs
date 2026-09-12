@@ -151,9 +151,9 @@ pub async fn add_message_label(
 }
 
 #[utoipa::path(
-    delete,
+    post,
     security(("bearer_auth" = [])),
-    path = "/api/v1/sessions/{session_id}/labels/{label_id}/messages",
+    path = "/api/v1/sessions/{session_id}/labels/{label_id}/messages/remove",
     tag = "labels",
     params(("session_id" = String, Path, description = "Session ID"), ("label_id" = String, Path, description = "Label ID")),
     request_body = MessageLabelRequest,

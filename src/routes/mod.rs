@@ -367,6 +367,8 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/chatstate/typing",
             post(handlers::chatstate::send_typing),
         )
+        .route("/{session_id}/mex/query", post(handlers::mex::mex_query))
+        .route("/{session_id}/mex/mutate", post(handlers::mex::mex_mutate))
         .route(
             "/{session_id}/calls/reject",
             post(handlers::calls::reject_call),

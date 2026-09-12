@@ -18,7 +18,7 @@
 
 Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Swagger. Prometheus. NATS JetStream (optional).
 
-Production-grade. **130+ REST endpoints across 22 feature modules.**
+Production-grade. **180+ REST endpoints across 29 feature modules.**
 
 ## Features
 
@@ -184,6 +184,56 @@ cargo build --release
 ./target/release/waxum
 ```
 
+### Toolchain
+
+**waxum builds on a pinned Rust nightly — `nightly-2026-04-05`.** You do
+not have to select it: the pin lives in `rust-toolchain.toml`, and
+`rustup` reads that file and installs the right toolchain on your first
+`cargo build`. If you have `rustup`, there is nothing to do.
+
+To install it up front, or to check what you are actually building with:
+
+```sh
+rustup toolchain install nightly-2026-04-05 --component rustfmt --component clippy
+rustup show active-toolchain   # from the repo root; expect nightly-2026-04-05-<host>
+```
+
+Do not run `rustup default nightly`. That selects a floating latest
+nightly globally, which is not what this project builds against.
+
+**Without `rustup`, the pin does not apply.** `rust-toolchain.toml` is a
+`rustup` feature; a distro-packaged, Homebrew, or Nix `cargo` ignores it
+silently — no warning, no error, just a different compiler than the one
+we test. If a build fails in a way this section does not explain, check
+`cargo --version` before anything else.
+
+If you force stable — `cargo +stable build` — we cannot tell you what
+happens, because nobody has run it. Historically it failed inside
+upstream `whatsapp-rust` with [`error[E0554]: #![feature] may not be used
+on the stable release channel`](https://doc.rust-lang.org/error_codes/E0554.html),
+which is the error this pin was introduced to prevent. That cause is gone
+at the revision we now pin, so a stable build may well succeed — it is
+simply unverified, and therefore unsupported.
+
+The pin is historical. Upstream `whatsapp-rust` used the unstable
+`portable_simd` feature, which is nightly-only; at the revision waxum
+currently pins, upstream has removed SIMD from its tree and declares a
+stable MSRV, and waxum itself uses no unstable features. The pin has not
+been re-validated against stable, so it stays until someone does that
+end to end. Tracked in
+[#87](https://github.com/imtaqin/waxum/issues/87).
+
+### Dependencies
+
+The WhatsApp protocol layer is not ours. It is
+[`whatsapp-rust`](https://github.com/oxidezap/whatsapp-rust), a
+third-party project, and waxum pins eight of its crates to a single git
+revision rather than to crates.io versions. That is a deliberate choice
+with real consequences for anyone depending on waxum — including that
+waxum cannot itself be published to crates.io. The reasoning, the risk,
+and the bump cadence are written down in
+**[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)**.
+
 ## Endpoints
 
 | URL | Purpose |
@@ -197,6 +247,18 @@ cargo build --release
 ## Stack
 
 Rust nightly · Axum 0.8 · Tokio · [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) · Postgres/MySQL/SQLite · NATS JetStream · Prometheus · Utoipa.
+
+## Ecosystem
+
+| Repo | What it is |
+|---|---|
+| [waxum-studio](https://github.com/imtaqin/waxum-studio) | Visual WhatsApp workflow builder — nodes, integrations, drag-and-drop automation, powered by waxum. |
+| [waxum-mcp](https://github.com/imtaqin/waxum-mcp) | MCP server for WhatsApp, backed by waxum — send/read/media tools for any MCP client (Claude Desktop, Claude Code, etc). |
+| [waxum-sdk](https://github.com/imtaqin/waxum-sdk) | TypeScript SDK, types generated from waxum's OpenAPI spec. |
+| [waxum-php-client](https://github.com/imtaqin/waxum-php-client) | PHP client for the waxum REST API. |
+| [waxum-doc](https://github.com/imtaqin/waxum-doc) | Docs site — [waxum.imtaqin.id](https://waxum.imtaqin.id). |
+| [waxum-hermes-plugin](https://github.com/imtaqin/waxum-hermes-plugin) | [Hermes Agent](https://github.com/NousResearch/hermes-agent) gateway platform plugin — real WhatsApp buttons/lists/CTA-url, which Hermes's built-in Baileys bridge can't do. |
+| [waxum-openclaw-plugin](https://github.com/imtaqin/waxum-openclaw-plugin) | [OpenClaw](https://github.com/openclaw/openclaw) channel plugin — same interactive WhatsApp messaging, wired into OpenClaw's gateway. |
 
 ## Docs
 

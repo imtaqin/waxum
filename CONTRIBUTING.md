@@ -4,19 +4,117 @@ Thanks for your interest in improving waxum. This document covers the
 development workflow, quality gates every push must pass, and the
 conventions the project follows.
 
+## Where to start
+
+If you're looking for a first contribution, start here:
+
+**[Open `good first issue` tickets](https://github.com/imtaqin/waxum/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**
+
+Most of what's there right now is handler test coverage. Roughly half of
+waxum's HTTP surface has no integration test, and each untested handler
+module is a self-contained, low-context piece of work that mirrors a test
+file already in the repo. Each issue names the handler file, lists the
+exact routes to cover, and says which existing test file to mirror, so
+you shouldn't need to go spelunking to get started.
+
+[`tests/presence.rs`](tests/presence.rs) is the worked example — read its
+header first. It spells out the four assertions that apply to every
+session-scoped handler, and where the boundary sits: assert the HTTP
+contract, not the protocol behaviour. Anything past the `get_client` gate
+needs a live WhatsApp client and is out of scope. For a module with more
+than a few routes, mirror the table-sweep shape in
+[`tests/groups_management.rs`](tests/groups_management.rs),
+[`tests/newsletter.rs`](tests/newsletter.rs), or
+[`tests/labels.rs`](tests/labels.rs) instead.
+
+Finding a real defect while writing a test is a good outcome — file it
+separately rather than fixing it in the test PR. That has already
+happened once here (#90 surfaced the bug fixed by #93).
+
 ## Getting the code
 
 ```sh
 git clone https://github.com/imtaqin/waxum.git
 cd waxum
+git config core.hooksPath .githooks   # activate the repo's commit-msg and other hooks
 ```
 
-The crate targets Rust **nightly** because the upstream `whatsapp-rust`
-client relies on the `portable_simd` feature. Install with:
+## Toolchain
+
+The crate builds on a **pinned Rust nightly — `nightly-2026-04-05`**.
+
+You do not need to install or select it by hand. The pin lives in
+`rust-toolchain.toml`; `rustup` reads that file and installs the matching
+toolchain on your first `cargo` invocation in this directory. Do not run
+`rustup default nightly` — that sets a floating latest-nightly globally,
+which is not what this project builds against and will drift.
+
+If you would rather install it explicitly, or want to confirm which
+compiler you are on:
 
 ```sh
-rustup default nightly
+rustup toolchain install nightly-2026-04-05 --component rustfmt --component clippy
+rustup show active-toolchain   # from the repo root; expect nightly-2026-04-05-<host>
 ```
+
+The components matter: `cargo fmt --check` and `cargo clippy` are both
+quality gates below, and neither exists on a toolchain installed without
+them.
+
+### If you are not using rustup
+
+`rust-toolchain.toml` is a `rustup` feature. A distro-packaged, Homebrew,
+or Nix `cargo` does not read it — it builds with whatever toolchain it
+is, silently, with no warning that the pin was ignored. This is the
+failure mode most likely to waste your afternoon, because it does not
+look like a toolchain problem. Check `cargo --version` first.
+
+### If you build on stable anyway
+
+We do not know what happens, and we would rather say so than guess: no
+one has run a stable build of waxum end to end. What we can tell you is
+the error the pin was introduced to prevent, which came from upstream,
+not from waxum:
+
+```
+error[E0554]: `#![feature]` may not be used on the stable release channel
+```
+
+That cause no longer exists at the revision we pin, so `cargo +stable
+build` may well succeed today. Unverified is not the same as supported —
+if you try it, please report what you get on
+[#87](https://github.com/imtaqin/waxum/issues/87); that is exactly the
+evidence the issue is waiting for.
+
+The pin exists because upstream `whatsapp-rust` used `portable_simd`, an
+unstable feature. That is no longer true at the revision we pin — upstream
+removed SIMD and declares a stable MSRV, and waxum uses no unstable
+features of its own — so the pin is likely removable, but has not been
+verified against stable. Do not quietly change it; see
+[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) and
+[#87](https://github.com/imtaqin/waxum/issues/87).
+
+## Upstream dependency policy
+
+waxum pins **eight** `whatsapp-rust` crates — `whatsapp-rust`, `wacore`,
+`wacore-binary`, `waproto`, `whatsapp-rust-sqlite-storage`,
+`whatsapp-rust-tokio-transport`, `whatsapp-rust-ureq-http-client`, and
+`whatsapp-rust-chat-store` — to a **single git revision**, not to
+crates.io versions.
+
+Rules, if you touch these:
+
+- **All eight move together, to the same revision.** They share types
+  across their public APIs; a mixed set does not compile.
+- **Do not switch any of them to a crates.io version.** Seven are
+  published, one (`whatsapp-rust-chat-store`) is not, and the set has to
+  resolve from one source.
+- **The revision is reviewed once per release**, as a checklist item in
+  the release process below — not continuously, and not on a cron.
+
+The full reasoning, the risks this carries, and what it means for anyone
+depending on waxum are in **[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)**.
+Read it before proposing a dependency change.
 
 ## Building & running
 
@@ -98,13 +196,21 @@ are really just an OOM. Cap it if you hit that: `cargo build -j 4` /
 
 The release flow is manual:
 
-1. Bump the `version` field in `Cargo.toml`.
-2. Add a `## [x.y.z]` section to `CHANGELOG.md` with what changed.
-3. `git commit -am "release x.y.z <short summary>"`.
-4. `git push origin main` — the `release.yml` workflow tags the commit,
+1. **Review the upstream `whatsapp-rust` revision.** Compare the pin in
+   `Cargo.toml` against upstream `main` and read the intervening changes
+   for protocol or API breaks. Bumping is optional; *looking* is not.
+   If you bump, move all eight crates to the same revision and smoke-test
+   a real pair + send — protocol regressions do not show up in
+   `cargo test`. Record the outcome either way in `CHANGELOG.md`, so the
+   next release knows the decision was made rather than skipped. See
+   [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md#bump-cadence).
+2. Bump the `version` field in `Cargo.toml`.
+3. Add a `## [x.y.z]` section to `CHANGELOG.md` with what changed.
+4. `git commit -am "release x.y.z <short summary>"`.
+5. `git push origin main` — the `release.yml` workflow tags the commit,
    builds multi-arch binaries + Docker image, and publishes the
    GitHub release.
-5. On the production server: `docker pull fdciabdul/waxum:latest`, then
+6. On the production server: `docker pull fdciabdul/waxum:latest`, then
    `docker cp` the binary out of a temporary container and
    `pm2 restart waxum` (see the internal deploy runbook).
 

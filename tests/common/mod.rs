@@ -9,7 +9,7 @@
 
 use axum::{
     body::{to_bytes, Body},
-    http::{Method, Request, StatusCode},
+    http::{HeaderMap, Method, Request, StatusCode},
     Router,
 };
 use serde_json::Value;
@@ -84,6 +84,24 @@ pub async fn call(app: &Router, req: Request<Body>) -> (StatusCode, Value) {
     (status, json)
 }
 
+/// Variant of [`call`] for routes whose body is not JSON.
+///
+/// [`call`] parses the body as JSON and falls back to wrapping the raw bytes
+/// in a `Value::String`, which is lossy for binary payloads and hides the
+/// response headers entirely. `GET /calls/{call_id}/recording.wav` serves
+/// `audio/wav` and sets `content-disposition`, so it needs both the untouched
+/// bytes and the headers to be assertable.
+#[allow(dead_code)]
+pub async fn call_bytes(app: &Router, req: Request<Body>) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let res = app.clone().oneshot(req).await.expect("router response");
+    let status = res.status();
+    let headers = res.headers().clone();
+    let body_bytes = to_bytes(res.into_body(), 8 * 1024 * 1024)
+        .await
+        .expect("body bytes");
+    (status, headers, body_bytes.to_vec())
+}
+
 #[allow(dead_code)]
 pub fn req_json(method: Method, path: &str, token: Option<&str>, body: Value) -> Request<Body> {
     let mut b = Request::builder()
@@ -96,6 +114,11 @@ pub fn req_json(method: Method, path: &str, token: Option<&str>, body: Value) ->
     b.body(Body::from(body.to_string())).expect("build request")
 }
 
+/// Carries `allow(dead_code)` for the same reason as `req_json` and
+/// `req_delete`: `common` is compiled once per integration-test binary, so a
+/// module that only exercises one HTTP method leaves the other constructors
+/// unused and would otherwise fail `clippy -D warnings`.
+#[allow(dead_code)]
 pub fn req_get(path: &str, token: Option<&str>) -> Request<Body> {
     let mut b = Request::builder().method(Method::GET).uri(path);
     if let Some(t) = token {

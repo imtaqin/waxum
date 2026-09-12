@@ -33,3 +33,6 @@ temp/
 postman/
 waxum.db
 waxum.db-*
+
+# AI agent working directory
+.claude/

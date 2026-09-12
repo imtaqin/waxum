@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Reject commit messages that contain Claude/Anthropic authorship attribution.
+# Activate for your clone: git config core.hooksPath .githooks
+
+f="$1"
+[ -f "$f" ] || exit 0
+
+if grep -qiE 'Co-Authored-By:.*[Cc]laude|noreply@anthropic\.com|Generated with \[?Claude|🤖 Generated with' "$f"; then
+    echo "commit-msg: rejected — remove Claude/Anthropic attribution from the commit message before committing." >&2
+    echo "  (strip Co-Authored-By: Claude … and Generated with Claude Code lines)" >&2
+    exit 1
+fi

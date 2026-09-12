@@ -2,6 +2,19 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [0.12.6] - 2026-09-12
+
+### Added
+
+- `AUTO_REJECT_INCOMING_CALLS` — auto-reject every incoming call instead
+  of parking it for manual `POST .../calls/reject` (#114).
+- `AUTO_PRESENCE_ON_SEND` — simulate a composing indicator before every
+  message/media send instead of requiring a separate `chatstate/typing`
+  call first (#114). Best-effort; never blocks the send.
+- `PUBLIC_BASE_URL` — overrides the `servers` entry in the Swagger/OpenAPI
+  doc, so "Try it out" targets the real public URL behind a reverse proxy
+  instead of always `http://localhost:3451` (#113).
+
 ## [0.12.4] - 2026-08-28
 
 ### Changed
