@@ -260,6 +260,7 @@ Rust nightly · Axum 0.8 · Tokio · [whatsapp-rust](https://github.com/oxidezap
 | [waxum-doc](https://github.com/imtaqin/waxum-doc) | Docs site — [waxum.imtaqin.id](https://waxum.imtaqin.id). |
 | [waxum-hermes-plugin](https://github.com/imtaqin/waxum-hermes-plugin) | [Hermes Agent](https://github.com/NousResearch/hermes-agent) gateway platform plugin — real WhatsApp buttons/lists/CTA-url, which Hermes's built-in Baileys bridge can't do. |
 | [waxum-openclaw-plugin](https://github.com/imtaqin/waxum-openclaw-plugin) | [OpenClaw](https://github.com/openclaw/openclaw) channel plugin — same interactive WhatsApp messaging, wired into OpenClaw's gateway. |
+| [waxum-agent](https://github.com/imtaqin/waxum-agent) | Voice-driven WhatsApp assistant on top of waxum — Tauri app (desktop + Android), reads messages aloud and replies by voice via ElevenLabs TTS/STT. |
 
 ## Docs
 

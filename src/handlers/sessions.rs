@@ -2459,6 +2459,18 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
                 "reason": format!("{:?}", failed.reason),
             })
         }
+        Event::PairingQrCode(qr) => {
+            serde_json::json!({
+                "code": qr.code,
+                "timeout_seconds": qr.timeout.as_secs(),
+            })
+        }
+        Event::PairingCode(pair) => {
+            serde_json::json!({
+                "code": pair.code,
+                "timeout_seconds": pair.timeout.as_secs(),
+            })
+        }
         _ => serde_json::json!({}),
     };
 
@@ -2549,6 +2561,33 @@ mod tests {
         assert_eq!(json["data"]["enc_index"], 2);
         assert_eq!(json["data"]["enc_type"], "pkmsg");
         assert_eq!(json["data"]["reason"], "BadMac");
+    }
+
+    #[test]
+    fn qr_and_pair_code_events_carry_the_code_in_their_data() {
+        use wacore::types::events::{Event, PairingCode, PairingQrCode};
+
+        let qr = Event::PairingQrCode(
+            PairingQrCode::builder()
+                .code("2@abc123,def456==".to_string())
+                .timeout(std::time::Duration::from_secs(60))
+                .build(),
+        );
+        let json = event_to_json(&qr, "sess");
+        assert_eq!(json["event"], "qr_code");
+        assert_eq!(json["data"]["code"], "2@abc123,def456==");
+        assert_eq!(json["data"]["timeout_seconds"], 60);
+
+        let pair = Event::PairingCode(
+            PairingCode::builder()
+                .code("ABCD1234".to_string())
+                .timeout(std::time::Duration::from_secs(180))
+                .build(),
+        );
+        let json = event_to_json(&pair, "sess");
+        assert_eq!(json["event"], "pair_code");
+        assert_eq!(json["data"]["code"], "ABCD1234");
+        assert_eq!(json["data"]["timeout_seconds"], 180);
     }
 
     #[test]
