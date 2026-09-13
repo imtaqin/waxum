@@ -2,7 +2,7 @@
 
 All notable changes to **waxum** will be documented in this file.
 
-## [Unreleased]
+## [0.12.8] - 2026-09-13
 
 ### Added
 
@@ -17,6 +17,15 @@ All notable changes to **waxum** will be documented in this file.
   after the composing indicator instead of going out in the same instant, so
   the recipient's client has time to render it. Set `AUTO_PRESENCE_DELAY_MS=0`
   to restore the old timing.
+
+### Fixed
+
+- `qr_code`/`pair_code` events (webhooks, NATS, and `GET
+  .../connect/wait`) now actually carry the code in their `data` payload.
+  `event_to_json` had no match arm for either event, so both silently
+  fell through to an empty `{}` — every consumer of these events got a
+  code-less payload despite `connect/wait`'s own docs promising the
+  event is forwarded verbatim.
 
 ## [0.12.7] - 2026-09-12
 
