@@ -91,6 +91,7 @@ Production-grade. **180+ REST endpoints across 29 feature modules.**
 | `is_on_whatsapp` batch check | `POST /sessions/{sid}/contacts/check` |
 | Contact info + profile picture | `GET /sessions/{sid}/contacts/{jid}` |
 | Sync device contacts | `POST /sessions/{sid}/contacts/sync` |
+| Save / rename a contact in the address book | `PUT /sessions/{sid}/contacts/{jid}` |
 | Block / unblock / list blocked | `POST /sessions/{sid}/blocking/*` |
 | Privacy settings (last-seen, profile, status) | `PATCH /sessions/{sid}/privacy` |
 | Presence broadcast (online / offline) | `POST /sessions/{sid}/presence` |

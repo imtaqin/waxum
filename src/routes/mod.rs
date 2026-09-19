@@ -298,6 +298,10 @@ fn session_routes() -> Router<AppState> {
             get(handlers::contacts::get_profile_picture),
         )
         .route(
+            "/{session_id}/contacts/{jid}",
+            put(handlers::contacts::save_contact),
+        )
+        .route(
             "/{session_id}/contacts/{jid}/lid",
             get(handlers::contacts::resolve_lid),
         )

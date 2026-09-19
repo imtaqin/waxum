@@ -360,3 +360,58 @@ pub async fn resolve_lid(
         learning_source: entry.learning_source.to_string(),
     }))
 }
+
+/// Save or rename a contact in the session address book via
+/// `chat_actions().save_contact`, which syncs the name to the account's other
+/// linked devices. The path JID must be a bare phone-number JID; LIDs, groups
+/// and device-specific JIDs are rejected upstream and surface as 400.
+#[utoipa::path(
+    put,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/contacts/{jid}",
+    tag = "contacts",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Phone-number JID (with or without `@s.whatsapp.net`)")
+    ),
+    request_body = SaveContactRequest,
+    responses(
+        (status = 200, description = "Contact saved", body = crate::models::common::SuccessResponse),
+        (status = 400, description = "Invalid JID, missing name, or non phone-number JID"),
+        (status = 503, description = "Session not connected")
+    )
+)]
+pub async fn save_contact(
+    State(state): State<AppState>,
+    Path((session_id, jid)): Path<(String, String)>,
+    Json(request): Json<SaveContactRequest>,
+) -> Result<Json<crate::models::common::SuccessResponse>, ApiError> {
+    if request.full_name.is_none() && request.first_name.is_none() {
+        return Err(ApiError::BadRequest(
+            "at least one of full_name or first_name is required".into(),
+        ));
+    }
+    let client = crate::handlers::messages::get_client(&state, &session_id)?;
+    let target = crate::handlers::messages::parse_jid(&jid)?;
+
+    AssertSend(async move {
+        client
+            .chat_actions()
+            .save_contact(
+                &target,
+                request.full_name,
+                request.first_name,
+                request.save_on_primary_addressbook,
+            )
+            .await
+            .map_err(|e| match e {
+                whatsapp_rust::features::AppStateError::InvalidRequest(m) => {
+                    ApiError::BadRequest(m)
+                }
+                other => ApiError::Internal(other.to_string()),
+            })
+    })
+    .await?;
+
+    Ok(Json(crate::models::common::SuccessResponse::new()))
+}

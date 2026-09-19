@@ -113,3 +113,19 @@ pub struct LidPnEntryResponse {
     /// How the mapping was learned (usync, a peer's message, pairing, etc.).
     pub learning_source: String,
 }
+
+/// Body for saving or renaming a contact in the session address book.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SaveContactRequest {
+    /// Display name saved for the contact.
+    #[schema(example = "Jane Doe")]
+    pub full_name: Option<String>,
+
+    /// Short/first name; omitted from the mutation when absent.
+    #[schema(example = "Jane")]
+    pub first_name: Option<String>,
+
+    /// Also save to the phone (primary device) address book.
+    #[serde(default)]
+    pub save_on_primary_addressbook: bool,
+}
