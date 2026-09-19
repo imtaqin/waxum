@@ -172,6 +172,7 @@ use state::AppState;
         handlers::contacts::get_user_info,
         handlers::contacts::list_contacts,
         handlers::contacts::resolve_lid,
+        handlers::contacts::save_contact,
 
         handlers::groups::list_groups,
         handlers::groups::get_group,
@@ -369,6 +370,7 @@ use state::AppState;
             models::contacts::StoredContact,
             models::contacts::StoredContactListResponse,
             models::contacts::LidPnEntryResponse,
+            models::contacts::SaveContactRequest,
 
             models::groups::GroupListResponse,
             models::groups::GroupInfo,
