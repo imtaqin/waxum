@@ -126,6 +126,78 @@ async fn search_finds_seeded_rows_with_snippet() {
     assert_eq!(hits[0]["msg_type"], "text");
 }
 
+/// `search()`'s SQLite FTS5 path reads its row positionally
+/// (`sqlite_row_to_message`), from a SELECT built from a separate
+/// column-list constant (`m_cols`) than `list_by_chat`'s -- a
+/// regression here would silently shift every field after
+/// `quoted_message_id`/`quoted_sender_jid` (snippet included) rather
+/// than fail to compile, so this exercises the real HTTP endpoint
+/// through the FTS5 path specifically (a handful of rows, same as
+/// `search_finds_seeded_rows_with_snippet`) and checks the quoted
+/// fields land correctly alongside every other column.
+#[tokio::test]
+async fn search_surfaces_quoted_context_through_fts5_path() {
+    let h = Harness::new().await;
+    seed_session(&h, "search-s-quoted").await;
+
+    let mut reply = msg(
+        "MID-REPLY",
+        "search-s-quoted",
+        "in",
+        "text",
+        Some("sure, lunch works"),
+        ts(2),
+    );
+    reply.quoted_message_id = Some("MID-ORIGINAL".to_string());
+    reply.quoted_sender_jid = Some("559999999999@s.whatsapp.net".to_string());
+    insert(&h.pool, &reply).await.expect("insert reply");
+
+    insert(
+        &h.pool,
+        &msg(
+            "MID-PLAIN",
+            "search-s-quoted",
+            "in",
+            "text",
+            Some("lunch plans for later"),
+            ts(1),
+        ),
+    )
+    .await
+    .expect("insert plain");
+
+    let (status, body) = call(
+        &h.app,
+        req_get(
+            "/api/v1/sessions/search-s-quoted/messages/search?q=lunch",
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let hits = body["messages"].as_array().expect("messages array");
+    assert_eq!(hits.len(), 2);
+
+    let reply_hit = hits
+        .iter()
+        .find(|h| h["message_id"] == "MID-REPLY")
+        .expect("reply hit present");
+    assert_eq!(reply_hit["quoted_message_id"], "MID-ORIGINAL");
+    assert_eq!(
+        reply_hit["quoted_sender_jid"],
+        "559999999999@s.whatsapp.net"
+    );
+    assert_eq!(reply_hit["chat_jid"], "559999999999@s.whatsapp.net");
+    assert_eq!(reply_hit["body"], "sure, lunch works");
+
+    let plain_hit = hits
+        .iter()
+        .find(|h| h["message_id"] == "MID-PLAIN")
+        .expect("plain hit present");
+    assert_eq!(plain_hit["quoted_message_id"], serde_json::Value::Null);
+    assert_eq!(plain_hit["quoted_sender_jid"], serde_json::Value::Null);
+}
+
 #[tokio::test]
 async fn duplicate_message_id_is_stored_once() {
     let h = Harness::new().await;

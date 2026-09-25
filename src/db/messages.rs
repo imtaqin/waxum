@@ -34,8 +34,7 @@
 use crate::db::session::{sqlite_blocking, DbPool};
 use crate::db::sqlite_raw::{self, Value as SQ};
 
-const COLS: &str =
-    "id, message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp";
+const COLS: &str = "id, message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, quoted_message_id, quoted_sender_jid";
 
 fn now_str() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
@@ -97,10 +96,11 @@ pub struct MediaPointer {
 /// A `messages` row as returned by search or chat listing, timestamps
 /// rendered as `%Y-%m-%d %H:%M:%S` UTC text regardless of backend.
 /// `snippet` is only populated by backends with cheap highlight
-/// support (SQLite FTS5, Postgres) and only by [`search`]. `media`,
-/// `push_name`, `quoted_message_id` and `quoted_sender_jid` are only
-/// populated by [`list_by_chat`] — `search`'s queries don't select
-/// those columns, so its rows always carry `None` there.
+/// support (SQLite FTS5, Postgres) and only by [`search`]. `media` and
+/// `push_name` are only populated by [`list_by_chat`] — `search`'s
+/// queries don't select those columns, so its rows always carry `None`
+/// there. `quoted_message_id`/`quoted_sender_jid` are populated by
+/// both.
 #[derive(Debug, Clone, Default)]
 pub struct MessageRow {
     pub id: i64,
@@ -335,7 +335,7 @@ pub async fn search(
                     values.push(SQ::Text(sid.to_string()));
                     where_sql.push_str(" AND f.session_id = ?");
                 }
-                let m_cols = "m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp";
+                let m_cols = "m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.quoted_message_id, m.quoted_sender_jid";
                 let sql = format!(
                     "SELECT {m_cols}, snippet(messages_fts, 0, '<b>', '</b>', '…', 16) FROM messages_fts f JOIN messages m ON m.session_id = f.session_id AND m.message_id = f.message_id WHERE {where_sql} ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?"
                 );
@@ -533,8 +533,8 @@ fn pg_row_to_message(row: &tokio_postgres::Row) -> MessageRow {
         snippet: row.get("snippet"),
         media: None,
         push_name: None,
-        quoted_message_id: None,
-        quoted_sender_jid: None,
+        quoted_message_id: row.get("quoted_message_id"),
+        quoted_sender_jid: row.get("quoted_sender_jid"),
     }
 }
 
@@ -606,8 +606,8 @@ fn my_row_to_message(row: &mysql_async::Row) -> MessageRow {
         snippet: my_get_string(row, "snippet"),
         media: None,
         push_name: None,
-        quoted_message_id: None,
-        quoted_sender_jid: None,
+        quoted_message_id: my_get_string(row, "quoted_message_id"),
+        quoted_sender_jid: my_get_string(row, "quoted_sender_jid"),
     }
 }
 
@@ -650,11 +650,11 @@ fn sqlite_row_to_message(row: &sqlite_raw::Row) -> MessageRow {
         msg_type: row.get_string(6).unwrap_or_default(),
         body: row.get_string(7),
         msg_timestamp: row.get_string(8).unwrap_or_default(),
-        snippet: row.get_string(9),
+        quoted_message_id: row.get_string(9),
+        quoted_sender_jid: row.get_string(10),
+        snippet: row.get_string(11),
         media: None,
         push_name: None,
-        quoted_message_id: None,
-        quoted_sender_jid: None,
     }
 }
 

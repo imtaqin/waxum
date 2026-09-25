@@ -85,15 +85,12 @@ pub struct MessageHit {
 
     /// WhatsApp message id this message is replying to
     /// (`ContextInfo.stanzaId`). `null` when the message is not a
-    /// reply. Only populated by `GET /messages/chat/{chat_jid}` —
-    /// always `null` from `/messages/search`.
+    /// reply.
     #[schema(example = "3EB0C8F1A2B3C4D5E6")]
     pub quoted_message_id: Option<String>,
 
     /// Sender of the quoted message (`ContextInfo.participant`).
     /// `null` when not a reply, or when WhatsApp omitted the field.
-    /// Only populated by `GET /messages/chat/{chat_jid}` — always
-    /// `null` from `/messages/search`.
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub quoted_sender_jid: Option<String>,
 }
