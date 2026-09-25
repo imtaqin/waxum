@@ -20,10 +20,10 @@ log = "0.4"
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
 thiserror = "2.0.19"
 tokio = { version = "1.53.1", default-features = false, features = ["sync", "rt", "macros"] }
-wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c39db90cd2dc6f7b6c4ec8340c0ce173401b43c", default-features = false }
-wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c39db90cd2dc6f7b6c4ec8340c0ce173401b43c", default-features = false }
-waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c39db90cd2dc6f7b6c4ec8340c0ce173401b43c" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4c39db90cd2dc6f7b6c4ec8340c0ce173401b43c" }
+wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f7468ae2920a2b0aedbd0848cf121de56a07f93c", default-features = false }
+wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f7468ae2920a2b0aedbd0848cf121de56a07f93c", default-features = false }
+waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f7468ae2920a2b0aedbd0848cf121de56a07f93c" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f7468ae2920a2b0aedbd0848cf121de56a07f93c" }
 
 [dev-dependencies]
 flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }

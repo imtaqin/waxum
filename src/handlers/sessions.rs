@@ -1797,7 +1797,7 @@ async fn handle_event(
                     );
                 }
             } else if !call_id.is_empty() {
-                state.incoming_calls().insert(call_id, call.clone());
+                state.incoming_calls().insert(call_id, *call.clone());
             }
         }
         _ => {}
@@ -1850,6 +1850,11 @@ async fn handle_event(
     }
 }
 
+/// `wacore::types::events::Event` is `#[non_exhaustive]`, so the wildcard
+/// arm below can never be dropped even once every current variant is named
+/// -- the compiler cannot flag a newly added upstream variant here.
+/// Bumping the whatsapp-rust pin should include re-diffing this match
+/// against the new `Event` definition.
 fn get_event_type(event: &wacore::types::events::Event) -> String {
     use wacore::types::events::Event;
     match event {
@@ -1880,6 +1885,54 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
         Event::CallLogSync(_) => "call_log_sync".to_string(),
         Event::StreamError(_) => "stream_error".to_string(),
         Event::EncDecryptFailed(_) => "enc_decrypt_failed".to_string(),
+        Event::AppStateSyncFailed(_) => "app_state_sync_failed".to_string(),
+        Event::BusinessStatusUpdate(_) => "business_status_update".to_string(),
+        Event::CallEndedElsewhere(_) => "call_ended_elsewhere".to_string(),
+        Event::ClearChatUpdate(_) => "clear_chat_update".to_string(),
+        Event::ClientExpirationChanged(_) => "client_expiration_changed".to_string(),
+        Event::ConnectFailure(_) => "connect_failure".to_string(),
+        Event::ContactNumberChanged(_) => "contact_number_changed".to_string(),
+        Event::ContactRemoved(_) => "contact_removed".to_string(),
+        Event::ContactSyncRequested(_) => "contact_sync_requested".to_string(),
+        Event::ContactUpdated(_) => "contact_updated".to_string(),
+        Event::DecryptedPayload(_) => "decrypted_payload".to_string(),
+        Event::DeleteChatUpdate(_) => "delete_chat_update".to_string(),
+        Event::DeleteMessageForMeUpdate(_) => "delete_message_for_me_update".to_string(),
+        Event::DirtyState(_) => "dirty_state".to_string(),
+        Event::DisableLinkPreviewsUpdate(_) => "disable_link_previews_update".to_string(),
+        Event::DisappearingModeChanged(_) => "disappearing_mode_changed".to_string(),
+        Event::FavoriteStickerUpdate(_) => "favorite_sticker_update".to_string(),
+        Event::FavoritesUpdate(_) => "favorites_update".to_string(),
+        Event::HistorySync(_) => "history_sync".to_string(),
+        Event::IdentityChange(_) => "identity_change".to_string(),
+        Event::LabelAssociationUpdate(_) => "label_association_update".to_string(),
+        Event::LabelEditUpdate(_) => "label_edit_update".to_string(),
+        Event::LockChatUpdate(_) => "lock_chat_update".to_string(),
+        Event::MessageLabelAssociationUpdate(_) => "message_label_association_update".to_string(),
+        Event::MexNotification(_) => "mex_notification".to_string(),
+        Event::MissedCall(_) => "missed_call".to_string(),
+        Event::NewsletterLiveUpdate(_) => "newsletter_live_update".to_string(),
+        Event::Notification(_) => "notification".to_string(),
+        Event::OfflineSyncInterrupted(_) => "offline_sync_interrupted".to_string(),
+        Event::PairError(_) => "pair_error".to_string(),
+        Event::PairingCodeError(_) => "pairing_code_error".to_string(),
+        Event::PairingCodeRefresh(_) => "pairing_code_refresh".to_string(),
+        Event::PairingQrCodesExhausted(_) => "pairing_qr_codes_exhausted".to_string(),
+        Event::PairPasskeyConfirmation(_) => "pair_passkey_confirmation".to_string(),
+        Event::PairPasskeyError(_) => "pair_passkey_error".to_string(),
+        Event::PairPasskeyRequest(_) => "pair_passkey_request".to_string(),
+        Event::PairSuccess(_) => "pair_success".to_string(),
+        Event::QrScannedWithoutMultidevice(_) => "qr_scanned_without_multidevice".to_string(),
+        Event::QuickReplyUpdate(_) => "quick_reply_update".to_string(),
+        Event::RawNode(_) => "raw_node".to_string(),
+        Event::RemoveRecentStickerUpdate(_) => "remove_recent_sticker_update".to_string(),
+        Event::RetiredPushNameUpdate(_) => "retired_push_name_update".to_string(),
+        Event::SentFrame(_) => "sent_frame".to_string(),
+        Event::ServerAck(_) => "server_ack".to_string(),
+        Event::StarUpdate(_) => "star_update".to_string(),
+        Event::StreamReplaced(_) => "stream_replaced".to_string(),
+        Event::TemporaryBan(_) => "temporary_ban".to_string(),
+        Event::UserStatusMuteUpdate(_) => "user_status_mute_update".to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -2201,7 +2254,7 @@ async fn persist_contact_event(
             let jid_str = sender.to_string();
             let mut push_name = None::<String>;
             if !info.push_name.is_empty() {
-                push_name = Some(info.push_name.clone());
+                push_name = Some(info.push_name.to_string());
             }
             let mut business_name = None::<String>;
             if let Some(vn) = info.verified_name.as_ref() {

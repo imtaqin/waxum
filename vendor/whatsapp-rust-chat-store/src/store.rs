@@ -1659,6 +1659,7 @@ fn apply_receipt(
 
     let chat = receipt.source.chat.to_non_ad_string();
     let ts_ms = receipt.timestamp.timestamp_millis();
+    let message_ids: Vec<String> = receipt.message_ids.iter().map(|id| id.to_string()).collect();
 
     let status = match receipt.r#type {
         ReceiptType::Delivered => wa::web_message_info::Status::DELIVERY_ACK as i32,
@@ -1682,7 +1683,7 @@ fn apply_receipt(
                     dsl::device_id
                         .eq(device_id)
                         .and(dsl::chat_jid.eq(&chat))
-                        .and(dsl::msg_id.eq_any(&receipt.message_ids)),
+                        .and(dsl::msg_id.eq_any(&message_ids)),
                 )
                 .select(diesel::dsl::max(dsl::timestamp_ms))
                 .first(conn)
@@ -1700,7 +1701,7 @@ fn apply_receipt(
                 device_id,
                 &chat,
                 boundary_ms - 1,
-                &receipt.message_ids,
+                &message_ids,
             )?
             else {
 
@@ -1732,7 +1733,7 @@ fn apply_receipt(
 
     let user = receipt.source.sender.to_non_ad_string();
     let mut missed: Vec<&String> = Vec::new();
-    for msg_id in &receipt.message_ids {
+    for msg_id in &message_ids {
 
 
 
@@ -1811,7 +1812,7 @@ fn apply_receipt(
 
 
 
-    for msg_id in &receipt.message_ids {
+    for msg_id in &message_ids {
         let key = match relocated.get(msg_id) {
             Some(alt) => alt,
             None if unowned.contains(&msg_id) => continue,

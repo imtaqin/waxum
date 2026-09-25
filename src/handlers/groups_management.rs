@@ -453,7 +453,7 @@ pub async fn set_group_settings(
     // For now, we validate the request and return the intended settings.
     let _ = client
         .groups()
-        .query_info(&jid)
+        .fetch_metadata(&jid)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
