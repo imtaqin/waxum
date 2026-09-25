@@ -64,6 +64,7 @@ pub(crate) async fn record_incoming(
         return;
     }
     let (text, caption, msg_type, _) = crate::handlers::sessions::extract_message_content(msg);
+    let quoted = crate::handlers::sessions::extract_quoted_context(msg);
     let row = NewMessage {
         message_id: info.id.to_string(),
         session_id: session_id.to_string(),
@@ -78,6 +79,8 @@ pub(crate) async fn record_incoming(
         body: text.or(caption),
         msg_timestamp: info.timestamp,
         media: crate::handlers::sessions::extract_media_pointer(msg),
+        quoted_message_id: quoted.as_ref().map(|(id, _)| id.clone()),
+        quoted_sender_jid: quoted.and_then(|(_, participant)| participant),
     };
     if let Err(e) = messages::insert(state.session_manager().pool(), &row).await {
         tracing::warn!("message history insert (incoming) failed: {}", e);
@@ -98,6 +101,7 @@ pub(crate) async fn record_outgoing(
         return;
     }
     let (text, caption, msg_type, _) = crate::handlers::sessions::extract_message_content(message);
+    let quoted = crate::handlers::sessions::extract_quoted_context(message);
     let row = NewMessage {
         message_id: message_id.to_string(),
         session_id: session_id.to_string(),
@@ -108,6 +112,8 @@ pub(crate) async fn record_outgoing(
         body: text.or(caption),
         msg_timestamp: chrono::Utc::now(),
         media: crate::handlers::sessions::extract_media_pointer(message),
+        quoted_message_id: quoted.as_ref().map(|(id, _)| id.clone()),
+        quoted_sender_jid: quoted.and_then(|(_, participant)| participant),
     };
     if let Err(e) = messages::insert(state.session_manager().pool(), &row).await {
         tracing::warn!("message history insert (outgoing) failed: {}", e);
@@ -263,6 +269,10 @@ fn message_kind_slug(kind: &MessageKind) -> String {
     .to_string()
 }
 
+/// Reads from the vendored diesel chat-store (`vendor/whatsapp-rust-chat-store`),
+/// a separate storage system from the FTS-backed `messages` table
+/// [`crate::db::messages`] uses -- so `quoted_message_id`/`quoted_sender_jid`
+/// on every row here are always `null`, unlike `GET /messages/chat/{chat_jid}`.
 #[utoipa::path(
     get,
     security(("bearer_auth" = [])),
@@ -340,6 +350,8 @@ pub async fn list_session_messages(
                 .as_deref()
                 .and_then(crate::handlers::sessions::extract_media_pointer)
                 .and_then(|p| media_pointer_to_model(&p)),
+            quoted_message_id: None,
+            quoted_sender_jid: None,
         });
     }
 
@@ -386,6 +398,8 @@ fn rows_to_response(rows: Vec<MessageRow>) -> MessageSearchResponse {
             msg_timestamp: r.msg_timestamp.clone(),
             push_name: r.push_name.clone(),
             media: r.media.as_ref().and_then(media_pointer_to_model),
+            quoted_message_id: r.quoted_message_id.clone(),
+            quoted_sender_jid: r.quoted_sender_jid.clone(),
         })
         .collect();
     MessageSearchResponse {
