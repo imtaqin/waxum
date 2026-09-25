@@ -78,7 +78,7 @@ pub async fn execute_text(
         }
         let metadata = client
             .groups()
-            .get_metadata(&to_jid)
+            .fetch_metadata(&to_jid)
             .await
             .map_err(|e| ApiError::Internal(e.to_string()))?;
         for p in metadata.participants {
@@ -850,13 +850,13 @@ pub async fn edit_message(
         ..Default::default()
     };
 
-    let message_id = client
+    let result = client
         .edit_message(to_jid.clone(), request.message_id, new_content)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
-        message_id,
+        message_id: result.message_id,
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     }))

@@ -1797,7 +1797,7 @@ async fn handle_event(
                     );
                 }
             } else if !call_id.is_empty() {
-                state.incoming_calls().insert(call_id, call.clone());
+                state.incoming_calls().insert(call_id, *call.clone());
             }
         }
         _ => {}
@@ -2201,7 +2201,7 @@ async fn persist_contact_event(
             let jid_str = sender.to_string();
             let mut push_name = None::<String>;
             if !info.push_name.is_empty() {
-                push_name = Some(info.push_name.clone());
+                push_name = Some(info.push_name.to_string());
             }
             let mut business_name = None::<String>;
             if let Some(vn) = info.verified_name.as_ref() {

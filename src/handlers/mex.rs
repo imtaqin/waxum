@@ -49,6 +49,7 @@ pub async fn mex_query(
 
     let mex_request = whatsapp_rust::MexRequest {
         doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomQuery"),
+        declared_variables: &[],
         variables: request.variables,
     };
 
@@ -100,6 +101,7 @@ pub async fn mex_mutate(
 
     let mex_request = whatsapp_rust::MexRequest {
         doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomMutation"),
+        declared_variables: &[],
         variables: request.variables,
     };
 

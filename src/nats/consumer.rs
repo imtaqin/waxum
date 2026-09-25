@@ -633,6 +633,7 @@ async fn dispatch_command(
             client
                 .edit_message(to_jid, &message_id, edit_msg)
                 .await
+                .map(|r| r.message_id)
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
 

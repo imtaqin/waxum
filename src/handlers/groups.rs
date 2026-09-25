@@ -28,17 +28,33 @@ pub async fn list_groups(
 ) -> Result<Json<GroupListResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
 
-    let groups = client
+    let overviews = client
         .groups()
-        .get_participating()
+        .list_participating()
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    let groups: Vec<GroupInfo> = groups
+    let fetches = overviews
         .into_iter()
-        .map(|(id, metadata)| GroupInfo {
-            jid: id.to_string(),
-            subject: metadata.subject,
+        .map(|overview| {
+            let client = client.clone();
+            async move { client.groups().fetch_metadata(&overview.id).await }
+        })
+        .collect::<Vec<_>>();
+    let metadatas = futures::future::join_all(fetches).await;
+
+    let groups: Vec<GroupInfo> = metadatas
+        .into_iter()
+        .filter_map(|r| match r {
+            Ok(metadata) => Some(metadata),
+            Err(e) => {
+                tracing::warn!("list_groups: fetch_metadata failed for a group: {}", e);
+                None
+            }
+        })
+        .map(|metadata| GroupInfo {
+            jid: metadata.id.to_string(),
+            subject: metadata.subject.unwrap_or_default(),
             participants: metadata
                 .participants
                 .into_iter()
@@ -86,13 +102,13 @@ pub async fn get_group(
 
     let metadata = client
         .groups()
-        .get_metadata(&jid)
+        .fetch_metadata(&jid)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(GroupInfo {
         jid: metadata.id.to_string(),
-        subject: metadata.subject,
+        subject: metadata.subject.unwrap_or_default(),
         participants: metadata
             .participants
             .into_iter()
@@ -136,7 +152,7 @@ pub async fn get_group_info(
 
     let info = client
         .groups()
-        .query_info(&jid)
+        .fetch_metadata(&jid)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -145,9 +161,13 @@ pub async fn get_group_info(
             .participants
             .iter()
             .map(|p| GroupParticipant {
-                jid: p.to_string(),
-                phone_number: None,
-                role: ParticipantRole::Member,
+                jid: p.jid.to_string(),
+                phone_number: p.phone_number.as_ref().map(|j| j.to_string()),
+                role: if p.is_admin() {
+                    ParticipantRole::Admin
+                } else {
+                    ParticipantRole::Member
+                },
             })
             .collect(),
         addressing_mode: format!("{:?}", info.addressing_mode),
