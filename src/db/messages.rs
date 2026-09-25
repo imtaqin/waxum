@@ -68,6 +68,12 @@ pub struct NewMessage {
     /// caller can round-trip these fields straight into
     /// `POST /media/download` with no re-encoding.
     pub media: Option<MediaPointer>,
+    /// `ContextInfo.stanzaId` when this message is a reply, `None`
+    /// otherwise. See [`crate::handlers::sessions::extract_quoted_context`].
+    pub quoted_message_id: Option<String>,
+    /// `ContextInfo.participant` — the quoted message's sender — when
+    /// this message is a reply and the field was present on the wire.
+    pub quoted_sender_jid: Option<String>,
 }
 
 /// Download pointer for one media message, captured at ingestion time
@@ -91,10 +97,10 @@ pub struct MediaPointer {
 /// A `messages` row as returned by search or chat listing, timestamps
 /// rendered as `%Y-%m-%d %H:%M:%S` UTC text regardless of backend.
 /// `snippet` is only populated by backends with cheap highlight
-/// support (SQLite FTS5, Postgres) and only by [`search`]. `media` and
-/// `push_name` are only populated by [`list_by_chat`] — `search`'s
-/// queries don't select those columns, so its rows always carry
-/// `None` there.
+/// support (SQLite FTS5, Postgres) and only by [`search`]. `media`,
+/// `push_name`, `quoted_message_id` and `quoted_sender_jid` are only
+/// populated by [`list_by_chat`] — `search`'s queries don't select
+/// those columns, so its rows always carry `None` there.
 #[derive(Debug, Clone, Default)]
 pub struct MessageRow {
     pub id: i64,
@@ -109,6 +115,10 @@ pub struct MessageRow {
     pub snippet: Option<String>,
     pub media: Option<MediaPointer>,
     pub push_name: Option<String>,
+    /// `ContextInfo.stanzaId` when this message is a reply.
+    pub quoted_message_id: Option<String>,
+    /// `ContextInfo.participant` — the quoted message's sender.
+    pub quoted_sender_jid: Option<String>,
 }
 
 /// Store one message, ignoring duplicates on `(session_id,
@@ -131,7 +141,7 @@ pub async fn insert(pool: &DbPool, msg: &NewMessage) -> anyhow::Result<()> {
             let client = pg.get().await?;
             client
                 .execute(
-                    "INSERT INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (session_id, message_id) DO NOTHING",
+                    "INSERT INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype, quoted_message_id, quoted_sender_jid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT (session_id, message_id) DO NOTHING",
                     &[
                         &msg.message_id,
                         &msg.session_id,
@@ -148,6 +158,8 @@ pub async fn insert(pool: &DbPool, msg: &NewMessage) -> anyhow::Result<()> {
                         &file_length,
                         &media_type,
                         &mimetype,
+                        &msg.quoted_message_id,
+                        &msg.quoted_sender_jid,
                     ],
                 )
                 .await?;
@@ -175,9 +187,11 @@ pub async fn insert(pool: &DbPool, msg: &NewMessage) -> anyhow::Result<()> {
                 file_length.into(),
                 media_type.map(str::to_string).into(),
                 mimetype.map(str::to_string).into(),
+                msg.quoted_message_id.clone().into(),
+                msg.quoted_sender_jid.clone().into(),
             ];
             conn.exec_drop(
-                "INSERT IGNORE INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, created_at, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT IGNORE INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, created_at, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype, quoted_message_id, quoted_sender_jid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 mysql_async::Params::Positional(params),
             )
             .await?;
@@ -199,7 +213,7 @@ pub async fn insert(pool: &DbPool, msg: &NewMessage) -> anyhow::Result<()> {
                 };
                 let changed = sqlite_raw::execute(
                     conn,
-                    "INSERT OR IGNORE INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, created_at, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO messages (message_id, session_id, chat_jid, sender_jid, direction, msg_type, body, msg_timestamp, created_at, media_key, file_sha256, file_enc_sha256, direct_path, file_length, media_type, mimetype, quoted_message_id, quoted_sender_jid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     &[
                         SQ::Text(m.message_id.clone()),
                         SQ::Text(m.session_id.clone()),
@@ -217,6 +231,8 @@ pub async fn insert(pool: &DbPool, msg: &NewMessage) -> anyhow::Result<()> {
                         file_length_value,
                         SQ::from_opt_str(media_type.as_deref()),
                         SQ::from_opt_str(mimetype.as_deref()),
+                        SQ::from_opt_str(m.quoted_message_id.as_deref()),
+                        SQ::from_opt_str(m.quoted_sender_jid.as_deref()),
                     ],
                 )?;
                 if changed > 0 {
@@ -376,7 +392,7 @@ pub async fn list_by_chat(
     match pool {
         DbPool::Postgres(pg) => {
             let client = pg.get().await?;
-            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = $1 AND m.chat_jid = $2 ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT $3 OFFSET $4";
+            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, m.quoted_message_id, m.quoted_sender_jid, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = $1 AND m.chat_jid = $2 ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT $3 OFFSET $4";
             let rows = client
                 .query(sql, &[&session_id, &chat_jid, &limit, &offset])
                 .await?;
@@ -385,14 +401,14 @@ pub async fn list_by_chat(
         DbPool::MySQL(my) => {
             use mysql_async::prelude::*;
             let mut conn = my.get_conn().await?;
-            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = ? AND m.chat_jid = ? ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?";
+            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, m.quoted_message_id, m.quoted_sender_jid, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = ? AND m.chat_jid = ? ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?";
             let rows: Vec<mysql_async::Row> = conn
                 .exec(sql, (session_id, chat_jid, limit, offset))
                 .await?;
             Ok(rows.iter().map(my_row_to_chat_message).collect())
         }
         DbPool::SQLite(handle) => {
-            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = ? AND m.chat_jid = ? ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?";
+            let sql = "SELECT m.id, m.message_id, m.session_id, m.chat_jid, m.sender_jid, m.direction, m.msg_type, m.body, m.msg_timestamp, m.media_key, m.file_sha256, m.file_enc_sha256, m.direct_path, m.file_length, m.media_type, m.mimetype, m.quoted_message_id, m.quoted_sender_jid, c.push_name FROM messages m LEFT JOIN contacts c ON c.session_id = m.session_id AND c.jid = m.sender_jid WHERE m.session_id = ? AND m.chat_jid = ? ORDER BY m.msg_timestamp DESC, m.id DESC LIMIT ? OFFSET ?";
             let values = vec![
                 SQ::Text(session_id),
                 SQ::Text(chat_jid),
@@ -517,6 +533,8 @@ fn pg_row_to_message(row: &tokio_postgres::Row) -> MessageRow {
         snippet: row.get("snippet"),
         media: None,
         push_name: None,
+        quoted_message_id: None,
+        quoted_sender_jid: None,
     }
 }
 
@@ -545,6 +563,8 @@ fn pg_row_to_chat_message(row: &tokio_postgres::Row) -> MessageRow {
         snippet: None,
         media,
         push_name: row.get("push_name"),
+        quoted_message_id: row.get("quoted_message_id"),
+        quoted_sender_jid: row.get("quoted_sender_jid"),
     }
 }
 
@@ -586,6 +606,8 @@ fn my_row_to_message(row: &mysql_async::Row) -> MessageRow {
         snippet: my_get_string(row, "snippet"),
         media: None,
         push_name: None,
+        quoted_message_id: None,
+        quoted_sender_jid: None,
     }
 }
 
@@ -612,6 +634,8 @@ fn my_row_to_chat_message(row: &mysql_async::Row) -> MessageRow {
         snippet: None,
         media,
         push_name: my_get_string(row, "push_name"),
+        quoted_message_id: my_get_string(row, "quoted_message_id"),
+        quoted_sender_jid: my_get_string(row, "quoted_sender_jid"),
     }
 }
 
@@ -629,12 +653,14 @@ fn sqlite_row_to_message(row: &sqlite_raw::Row) -> MessageRow {
         snippet: row.get_string(9),
         media: None,
         push_name: None,
+        quoted_message_id: None,
+        quoted_sender_jid: None,
     }
 }
 
 /// Row shape for [`list_by_chat`]: the plain message columns (0-8),
-/// the seven media pointer columns (9-15), then `push_name` from the
-/// `contacts` join (16).
+/// the seven media pointer columns (9-15), the quote columns (16-17),
+/// then `push_name` from the `contacts` join (18).
 fn sqlite_row_to_chat_message(row: &sqlite_raw::Row) -> MessageRow {
     let media = row.get_string(9).map(|media_key| MediaPointer {
         media_key,
@@ -657,6 +683,8 @@ fn sqlite_row_to_chat_message(row: &sqlite_raw::Row) -> MessageRow {
         msg_timestamp: row.get_string(8).unwrap_or_default(),
         snippet: None,
         media,
-        push_name: row.get_string(16),
+        quoted_message_id: row.get_string(16),
+        quoted_sender_jid: row.get_string(17),
+        push_name: row.get_string(18),
     }
 }

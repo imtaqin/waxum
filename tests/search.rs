@@ -51,6 +51,8 @@ fn msg(
         body: body.map(str::to_string),
         msg_timestamp: ts,
         media: None,
+        quoted_message_id: None,
+        quoted_sender_jid: None,
     }
 }
 
@@ -404,6 +406,8 @@ async fn chat_listing_includes_push_name_and_media_pointer() {
         media_type: "image".to_string(),
         mimetype: "image/jpeg".to_string(),
     });
+    image_row.quoted_message_id = Some("MID-C1".to_string());
+    image_row.quoted_sender_jid = Some("559999999999@s.whatsapp.net".to_string());
     insert(&h.pool, &image_row).await.expect("insert");
 
     let (status, body) = call(
@@ -425,10 +429,14 @@ async fn chat_listing_includes_push_name_and_media_pointer() {
     assert_eq!(hits[0]["media"]["direct_path"], "/v/t/abc");
     assert_eq!(hits[0]["media"]["file_length"], 1234);
     assert_eq!(hits[0]["media"]["media_type"], "image");
+    assert_eq!(hits[0]["quoted_message_id"], "MID-C1");
+    assert_eq!(hits[0]["quoted_sender_jid"], "559999999999@s.whatsapp.net");
 
     assert_eq!(hits[1]["message_id"], "MID-C1");
     assert_eq!(hits[1]["push_name"], "Jane Doe");
     assert_eq!(hits[1]["media"], serde_json::Value::Null);
+    assert_eq!(hits[1]["quoted_message_id"], serde_json::Value::Null);
+    assert_eq!(hits[1]["quoted_sender_jid"], serde_json::Value::Null);
 }
 
 fn urlencoding(s: &str) -> String {

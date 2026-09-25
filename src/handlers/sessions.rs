@@ -2097,11 +2097,16 @@ fn message_event_data(
     let (text, caption, message_type, media_mimetype) = extract_message_content(msg);
     let media_meta = extract_media_metadata(msg);
     let location = extract_location(msg);
+    let quoted = extract_quoted_context(msg);
+    let quoted_message_id = quoted.as_ref().map(|(id, _)| id.clone());
+    let quoted_sender_jid = quoted.and_then(|(_, participant)| participant);
     serde_json::json!({
         "from": info.source.sender.to_string(),
         "from_phone": from_phone,
         "chat": info.source.chat.to_string(),
         "chat_phone": chat_phone,
+        "quoted_message_id": quoted_message_id,
+        "quoted_sender_jid": quoted_sender_jid,
         "message_id": info.id.to_string(),
         "timestamp": info.timestamp,
         "is_from_me": info.source.is_from_me,
@@ -2243,6 +2248,134 @@ pub(crate) fn extract_message_content(
     }
 
     (text, caption, message_type, media_mimetype)
+}
+
+/// Extracts the WhatsApp reply/quote linkage (`ContextInfo.stanzaId` +
+/// `.participant`) from whichever content submessage the message carries.
+/// `None` when the message is not a reply. `context_info` lives per
+/// content type in the protobuf, not on `Message` itself, so this checks
+/// every content type that the wire format actually attaches one to
+/// (confirmed against `contextInfo` fields in the whatsapp-rust proto,
+/// not merely the subset `extract_message_content` above branches on).
+pub(crate) fn extract_quoted_context(
+    msg: &waproto::whatsapp::Message,
+) -> Option<(String, Option<String>)> {
+    let ctx = msg
+        .extended_text_message
+        .as_option()
+        .and_then(|m| m.context_info.as_option())
+        .or_else(|| {
+            msg.image_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.video_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.audio_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.document_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.sticker_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.contact_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.contacts_array_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.location_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.live_location_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.poll_creation_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.poll_creation_message_v2
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.poll_creation_message_v3
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.buttons_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.buttons_response_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.list_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.list_response_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.interactive_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.interactive_response_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.template_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.template_button_reply_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.order_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })
+        .or_else(|| {
+            msg.product_message
+                .as_option()
+                .and_then(|m| m.context_info.as_option())
+        })?;
+    let stanza_id = ctx.stanza_id.clone()?;
+    Some((stanza_id, ctx.participant.clone()))
 }
 
 async fn persist_contact_event(

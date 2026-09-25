@@ -139,6 +139,8 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 file_length INTEGER, \
                 media_type TEXT, \
                 mimetype TEXT, \
+                quoted_message_id TEXT, \
+                quoted_sender_jid TEXT, \
                 UNIQUE (session_id, message_id) \
              ); \
              CREATE INDEX IF NOT EXISTS idx_messages_session_ts ON messages(session_id, msg_timestamp); \
@@ -175,6 +177,8 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
             ("file_length", "INTEGER"),
             ("media_type", "TEXT"),
             ("mimetype", "TEXT"),
+            ("quoted_message_id", "TEXT"),
+            ("quoted_sender_jid", "TEXT"),
         ] {
             if !existing_columns.contains(column) {
                 sqlite_raw::exec_batch(
@@ -442,6 +446,8 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         "ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_length BIGINT",
         "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT",
         "ALTER TABLE messages ADD COLUMN IF NOT EXISTS mimetype TEXT",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS quoted_message_id TEXT",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS quoted_sender_jid TEXT",
     ] {
         let _ = client.execute(sql, &[]).await;
     }
@@ -666,6 +672,8 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             file_length BIGINT NULL,
             media_type VARCHAR(16) NULL,
             mimetype VARCHAR(255) NULL,
+            quoted_message_id VARCHAR(255) NULL,
+            quoted_sender_jid VARCHAR(255) NULL,
             UNIQUE KEY uniq_messages_id (session_id, message_id),
             INDEX idx_messages_session_ts (session_id, msg_timestamp),
             INDEX idx_messages_chat (session_id, chat_jid),
@@ -727,6 +735,8 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
         "ALTER TABLE messages ADD COLUMN file_length BIGINT NULL",
         "ALTER TABLE messages ADD COLUMN media_type VARCHAR(16) NULL",
         "ALTER TABLE messages ADD COLUMN mimetype VARCHAR(255) NULL",
+        "ALTER TABLE messages ADD COLUMN quoted_message_id VARCHAR(255) NULL",
+        "ALTER TABLE messages ADD COLUMN quoted_sender_jid VARCHAR(255) NULL",
     ];
     for sql in &migrations {
         let _ = conn.query_drop(*sql).await;
