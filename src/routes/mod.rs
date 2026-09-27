@@ -113,6 +113,23 @@ fn session_routes() -> Router<AppState> {
             get(handlers::cloud::cloud_webhook_verify).post(handlers::cloud::cloud_webhook_receive),
         )
         .route(
+            "/{session_id}/cloud/commerce-settings",
+            get(handlers::cloud_commerce::get_commerce_settings)
+                .post(handlers::cloud_commerce::update_commerce_settings),
+        )
+        .route(
+            "/{session_id}/messages/product",
+            post(handlers::cloud_commerce::send_product),
+        )
+        .route(
+            "/{session_id}/messages/product-list",
+            post(handlers::cloud_commerce::send_product_list),
+        )
+        .route(
+            "/{session_id}/messages/catalog",
+            post(handlers::cloud_commerce::send_catalog),
+        )
+        .route(
             "/{session_id}/cloud/media",
             post(handlers::cloud::cloud_upload_media)
                 .layer(DefaultBodyLimit::max(MAX_MEDIA_UPLOAD_BYTES)),

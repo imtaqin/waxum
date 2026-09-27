@@ -440,4 +440,54 @@ impl CloudClient {
             body: format!("failed to parse response: {e}: {body}"),
         })
     }
+
+    /// `GET {phone_number_id}/whatsapp_commerce_settings`, per "Get
+    /// commerce settings".
+    pub async fn get_commerce_settings(&self) -> Result<Value, CloudError> {
+        self.get_json(&format!(
+            "{}/{}/whatsapp_commerce_settings",
+            self.base_url, self.phone_number_id
+        ))
+        .await
+    }
+
+    /// `POST {phone_number_id}/whatsapp_commerce_settings`, per "Set or
+    /// update commerce settings". Meta takes both flags as query
+    /// parameters with no body; a flag left `None` is not sent and keeps
+    /// its current value.
+    pub async fn set_commerce_settings(
+        &self,
+        is_cart_enabled: Option<bool>,
+        is_catalog_visible: Option<bool>,
+    ) -> Result<Value, CloudError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(v) = is_cart_enabled {
+            query.push(("is_cart_enabled", v.to_string()));
+        }
+        if let Some(v) = is_catalog_visible {
+            query.push(("is_catalog_visible", v.to_string()));
+        }
+        let resp = self
+            .http
+            .post(format!(
+                "{}/{}/whatsapp_commerce_settings",
+                self.base_url, self.phone_number_id
+            ))
+            .bearer_auth(&self.access_token)
+            .query(&query)
+            .send()
+            .await?;
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(CloudError::Api {
+                status: status.as_u16(),
+                body,
+            });
+        }
+        serde_json::from_str(&body).map_err(|e| CloudError::Api {
+            status: status.as_u16(),
+            body: format!("failed to parse response: {e}: {body}"),
+        })
+    }
 }

@@ -58,6 +58,12 @@ pub fn verify_challenge<'a>(
 /// `quoted_sender_jid` -- so a consumer's webhook receiver doesn't need
 /// a provider-specific code path.
 ///
+/// Commerce adds two Cloud-only fields, `null` unless present: `order` is
+/// Meta's cart object (`catalog_id`, `product_items`, `text`) for a
+/// `message_type: "order"` submission, and `referred_product`
+/// (`catalog_id`, `product_retailer_id`) is set when the customer's
+/// message was sent from a product's "Message business" button.
+///
 /// Only inbound `messages[]` entries produce an event; `statuses[]`
 /// (delivered/read/failed) delivery-status updates are not yet mapped to
 /// a webhook event of their own in this phase.
@@ -148,6 +154,13 @@ fn normalize_one_message(
         .and_then(|c| c.get("from"))
         .and_then(|v| v.as_str())
         .map(str::to_string);
+    let referred_product = msg
+        .get("context")
+        .and_then(|c| c.get("referred_product"))
+        .cloned();
+    let order = (msg_type == "order")
+        .then(|| msg.get("order").cloned())
+        .flatten();
 
     let phone_number_id = value
         .get("metadata")
@@ -166,6 +179,8 @@ fn normalize_one_message(
             .and_then(|v| v.as_str()),
         "quoted_message_id": quoted_message_id,
         "quoted_sender_jid": quoted_sender_jid,
+        "referred_product": referred_product,
+        "order": order,
         "message_id": message_id,
         "timestamp": timestamp,
         "is_from_me": false,
@@ -251,5 +266,63 @@ mod tests {
         assert_eq!(e["is_group"], false);
         assert_eq!(e["quoted_message_id"], "wamid.ORIGINAL");
         assert_eq!(e["push_name"], "Ada");
+        assert_eq!(e["order"], serde_json::Value::Null);
+        assert_eq!(e["referred_product"], serde_json::Value::Null);
+    }
+
+    fn one_message(msg: serde_json::Value) -> serde_json::Value {
+        let payload = serde_json::json!({
+            "entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": "106540"},
+                "messages": [msg]
+            }}]}]
+        });
+        normalize_messages(&payload).remove(0)
+    }
+
+    #[test]
+    fn keeps_an_order_submission() {
+        let e = one_message(serde_json::json!({
+            "from": "16315551234",
+            "id": "wamid.ORDER",
+            "timestamp": "1603069091",
+            "type": "order",
+            "order": {
+                "catalog_id": "CAT",
+                "product_items": [
+                    {"product_retailer_id": "SKU-1", "quantity": 2, "item_price": 15000, "currency": "IDR"}
+                ],
+                "text": "please deliver today"
+            },
+            "context": {"from": "16315551234", "id": "wamid.CATALOGMSG"}
+        }));
+        assert_eq!(e["message_type"], "order");
+        assert_eq!(e["order"]["catalog_id"], "CAT");
+        assert_eq!(
+            e["order"]["product_items"][0]["product_retailer_id"],
+            "SKU-1"
+        );
+        assert_eq!(e["order"]["product_items"][0]["quantity"], 2);
+        assert_eq!(e["order"]["text"], "please deliver today");
+        assert_eq!(e["quoted_message_id"], "wamid.CATALOGMSG");
+    }
+
+    #[test]
+    fn keeps_the_referred_product_on_a_product_enquiry() {
+        let e = one_message(serde_json::json!({
+            "from": "1",
+            "id": "wamid.Q",
+            "timestamp": "1700000000",
+            "type": "text",
+            "text": {"body": "is this in stock?"},
+            "context": {
+                "from": "1",
+                "id": "wamid.P",
+                "referred_product": {"catalog_id": "CAT", "product_retailer_id": "SKU-7"}
+            }
+        }));
+        assert_eq!(e["text"], "is this in stock?");
+        assert_eq!(e["referred_product"]["product_retailer_id"], "SKU-7");
+        assert_eq!(e["order"], serde_json::Value::Null);
     }
 }

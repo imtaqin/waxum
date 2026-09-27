@@ -128,6 +128,11 @@ use state::AppState;
 
         handlers::cloud::connect_cloud,
         handlers::cloud::embedded_signup_exchange,
+        handlers::cloud_commerce::get_commerce_settings,
+        handlers::cloud_commerce::update_commerce_settings,
+        handlers::cloud_commerce::send_product,
+        handlers::cloud_commerce::send_product_list,
+        handlers::cloud_commerce::send_catalog,
         handlers::cloud::send_template,
 
         handlers::messages::send_text,
@@ -313,6 +318,11 @@ use state::AppState;
             models::cloud::ConnectCloudRequest,
             models::cloud::ConnectCloudResponse,
             models::cloud::EmbeddedSignupExchangeRequest,
+            models::cloud_commerce::UpdateCommerceSettingsRequest,
+            models::cloud_commerce::SendProductRequest,
+            models::cloud_commerce::ProductSection,
+            models::cloud_commerce::SendProductListRequest,
+            models::cloud_commerce::SendCatalogRequest,
             models::cloud::EmbeddedSignupExchangeResponse,
             models::cloud::SendTemplateRequest,
 
