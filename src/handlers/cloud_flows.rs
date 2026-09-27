@@ -33,8 +33,6 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
-use rsa::{RsaPrivateKey, RsaPublicKey};
 use serde_json::{json, Value};
 
 use crate::cloud::client::CloudClient;
@@ -449,22 +447,19 @@ pub async fn configure_flow_endpoint(
     let private_key = match &request.private_key {
         Some(pem) => flows_crypto::parse_private_key(pem)
             .map_err(|_| ApiError::BadRequest("private_key is not a valid RSA PEM".to_string()))?,
-        None => tokio::task::spawn_blocking(|| RsaPrivateKey::new(&mut rand::thread_rng(), 2048))
+        None => tokio::task::spawn_blocking(flows_crypto::generate_private_key)
             .await
             .map_err(|e| ApiError::Internal(e.to_string()))?
             .map_err(|e| ApiError::Internal(format!("RSA key generation failed: {e}")))?,
     };
-    if rsa::traits::PublicKeyParts::size(&private_key) < 256 {
+    if private_key.key_size_bits() < 2048 {
         return Err(ApiError::BadRequest(
             "private_key must be at least 2048 bits".to_string(),
         ));
     }
-    let private_pem = private_key
-        .to_pkcs8_pem(LineEnding::LF)
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .to_string();
-    let public_pem = RsaPublicKey::from(&private_key)
-        .to_public_key_pem(LineEnding::LF)
+    let private_pem = flows_crypto::private_key_pem(&private_key)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let public_pem = flows_crypto::public_key_pem(&private_key)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let meta_response = client_for(&creds)

@@ -8,6 +8,7 @@ use aes_gcm::aead::consts::U16;
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::aes::Aes128;
 use aes_gcm::{AesGcm, Key, Nonce};
+use aws_lc_rs::rsa::{OaepPublicEncryptingKey, PrivateDecryptingKey, OAEP_SHA256_MGF1SHA256};
 use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
@@ -16,11 +17,10 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use common::{call, req_get, req_json, Harness, TEST_TOKEN};
 use hmac::{Hmac, Mac};
-use rsa::pkcs8::{EncodePrivateKey, LineEnding};
-use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
 use serde_json::{json, Value};
 use sha2::Sha256;
 use tower::ServiceExt;
+use waxum::cloud::flows_crypto::{generate_private_key, private_key_pem};
 
 type FlowCipher = AesGcm<Aes128, U16>;
 
@@ -65,25 +65,25 @@ async fn create_session(h: &Harness, session_id: &str, cloud: bool) {
 /// Creates a cloud session with a Flow endpoint key stored directly on
 /// the session -- the HTTP configure route would also call Meta to
 /// register the public key, which these offline tests can't reach.
-async fn flow_session(h: &Harness, session_id: &str) -> (RsaPublicKey, String) {
+async fn flow_session(h: &Harness, session_id: &str) -> (PrivateDecryptingKey, String) {
     create_session(h, session_id, true).await;
-    let private_key = RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap();
-    let pem = private_key
-        .to_pkcs8_pem(LineEnding::LF)
-        .unwrap()
-        .to_string();
+    let key = generate_private_key().unwrap();
+    let pem = private_key_pem(&key).unwrap();
     h.state
         .session_manager()
         .set_flow_endpoint(session_id, &pem, None)
         .await
         .expect("store flow key");
-    (RsaPublicKey::from(&private_key), pem)
+    (key, pem)
 }
 
-fn encrypt_like_meta(public_key: &RsaPublicKey, payload: &Value) -> Value {
-    let wrapped = public_key
-        .encrypt(&mut rand::thread_rng(), Oaep::new::<Sha256>(), &AES_KEY)
-        .unwrap();
+fn encrypt_like_meta(key: &PrivateDecryptingKey, payload: &Value) -> Value {
+    let public = OaepPublicEncryptingKey::new(key.public_key()).unwrap();
+    let mut wrapped = vec![0u8; public.ciphertext_size()];
+    let wrapped = public
+        .encrypt(&OAEP_SHA256_MGF1SHA256, &AES_KEY, &mut wrapped, None)
+        .unwrap()
+        .to_vec();
     let cipher = FlowCipher::new(Key::<FlowCipher>::from_slice(&AES_KEY));
     let ct = cipher
         .encrypt(
@@ -152,9 +152,9 @@ fn exchange_path(id: &str) -> String {
 #[tokio::test]
 async fn encrypted_ping_round_trips_over_http_without_a_bearer_token() {
     let h = Harness::new().await;
-    let (public_key, _) = flow_session(&h, "flow-1").await;
+    let (key, _) = flow_session(&h, "flow-1").await;
 
-    let envelope = encrypt_like_meta(&public_key, &json!({"version": "3.0", "action": "ping"}));
+    let envelope = encrypt_like_meta(&key, &json!({"version": "3.0", "action": "ping"}));
     let (status, body, ctype) = raw_call(
         &h,
         signed(&exchange_path("flow-1"), &envelope.to_string(), APP_SECRET),
@@ -172,8 +172,8 @@ async fn encrypted_ping_round_trips_over_http_without_a_bearer_token() {
 #[tokio::test]
 async fn bad_signature_gets_metas_432() {
     let h = Harness::new().await;
-    let (public_key, _) = flow_session(&h, "flow-2").await;
-    let envelope = encrypt_like_meta(&public_key, &json!({"action": "ping"}));
+    let (key, _) = flow_session(&h, "flow-2").await;
+    let envelope = encrypt_like_meta(&key, &json!({"action": "ping"}));
 
     let (status, _, _) = raw_call(
         &h,
@@ -192,7 +192,7 @@ async fn wrong_key_and_tampered_payload_get_the_same_421() {
     let h = Harness::new().await;
     flow_session(&h, "flow-3").await;
 
-    let other = RsaPublicKey::from(&RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap());
+    let other = generate_private_key().unwrap();
     let wrong_key = encrypt_like_meta(&other, &json!({"action": "ping"}));
     let (s1, b1, _) = raw_call(
         &h,
@@ -200,8 +200,8 @@ async fn wrong_key_and_tampered_payload_get_the_same_421() {
     )
     .await;
 
-    let (public_key, _) = flow_session(&h, "flow-3b").await;
-    let mut tampered = encrypt_like_meta(&public_key, &json!({"action": "ping"}));
+    let (key, _) = flow_session(&h, "flow-3b").await;
+    let mut tampered = encrypt_like_meta(&key, &json!({"action": "ping"}));
     let mut ct = B64
         .decode(tampered["encrypted_flow_data"].as_str().unwrap())
         .unwrap();
@@ -221,9 +221,9 @@ async fn wrong_key_and_tampered_payload_get_the_same_421() {
 #[tokio::test]
 async fn non_ping_without_a_forward_url_is_refused() {
     let h = Harness::new().await;
-    let (public_key, _) = flow_session(&h, "flow-4").await;
+    let (key, _) = flow_session(&h, "flow-4").await;
     let envelope = encrypt_like_meta(
-        &public_key,
+        &key,
         &json!({"version": "3.0", "action": "INIT", "flow_token": "t"}),
     );
     let (status, _, _) = raw_call(
