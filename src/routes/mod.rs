@@ -101,6 +101,14 @@ fn session_routes() -> Router<AppState> {
         )
         .route("/{session_id}/pair", post(handlers::sessions::pair_session))
         .route(
+            "/{session_id}/cloud/connect",
+            post(handlers::cloud::connect_cloud),
+        )
+        .route(
+            "/{session_id}/cloud/webhook",
+            get(handlers::cloud::cloud_webhook_verify).post(handlers::cloud::cloud_webhook_receive),
+        )
+        .route(
             "/{session_id}/disconnect",
             post(handlers::sessions::disconnect_session),
         )

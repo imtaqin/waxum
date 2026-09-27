@@ -57,6 +57,37 @@ pub async fn execute_text(
     session_id: &str,
     request: SendTextRequest,
 ) -> Result<MessageResponse, ApiError> {
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let resp = cloud
+            .send_text(
+                &request.to,
+                &request.text,
+                false,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        let message_id = resp
+            .get("messages")
+            .and_then(|m| m.as_array())
+            .and_then(|a| a.first())
+            .and_then(|m| m.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        return Ok(MessageResponse {
+            message_id,
+            timestamp: chrono::Utc::now().timestamp(),
+            to: request.to,
+        });
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -192,6 +223,7 @@ pub async fn execute_image(
     session_id: &str,
     request: SendImageRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -300,6 +332,7 @@ pub async fn execute_video(
     session_id: &str,
     request: SendVideoRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -408,6 +441,7 @@ pub async fn execute_audio(
     session_id: &str,
     request: SendAudioRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -502,6 +536,7 @@ pub async fn execute_document(
     session_id: &str,
     request: SendDocumentRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -611,6 +646,7 @@ pub async fn execute_sticker(
     session_id: &str,
     request: SendStickerRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -704,6 +740,7 @@ pub async fn execute_location(
     session_id: &str,
     request: SendLocationRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -783,6 +820,7 @@ pub async fn execute_contact(
     session_id: &str,
     request: SendContactRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -883,6 +921,7 @@ pub async fn send_reaction(
     Path(session_id): Path<String>,
     Json(request): Json<SendReactionRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
+    require_web_provider(&state, &session_id).await?;
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -1043,6 +1082,7 @@ pub async fn execute_buttons(
     session_id: &str,
     request: SendButtonsRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -1149,6 +1189,7 @@ pub async fn execute_list(
     session_id: &str,
     request: SendListRequest,
 ) -> Result<MessageResponse, ApiError> {
+    require_web_provider(state, session_id).await?;
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -3544,6 +3585,22 @@ pub async fn mark_as_read(
     Path(session_id): Path<String>,
     Json(request): Json<MarkAsReadRequest>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(&session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        for id in &request.message_ids {
+            cloud
+                .mark_read(id)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        return Ok(Json(SuccessResponse { success: true }));
+    }
+
     let client = get_client(&state, &session_id)?;
     let chat_jid = parse_jid(&request.chat_jid)?;
 
@@ -3559,6 +3616,29 @@ pub async fn mark_as_read(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(SuccessResponse { success: true }))
+}
+
+/// Rejects a request against a handler that has no `whatsapp_cloud`
+/// counterpart yet (groups, polls, calls, presence, most interactive
+/// message types) with a clear 400 instead of letting it fall through
+/// to [`get_client`], which would return a confusing 503 -- there is no
+/// live whatsapp-rust client to find for a Cloud API session, since it
+/// never opens one.
+pub(crate) async fn require_web_provider(
+    state: &AppState,
+    session_id: &str,
+) -> Result<(), ApiError> {
+    if state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+        .is_some()
+    {
+        return Err(ApiError::BadRequest(
+            "this endpoint is not supported for whatsapp_cloud sessions".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn get_client(

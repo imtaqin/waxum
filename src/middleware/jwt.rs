@@ -14,7 +14,11 @@
 //! every session, unchanged from before this existed.
 //!
 //! `/health` and `/metrics` are always allowed through so probes and
-//! scrapers don't need credentials. `/swagger-ui` and `/api-docs` go
+//! scrapers don't need credentials. Any `.../cloud/webhook` path is also
+//! exempt -- Meta calls it directly and only ever presents its own
+//! `X-Hub-Signature-256`, verified per-session inside the handler against
+//! that session's own `cloud_app_secret`, never a waxum bearer token.
+//! `/swagger-ui` and `/api-docs` go
 //! through the same check as everything else — either header carries the
 //! plain `SUPERADMIN_TOKEN` (or a superadmin JWT), or the browser already
 //! holds the `waxum_console` cookie from a console login, so a signed-in
@@ -155,6 +159,10 @@ pub async fn jwt_auth_middleware(
 ) -> Response {
     let path = request.uri().path();
     if matches!(path, "/health" | "/livez" | "/readyz" | "/metrics") {
+        return next.run(request).await;
+    }
+
+    if path.ends_with("/cloud/webhook") {
         return next.run(request).await;
     }
 

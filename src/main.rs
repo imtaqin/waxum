@@ -126,6 +126,8 @@ use state::AppState;
         handlers::sessions::import_session,
         handlers::sessions::get_device_info,
 
+        handlers::cloud::connect_cloud,
+
         handlers::messages::send_text,
         handlers::messages::send_image,
         handlers::messages::send_video,
@@ -305,6 +307,9 @@ use state::AppState;
             models::sessions::QrCodeResponse,
             models::sessions::SessionStatusResponse,
             models::sessions::DeviceInfo,
+
+            models::cloud::ConnectCloudRequest,
+            models::cloud::ConnectCloudResponse,
 
             models::messages::SendTextRequest,
             models::messages::SendImageRequest,

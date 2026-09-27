@@ -31,6 +31,7 @@ pub mod bulk;
 pub mod business;
 pub mod calls;
 pub mod chatstate;
+pub mod cloud;
 pub mod contacts;
 pub mod events;
 pub mod fake_reply;

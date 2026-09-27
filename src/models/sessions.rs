@@ -93,6 +93,28 @@ pub struct SessionInfo {
     pub last_connected_at: Option<i64>,
     /// Whether session is authenticated
     pub is_logged_in: bool,
+    /// `whatsapp_web` (default, unofficial multi-device protocol) or
+    /// `whatsapp_cloud` (Meta's official Cloud API, set via
+    /// `POST /sessions/{id}/cloud/connect`).
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    /// Cloud API WhatsApp Business Account ID, set only on `whatsapp_cloud`
+    /// sessions.
+    #[serde(default)]
+    pub cloud_waba_id: Option<String>,
+    /// Cloud API phone number ID, set only on `whatsapp_cloud` sessions.
+    #[serde(default)]
+    pub cloud_phone_number_id: Option<String>,
+    /// Cloud API Meta Business ID, set only on `whatsapp_cloud` sessions.
+    #[serde(default)]
+    pub cloud_business_id: Option<String>,
+    /// Cloud API app ID, set only on `whatsapp_cloud` sessions.
+    #[serde(default)]
+    pub cloud_app_id: Option<String>,
+}
+
+fn default_provider() -> String {
+    "whatsapp_web".to_string()
 }
 
 /// Request to create a new session

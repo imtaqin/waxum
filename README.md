@@ -236,6 +236,20 @@ waxum cannot itself be published to crates.io. The reasoning, the risk,
 and the bump cadence are written down in
 **[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)**.
 
+## Providers
+
+A session's `provider` is `whatsapp_web` (default, the unofficial
+multi-device protocol above) or `whatsapp_cloud` (Meta's official WhatsApp
+Cloud API). Attach Cloud API credentials with `POST
+/sessions/{id}/cloud/connect`; Meta's webhook deliveries land on `GET`/`POST
+/sessions/{id}/cloud/webhook` (exempt from the normal bearer-auth check --
+verified instead against that session's own `cloud_app_secret`). Text
+messages and read receipts dispatch to the Cloud API for a `whatsapp_cloud`
+session; other send endpoints without a Cloud equivalent yet return `400`
+rather than a confusing `503`. Phase 1 -- templates, media by upload, the
+Embedded Signup OAuth exchange, and the rest of the message types are not
+in this pass yet.
+
 ## Endpoints
 
 | URL | Purpose |

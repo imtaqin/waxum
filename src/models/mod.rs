@@ -5,6 +5,7 @@ pub mod bulk;
 pub mod business;
 pub mod calls;
 pub mod chatstate;
+pub mod cloud;
 pub mod common;
 pub mod contacts;
 pub mod groups;

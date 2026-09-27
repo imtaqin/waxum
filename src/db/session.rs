@@ -8,6 +8,17 @@ use mysql_async::Pool as MyPool;
 
 pub type SqlitePool = SqliteHandle;
 
+/// Cloud API credentials for a `whatsapp_cloud` session, read internally by
+/// [`crate::cloud::client::CloudClient`] and the webhook verifier. Never
+/// serialized into an HTTP response.
+#[derive(Debug, Clone)]
+pub struct CloudCredentials {
+    pub phone_number_id: String,
+    pub access_token: String,
+    pub app_secret: String,
+    pub webhook_verify_token: String,
+}
+
 #[derive(Clone)]
 pub enum DbPool {
     Postgres(PgPool),
@@ -122,7 +133,7 @@ impl SessionManager {
                 sqlite_blocking(pool, move |conn| {
                     let mut out = sqlite_raw::query(
                         conn,
-                        "SELECT id, name, phone_number, push_name, status, is_logged_in, created_at, updated_at, last_connected_at FROM sessions WHERE id = ?",
+                        "SELECT id, name, phone_number, push_name, status, is_logged_in, created_at, updated_at, last_connected_at, provider, cloud_waba_id, cloud_phone_number_id, cloud_business_id, cloud_app_id FROM sessions WHERE id = ?",
                         &[SQ::Text(id_s)],
                         sqlite_row_to_session,
                     )?;
@@ -183,7 +194,7 @@ impl SessionManager {
             DbPool::SQLite(pool) => sqlite_blocking(pool, |conn| {
                 sqlite_raw::query(
                     conn,
-                    "SELECT id, name, phone_number, push_name, status, is_logged_in, created_at, updated_at, last_connected_at FROM sessions ORDER BY created_at DESC",
+                    "SELECT id, name, phone_number, push_name, status, is_logged_in, created_at, updated_at, last_connected_at, provider, cloud_waba_id, cloud_phone_number_id, cloud_business_id, cloud_app_id FROM sessions ORDER BY created_at DESC",
                     &[],
                     sqlite_row_to_session,
                 )
@@ -279,6 +290,159 @@ impl SessionManager {
             }
         }
         Ok(())
+    }
+
+    /// Attaches Cloud API credentials to a session and flips its
+    /// `provider` to `whatsapp_cloud`. Secrets (`access_token`,
+    /// `app_secret`, `webhook_verify_token`) land in the DB here but are
+    /// never read back through [`SessionInfo`] -- fetch them via
+    /// [`Self::get_cloud_credentials`] instead.
+    pub async fn connect_cloud(
+        &self,
+        id: &str,
+        req: &crate::models::cloud::ConnectCloudRequest,
+    ) -> anyhow::Result<()> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                client
+                    .execute(
+                        "UPDATE sessions SET provider = 'whatsapp_cloud', cloud_waba_id = $1, cloud_phone_number_id = $2, cloud_business_id = $3, cloud_access_token = $4, cloud_app_id = $5, cloud_app_secret = $6, cloud_webhook_verify_token = $7, updated_at = NOW() WHERE id = $8",
+                        &[
+                            &req.waba_id,
+                            &req.phone_number_id,
+                            &req.business_id,
+                            &req.access_token,
+                            &req.app_id,
+                            &req.app_secret,
+                            &req.webhook_verify_token,
+                            &id,
+                        ],
+                    )
+                    .await?;
+            }
+            DbPool::MySQL(pool) => {
+                let now = now_str();
+                let mut conn = pool.get_conn().await?;
+                conn.exec_drop(
+                    "UPDATE sessions SET provider = 'whatsapp_cloud', cloud_waba_id = ?, cloud_phone_number_id = ?, cloud_business_id = ?, cloud_access_token = ?, cloud_app_id = ?, cloud_app_secret = ?, cloud_webhook_verify_token = ?, updated_at = ? WHERE id = ?",
+                    (
+                        &req.waba_id,
+                        &req.phone_number_id,
+                        &req.business_id,
+                        &req.access_token,
+                        &req.app_id,
+                        &req.app_secret,
+                        &req.webhook_verify_token,
+                        &now,
+                        id,
+                    ),
+                )
+                .await?;
+            }
+            DbPool::SQLite(pool) => {
+                let id_s = id.to_string();
+                let waba_id = req.waba_id.clone();
+                let phone_number_id = req.phone_number_id.clone();
+                let business_id = SQ::from_opt_str(req.business_id.as_deref());
+                let access_token = req.access_token.clone();
+                let app_id = SQ::from_opt_str(req.app_id.as_deref());
+                let app_secret = req.app_secret.clone();
+                let webhook_verify_token = req.webhook_verify_token.clone();
+                let now = now_str();
+                sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "UPDATE sessions SET provider = 'whatsapp_cloud', cloud_waba_id = ?, cloud_phone_number_id = ?, cloud_business_id = ?, cloud_access_token = ?, cloud_app_id = ?, cloud_app_secret = ?, cloud_webhook_verify_token = ?, updated_at = ? WHERE id = ?",
+                        &[
+                            SQ::Text(waba_id),
+                            SQ::Text(phone_number_id),
+                            business_id,
+                            SQ::Text(access_token),
+                            app_id,
+                            SQ::Text(app_secret),
+                            SQ::Text(webhook_verify_token),
+                            SQ::Text(now),
+                            SQ::Text(id_s),
+                        ],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads back the Cloud API credentials stored by
+    /// [`Self::connect_cloud`], for internal use by
+    /// [`crate::cloud::client::CloudClient`] and the webhook verifier.
+    /// Never exposed through the HTTP API.
+    pub async fn get_cloud_credentials(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<Option<CloudCredentials>> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                let row = client
+                    .query_opt(
+                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = $1",
+                        &[&id],
+                    )
+                    .await?;
+                Ok(row.and_then(|r| {
+                    let provider: String = r.get("provider");
+                    (provider == "whatsapp_cloud").then(|| CloudCredentials {
+                        phone_number_id: r.get("cloud_phone_number_id"),
+                        access_token: r.get("cloud_access_token"),
+                        app_secret: r.get("cloud_app_secret"),
+                        webhook_verify_token: r.get("cloud_webhook_verify_token"),
+                    })
+                }))
+            }
+            DbPool::MySQL(pool) => {
+                let mut conn = pool.get_conn().await?;
+                let row: Option<mysql_async::Row> = conn
+                    .exec_first(
+                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = ?",
+                        (id,),
+                    )
+                    .await?;
+                Ok(row.and_then(|r| {
+                    let provider = my_get_string(&r, "provider").unwrap_or_default();
+                    (provider == "whatsapp_cloud").then(|| CloudCredentials {
+                        phone_number_id: my_get_string(&r, "cloud_phone_number_id")
+                            .unwrap_or_default(),
+                        access_token: my_get_string(&r, "cloud_access_token").unwrap_or_default(),
+                        app_secret: my_get_string(&r, "cloud_app_secret").unwrap_or_default(),
+                        webhook_verify_token: my_get_string(&r, "cloud_webhook_verify_token")
+                            .unwrap_or_default(),
+                    })
+                }))
+            }
+            DbPool::SQLite(pool) => {
+                let id_s = id.to_string();
+                sqlite_blocking(pool, move |conn| {
+                    let mut out = sqlite_raw::query(
+                        conn,
+                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = ?",
+                        &[SQ::Text(id_s)],
+                        |row| {
+                            let provider = row.get_string(0).unwrap_or_default();
+                            (provider == "whatsapp_cloud").then(|| CloudCredentials {
+                                phone_number_id: row.get_string(1).unwrap_or_default(),
+                                access_token: row.get_string(2).unwrap_or_default(),
+                                app_secret: row.get_string(3).unwrap_or_default(),
+                                webhook_verify_token: row.get_string(4).unwrap_or_default(),
+                            })
+                        },
+                    )?;
+                    Ok(out.pop().flatten())
+                })
+                .await
+            }
+        }
     }
 
     pub async fn update_last_connected(&self, id: &str) -> anyhow::Result<()> {
@@ -636,6 +800,11 @@ fn pg_row_to_session(row: &tokio_postgres::Row) -> SessionInfo {
         updated_at: updated_at.timestamp(),
         last_connected_at: last_connected_at.map(|t| t.timestamp()),
         is_logged_in: row.get("is_logged_in"),
+        provider: row.get("provider"),
+        cloud_waba_id: row.get("cloud_waba_id"),
+        cloud_phone_number_id: row.get("cloud_phone_number_id"),
+        cloud_business_id: row.get("cloud_business_id"),
+        cloud_app_id: row.get("cloud_app_id"),
     }
 }
 
@@ -704,6 +873,11 @@ fn my_row_to_session(row: &mysql_async::Row) -> SessionInfo {
         updated_at: parse_mysql_timestamp(updated_at.as_deref()).unwrap_or(0),
         last_connected_at: parse_mysql_timestamp(last_connected_at.as_deref()),
         is_logged_in: is_logged_in != 0,
+        provider: my_get_string(row, "provider").unwrap_or_else(|| "whatsapp_web".to_string()),
+        cloud_waba_id: my_get_string(row, "cloud_waba_id"),
+        cloud_phone_number_id: my_get_string(row, "cloud_phone_number_id"),
+        cloud_business_id: my_get_string(row, "cloud_business_id"),
+        cloud_app_id: my_get_string(row, "cloud_app_id"),
     }
 }
 
@@ -768,6 +942,13 @@ fn sqlite_row_to_session(row: &sqlite_raw::Row) -> SessionInfo {
             .as_deref()
             .and_then(|s| parse_mysql_timestamp(Some(s))),
         is_logged_in: logged != 0,
+        provider: row
+            .get_string(9)
+            .unwrap_or_else(|| "whatsapp_web".to_string()),
+        cloud_waba_id: row.get_string(10),
+        cloud_phone_number_id: row.get_string(11),
+        cloud_business_id: row.get_string(12),
+        cloud_app_id: row.get_string(13),
     }
 }
 

@@ -32,7 +32,15 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 is_logged_in INTEGER NOT NULL DEFAULT 0, \
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
                 updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')), \
-                last_connected_at TEXT \
+                last_connected_at TEXT, \
+                provider TEXT NOT NULL DEFAULT 'whatsapp_web', \
+                cloud_waba_id TEXT, \
+                cloud_phone_number_id TEXT, \
+                cloud_business_id TEXT, \
+                cloud_access_token TEXT, \
+                cloud_app_id TEXT, \
+                cloud_app_secret TEXT, \
+                cloud_webhook_verify_token TEXT \
              ); \
              CREATE TABLE IF NOT EXISTS webhooks ( \
                 id TEXT PRIMARY KEY, \
@@ -161,6 +169,31 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
              ); \
              CREATE INDEX IF NOT EXISTS idx_token_sessions_session ON token_sessions(session_id);",
         )?;
+        let existing_session_columns: HashSet<String> = sqlite_raw::query(
+            conn,
+            "PRAGMA table_info(sessions)",
+            &[],
+            |row| row.get_string(1).unwrap_or_default(),
+        )?
+        .into_iter()
+        .collect();
+        for (column, definition) in [
+            ("provider", "TEXT NOT NULL DEFAULT 'whatsapp_web'"),
+            ("cloud_waba_id", "TEXT"),
+            ("cloud_phone_number_id", "TEXT"),
+            ("cloud_business_id", "TEXT"),
+            ("cloud_access_token", "TEXT"),
+            ("cloud_app_id", "TEXT"),
+            ("cloud_app_secret", "TEXT"),
+            ("cloud_webhook_verify_token", "TEXT"),
+        ] {
+            if !existing_session_columns.contains(column) {
+                sqlite_raw::exec_batch(
+                    conn,
+                    &format!("ALTER TABLE sessions ADD COLUMN {column} {definition}"),
+                )?;
+            }
+        }
         let existing_columns: HashSet<String> = sqlite_raw::query(
             conn,
             "PRAGMA table_info(messages)",
@@ -223,6 +256,19 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
             &[],
         )
         .await?;
+
+    for sql in [
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS provider VARCHAR(32) NOT NULL DEFAULT 'whatsapp_web'",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_waba_id VARCHAR(255)",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_phone_number_id VARCHAR(255)",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_business_id VARCHAR(255)",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_access_token TEXT",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_app_id VARCHAR(255)",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_app_secret TEXT",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_webhook_verify_token TEXT",
+    ] {
+        client.execute(sql, &[]).await?;
+    }
 
     client
         .execute(
@@ -737,6 +783,14 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
         "ALTER TABLE messages ADD COLUMN mimetype VARCHAR(255) NULL",
         "ALTER TABLE messages ADD COLUMN quoted_message_id VARCHAR(255) NULL",
         "ALTER TABLE messages ADD COLUMN quoted_sender_jid VARCHAR(255) NULL",
+        "ALTER TABLE sessions ADD COLUMN provider VARCHAR(32) NOT NULL DEFAULT 'whatsapp_web'",
+        "ALTER TABLE sessions ADD COLUMN cloud_waba_id VARCHAR(255) NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_phone_number_id VARCHAR(255) NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_business_id VARCHAR(255) NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_access_token TEXT NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_app_id VARCHAR(255) NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_app_secret TEXT NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_webhook_verify_token TEXT NULL",
     ];
     for sql in &migrations {
         let _ = conn.query_drop(*sql).await;
