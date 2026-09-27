@@ -127,6 +127,8 @@ use state::AppState;
         handlers::sessions::get_device_info,
 
         handlers::cloud::connect_cloud,
+        handlers::cloud::embedded_signup_exchange,
+        handlers::cloud::send_template,
 
         handlers::messages::send_text,
         handlers::messages::send_image,
@@ -310,6 +312,9 @@ use state::AppState;
 
             models::cloud::ConnectCloudRequest,
             models::cloud::ConnectCloudResponse,
+            models::cloud::EmbeddedSignupExchangeRequest,
+            models::cloud::EmbeddedSignupExchangeResponse,
+            models::cloud::SendTemplateRequest,
 
             models::messages::SendTextRequest,
             models::messages::SendImageRequest,

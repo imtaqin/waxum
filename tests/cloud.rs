@@ -106,7 +106,7 @@ async fn get_session_never_leaks_the_cloud_access_token_or_app_secret() {
 }
 
 #[tokio::test]
-async fn unsupported_endpoint_on_a_cloud_session_returns_400_not_503() {
+async fn location_dispatches_through_the_cloud_client_instead_of_falling_through_to_get_client() {
     let h = Harness::new().await;
     create_cloud_session(&h, "cloud-3").await;
 
@@ -120,14 +120,32 @@ async fn unsupported_endpoint_on_a_cloud_session_returns_400_not_503() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
-    let message = body
-        .pointer("/error/message")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    assert!(
-        message.contains("whatsapp_cloud"),
-        "expected a provider-aware 400, got: {message}"
+    assert_ne!(
+        status,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "a whatsapp_cloud session must never hit the whatsapp-rust get_client() 503 path: {body}"
+    );
+}
+
+#[tokio::test]
+async fn a_send_type_with_no_cloud_dispatch_yet_still_503s_via_get_client() {
+    let h = Harness::new().await;
+    create_cloud_session(&h, "cloud-3b").await;
+
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/cloud-3b/messages/poll",
+            Some(TEST_TOKEN),
+            json!({"to": "15551234567", "name": "q", "options": ["a", "b"]}),
+        ),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "polls have no Cloud API equivalent and are out of scope for Phase 1b"
     );
 }
 
@@ -158,6 +176,70 @@ async fn webhook_verify_handshake_echoes_challenge_only_on_matching_token() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn send_template_rejects_a_whatsapp_web_session_with_400() {
+    let h = Harness::new().await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(TEST_TOKEN),
+            json!({"id": "web-only-1"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/web-only-1/messages/template",
+            Some(TEST_TOKEN),
+            json!({"to": "15551234567", "name": "hello_world", "language_code": "en_US"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+}
+
+#[tokio::test]
+async fn cloud_media_routes_reject_a_whatsapp_web_session_with_400() {
+    let h = Harness::new().await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(TEST_TOKEN),
+            json!({"id": "web-only-2"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = call(
+        &h.app,
+        common::req_get(
+            "/api/v1/sessions/web-only-2/cloud/media/some-id",
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        &h.app,
+        common::req_delete(
+            "/api/v1/sessions/web-only-2/cloud/media/some-id",
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 fn signed_post(path: &str, body: &serde_json::Value, secret: &str) -> Request<Body> {
