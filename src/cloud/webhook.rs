@@ -71,9 +71,9 @@ pub fn verify_challenge<'a>(
 /// (`catalog_id`, `product_retailer_id`) is set when the customer's
 /// message was sent from a product's "Message business" button.
 ///
-/// Only inbound `messages[]` entries produce an event; `statuses[]`
-/// (delivered/read/failed) delivery-status updates are not yet mapped to
-/// a webhook event of their own in this phase.
+/// Only inbound `messages[]` entries produce a `message` event here;
+/// `statuses[]` updates become `receipt` events via
+/// [`normalize_statuses`].
 pub fn normalize_messages(payload: &serde_json::Value) -> Vec<serde_json::Value> {
     let mut out = Vec::new();
     let Some(entries) = payload.get("entry").and_then(|v| v.as_array()) else {
@@ -97,6 +97,121 @@ pub fn normalize_messages(payload: &serde_json::Value) -> Vec<serde_json::Value>
         }
     }
     out
+}
+
+/// Normalizes Meta's `statuses[]` updates into waxum `receipt` events,
+/// one per status. Unlike whatsapp-rust's receipt (a debug string), each
+/// carries structured fields: `message_id`, `recipient`, `status`
+/// (`sent`/`delivered`/`read`/`failed`, or for payments
+/// `captured`/`pending`/`failed`), `timestamp`, plus Meta's `type`,
+/// `errors`, `conversation`, `pricing` and `payment` objects when
+/// present, so a failed send's reason and a payment's `reference_id`
+/// reach the consumer.
+pub fn normalize_statuses(payload: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    let changes = payload
+        .get("entry")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.get("changes").and_then(|v| v.as_array()))
+        .flatten();
+    for change in changes {
+        let Some(value) = change.get("value") else {
+            continue;
+        };
+        let phone_number_id = value
+            .get("metadata")
+            .and_then(|m| m.get("phone_number_id"))
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let Some(statuses) = value.get("statuses").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for s in statuses {
+            let timestamp = s
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .and_then(|t| t.parse::<i64>().ok());
+            let recipient = s.get("recipient_id").or_else(|| s.get("from")).cloned();
+            out.push(serde_json::json!({
+                "provider": "whatsapp_cloud",
+                "chat": phone_number_id,
+                "message_id": s.get("id"),
+                "recipient": recipient,
+                "status": s.get("status"),
+                "type": s.get("type"),
+                "timestamp": timestamp,
+                "errors": s.get("errors"),
+                "conversation": s.get("conversation"),
+                "pricing": s.get("pricing"),
+                "payment": s.get("payment"),
+            }));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::normalize_statuses;
+    use serde_json::json;
+
+    fn wrap(statuses: serde_json::Value) -> serde_json::Value {
+        json!({"entry": [{"changes": [{"value": {
+            "metadata": {"phone_number_id": "106540"},
+            "statuses": statuses
+        }}]}]})
+    }
+
+    #[test]
+    fn delivery_status_becomes_a_structured_receipt() {
+        let out = normalize_statuses(&wrap(json!([{
+            "id": "wamid.X",
+            "recipient_id": "6281",
+            "status": "delivered",
+            "timestamp": "1700000000",
+            "conversation": {"id": "c1", "origin": {"type": "utility"}},
+            "pricing": {"billable": true, "category": "utility"}
+        }])));
+        assert_eq!(out.len(), 1);
+        let r = &out[0];
+        assert_eq!(r["message_id"], "wamid.X");
+        assert_eq!(r["recipient"], "6281");
+        assert_eq!(r["status"], "delivered");
+        assert_eq!(r["timestamp"], 1700000000);
+        assert_eq!(r["chat"], "106540");
+        assert_eq!(r["pricing"]["category"], "utility");
+        assert_eq!(r["errors"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn failed_status_keeps_metas_error_detail() {
+        let out = normalize_statuses(&wrap(json!([{
+            "id": "wamid.F", "recipient_id": "6281", "status": "failed", "timestamp": "1",
+            "errors": [{"code": 131047, "title": "Re-engagement message"}]
+        }])));
+        assert_eq!(out[0]["errors"][0]["code"], 131047);
+    }
+
+    #[test]
+    fn payment_status_keeps_the_reference_id() {
+        let out = normalize_statuses(&wrap(json!([{
+            "id": "wamid.P", "from": "6281", "type": "payment", "status": "captured",
+            "payment": {"reference_id": "ref-1"}, "timestamp": "2"
+        }])));
+        assert_eq!(out[0]["type"], "payment");
+        assert_eq!(out[0]["status"], "captured");
+        assert_eq!(out[0]["recipient"], "6281");
+        assert_eq!(out[0]["payment"]["reference_id"], "ref-1");
+    }
+
+    #[test]
+    fn a_messages_only_delivery_yields_no_receipts() {
+        let payload = json!({"entry": [{"changes": [{"value": {"messages": [{"id": "m"}]}}]}]});
+        assert!(normalize_statuses(&payload).is_empty());
+        assert!(normalize_statuses(&json!({})).is_empty());
+    }
 }
 
 fn normalize_one_message(

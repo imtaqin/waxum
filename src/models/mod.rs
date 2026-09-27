@@ -6,6 +6,7 @@ pub mod business;
 pub mod calls;
 pub mod chatstate;
 pub mod cloud;
+pub mod cloud_admin;
 pub mod cloud_commerce;
 pub mod common;
 pub mod contacts;

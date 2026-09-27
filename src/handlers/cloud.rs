@@ -236,6 +236,23 @@ pub async fn cloud_webhook_receive(
                 .await;
         }
     }
+    for data in webhook::normalize_statuses(&payload) {
+        let envelope = serde_json::json!({
+            "session_id": session_id,
+            "event": "receipt",
+            "timestamp": timestamp,
+            "offline": false,
+            "data": data,
+        });
+        if let Ok(payload_str) = serde_json::to_string(&envelope) {
+            state
+                .broadcast_to_webhooks(&session_id, "receipt", &payload_str)
+                .await;
+            state
+                .publish_to_nats(&session_id, "receipt", &payload_str)
+                .await;
+        }
+    }
 
     StatusCode::OK
 }

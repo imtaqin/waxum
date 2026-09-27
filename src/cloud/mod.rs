@@ -20,4 +20,5 @@
 pub mod client;
 pub mod embedded_signup;
 pub mod flows_crypto;
+pub mod graph;
 pub mod webhook;

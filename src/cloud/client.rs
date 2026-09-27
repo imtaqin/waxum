@@ -40,10 +40,10 @@ pub struct SendInteractiveListRequest<'a> {
 }
 
 pub struct CloudClient {
-    http: reqwest::Client,
-    base_url: String,
-    phone_number_id: String,
-    access_token: String,
+    pub(super) http: reqwest::Client,
+    pub(super) base_url: String,
+    pub(super) phone_number_id: String,
+    pub(super) access_token: String,
 }
 
 impl CloudClient {
