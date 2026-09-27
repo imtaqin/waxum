@@ -58,6 +58,13 @@ pub fn verify_challenge<'a>(
 /// `quoted_sender_jid` -- so a consumer's webhook receiver doesn't need
 /// a provider-specific code path.
 ///
+/// `interactive` replies have no whatsapp-rust counterpart, so they get
+/// two Cloud-only fields rather than being dropped: `interactive` carries
+/// Meta's object as-is (`button_reply`, `list_reply` or `nfm_reply`), and
+/// `flow_response` is a completed Flow's `nfm_reply.response_json`
+/// parsed from the JSON string Meta sends it as, so the submitted form
+/// arrives as an object. Both are `null` for every other message type.
+///
 /// Commerce adds two Cloud-only fields, `null` unless present: `order` is
 /// Meta's cart object (`catalog_id`, `product_items`, `text`) for a
 /// `message_type: "order"` submission, and `referred_product`
@@ -144,6 +151,15 @@ fn normalize_one_message(
     let location = (msg_type == "location")
         .then(|| msg.get("location").cloned())
         .flatten();
+    let interactive = (msg_type == "interactive")
+        .then(|| msg.get("interactive").cloned())
+        .flatten();
+    let flow_response = interactive
+        .as_ref()
+        .and_then(|i| i.get("nfm_reply"))
+        .and_then(|r| r.get("response_json"))
+        .and_then(|v| v.as_str())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
     let quoted_message_id = msg
         .get("context")
         .and_then(|c| c.get("id"))
@@ -193,6 +209,8 @@ fn normalize_one_message(
         "caption": caption,
         "media": media,
         "location": location,
+        "interactive": interactive,
+        "flow_response": flow_response,
         "is_group": false,
         "participant": from,
     })
@@ -268,6 +286,8 @@ mod tests {
         assert_eq!(e["push_name"], "Ada");
         assert_eq!(e["order"], serde_json::Value::Null);
         assert_eq!(e["referred_product"], serde_json::Value::Null);
+        assert_eq!(e["interactive"], serde_json::Value::Null);
+        assert_eq!(e["flow_response"], serde_json::Value::Null);
     }
 
     fn one_message(msg: serde_json::Value) -> serde_json::Value {
@@ -324,5 +344,56 @@ mod tests {
         assert_eq!(e["text"], "is this in stock?");
         assert_eq!(e["referred_product"]["product_retailer_id"], "SKU-7");
         assert_eq!(e["order"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn keeps_a_completed_flows_submitted_form_as_an_object() {
+        let payload = serde_json::json!({
+            "entry": [{
+                "changes": [{
+                    "value": {
+                        "metadata": {"phone_number_id": "106540", "display_phone_number": "15551234567"},
+                        "messages": [{
+                            "from": "15559876543",
+                            "id": "wamid.FLOW",
+                            "timestamp": "1700000000",
+                            "type": "interactive",
+                            "context": {"id": "wamid.SENTFLOW", "from": "15551234567"},
+                            "interactive": {
+                                "type": "nfm_reply",
+                                "nfm_reply": {
+                                    "name": "flow",
+                                    "body": "Sent",
+                                    "response_json": "{\"flow_token\":\"tok-1\",\"slot\":\"09:00\"}"
+                                }
+                            }
+                        }]
+                    }
+                }]
+            }]
+        });
+        let e = &normalize_messages(&payload)[0];
+        assert_eq!(e["message_type"], "interactive");
+        assert_eq!(e["interactive"]["type"], "nfm_reply");
+        assert_eq!(e["flow_response"]["flow_token"], "tok-1");
+        assert_eq!(e["flow_response"]["slot"], "09:00");
+        assert_eq!(e["quoted_message_id"], "wamid.SENTFLOW");
+    }
+
+    #[test]
+    fn keeps_a_button_reply_payload() {
+        let payload = serde_json::json!({
+            "entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": "106540"},
+                "messages": [{
+                    "from": "1", "id": "wamid.B", "timestamp": "1700000000",
+                    "type": "interactive",
+                    "interactive": {"type": "button_reply", "button_reply": {"id": "yes", "title": "Yes"}}
+                }]
+            }}]}]
+        });
+        let e = &normalize_messages(&payload)[0];
+        assert_eq!(e["interactive"]["button_reply"]["id"], "yes");
+        assert_eq!(e["flow_response"], serde_json::Value::Null);
     }
 }

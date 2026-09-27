@@ -74,6 +74,11 @@ hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 
+# Crypto for the WhatsApp Flows Data Exchange handshake (RSA-OAEP key
+# unwrap + AES-128-GCM payload encrypt/decrypt).
+rsa = "0.9"
+aes-gcm = "0.10"
+
 # URL parsing for the SSRF guard (net_guard.rs) -- validating scheme and
 # host before any server-side fetch of a caller-supplied URL.
 url = "2"

@@ -415,6 +415,191 @@ impl CloudClient {
         Ok(resp.bytes().await?.to_vec())
     }
 
+    /// `POST {waba_id}/flows` (multipart) -- creates a Flow in draft
+    /// status, per "Create Flow". `categories` is the JSON-encoded array
+    /// string Meta expects in the form field (e.g. `["OTHER"]`).
+    pub async fn create_flow(
+        &self,
+        waba_id: &str,
+        name: &str,
+        categories: &[String],
+        clone_flow_id: Option<&str>,
+    ) -> Result<Value, CloudError> {
+        let categories_json =
+            serde_json::to_string(categories).unwrap_or_else(|_| "[]".to_string());
+        let mut form = reqwest::multipart::Form::new()
+            .text("name", name.to_string())
+            .text("categories", categories_json);
+        if let Some(id) = clone_flow_id {
+            form = form.text("clone_flow_id", id.to_string());
+        }
+        self.post_multipart(&format!("{}/{}/flows", self.base_url, waba_id), form)
+            .await
+    }
+
+    /// `GET {waba_id}/flows`, per "List Flows".
+    pub async fn list_flows(&self, waba_id: &str) -> Result<Value, CloudError> {
+        self.get_json(&format!("{}/{}/flows", self.base_url, waba_id))
+            .await
+    }
+
+    /// `GET {flow_id}?fields=...`, per "Get Flow".
+    pub async fn get_flow(&self, flow_id: &str) -> Result<Value, CloudError> {
+        self.get_json(&format!(
+            "{}/{}?fields=id,name,categories,preview,status,validation_errors,json_version,data_api_version,data_channel_uri,health_status,whatsapp_business_account,application",
+            self.base_url, flow_id
+        ))
+        .await
+    }
+
+    /// `POST {flow_id}` (multipart) -- renames/re-categorizes a Flow or
+    /// sets its `endpoint_uri`, per "Update Flow Metadata".
+    pub async fn update_flow_metadata(
+        &self,
+        flow_id: &str,
+        name: Option<&str>,
+        categories: Option<&[String]>,
+        endpoint_uri: Option<&str>,
+    ) -> Result<Value, CloudError> {
+        let mut form = reqwest::multipart::Form::new();
+        if let Some(name) = name {
+            form = form.text("name", name.to_string());
+        }
+        if let Some(categories) = categories {
+            let categories_json =
+                serde_json::to_string(categories).unwrap_or_else(|_| "[]".to_string());
+            form = form.text("categories", categories_json);
+        }
+        if let Some(uri) = endpoint_uri {
+            form = form.text("endpoint_uri", uri.to_string());
+        }
+        self.post_multipart(&format!("{}/{}", self.base_url, flow_id), form)
+            .await
+    }
+
+    /// `POST {flow_id}/assets` (multipart file upload, `asset_type:
+    /// FLOW_JSON`), per "Update Flow JSON".
+    pub async fn update_flow_json(
+        &self,
+        flow_id: &str,
+        flow_json_bytes: Vec<u8>,
+    ) -> Result<Value, CloudError> {
+        let part = reqwest::multipart::Part::bytes(flow_json_bytes)
+            .file_name("flow.json".to_string())
+            .mime_str("application/json")
+            .map_err(|e| CloudError::Api {
+                status: 0,
+                body: format!("invalid flow json part: {e}"),
+            })?;
+        let form = reqwest::multipart::Form::new()
+            .text("name", "flow.json".to_string())
+            .text("asset_type", "FLOW_JSON".to_string())
+            .part("file", part);
+        self.post_multipart(&format!("{}/{}/assets", self.base_url, flow_id), form)
+            .await
+    }
+
+    /// `GET {flow_id}/assets`, per "List Assets (Get Flow JSON URL)".
+    pub async fn get_flow_assets(&self, flow_id: &str) -> Result<Value, CloudError> {
+        self.get_json(&format!("{}/{}/assets", self.base_url, flow_id))
+            .await
+    }
+
+    /// `POST {flow_id}/publish`, per "Publish Flow".
+    pub async fn publish_flow(&self, flow_id: &str) -> Result<Value, CloudError> {
+        self.post_json(&format!("{}/{}/publish", self.base_url, flow_id), json!({}))
+            .await
+    }
+
+    /// `POST {flow_id}/deprecate`, per "Deprecate Flow".
+    pub async fn deprecate_flow(&self, flow_id: &str) -> Result<Value, CloudError> {
+        self.post_json(
+            &format!("{}/{}/deprecate", self.base_url, flow_id),
+            json!({}),
+        )
+        .await
+    }
+
+    /// `DELETE {flow_id}`, per "Delete Flow". Only draft (never
+    /// published) Flows can actually be deleted -- Meta itself enforces
+    /// that, this client just forwards the call.
+    pub async fn delete_flow(&self, flow_id: &str) -> Result<Value, CloudError> {
+        self.delete_json(&format!("{}/{}", self.base_url, flow_id))
+            .await
+    }
+
+    /// `POST {phone_number_id}/whatsapp_business_encryption` (multipart)
+    /// -- registers the business's RSA public key with Meta, per "Set
+    /// Encryption Public Key". The matching private key stays local,
+    /// stored on the session, and is only ever used to unwrap the
+    /// per-request AES key in [`crate::cloud::flows_crypto`].
+    pub async fn set_flow_encryption_public_key(
+        &self,
+        public_key_pem: &str,
+    ) -> Result<Value, CloudError> {
+        let form =
+            reqwest::multipart::Form::new().text("business_public_key", public_key_pem.to_string());
+        self.post_multipart(
+            &format!(
+                "{}/{}/whatsapp_business_encryption",
+                self.base_url, self.phone_number_id
+            ),
+            form,
+        )
+        .await
+    }
+
+    async fn post_multipart(
+        &self,
+        url: &str,
+        form: reqwest::multipart::Form,
+    ) -> Result<Value, CloudError> {
+        let resp = self
+            .http
+            .post(url)
+            .bearer_auth(&self.access_token)
+            .multipart(form)
+            .send()
+            .await?;
+        Self::parse_response(resp).await
+    }
+
+    async fn post_json(&self, url: &str, body: Value) -> Result<Value, CloudError> {
+        let resp = self
+            .http
+            .post(url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .await?;
+        Self::parse_response(resp).await
+    }
+
+    async fn delete_json(&self, url: &str) -> Result<Value, CloudError> {
+        let resp = self
+            .http
+            .delete(url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await?;
+        Self::parse_response(resp).await
+    }
+
+    async fn parse_response(resp: reqwest::Response) -> Result<Value, CloudError> {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(CloudError::Api {
+                status: status.as_u16(),
+                body,
+            });
+        }
+        serde_json::from_str(&body).map_err(|e| CloudError::Api {
+            status: status.as_u16(),
+            body: format!("failed to parse response: {e}: {body}"),
+        })
+    }
+
     /// `DELETE {media_id}?phone_number_id=...`, per "Delete Media".
     pub async fn delete_media(&self, media_id: &str) -> Result<Value, CloudError> {
         let url = format!(

@@ -18,6 +18,9 @@
 //! exempt -- Meta calls it directly and only ever presents its own
 //! `X-Hub-Signature-256`, verified per-session inside the handler against
 //! that session's own `cloud_app_secret`, never a waxum bearer token.
+//! `.../cloud/flow-endpoint/exchange` (the WhatsApp Flows Data Exchange
+//! endpoint) is exempt for the same reason; see
+//! [`crate::handlers::cloud_flows`] for its signature + RSA/AES checks.
 //! `/swagger-ui` and `/api-docs` go
 //! through the same check as everything else — either header carries the
 //! plain `SUPERADMIN_TOKEN` (or a superadmin JWT), or the browser already
@@ -162,7 +165,7 @@ pub async fn jwt_auth_middleware(
         return next.run(request).await;
     }
 
-    if path.ends_with("/cloud/webhook") {
+    if path.ends_with("/cloud/webhook") || path.ends_with("/cloud/flow-endpoint/exchange") {
         return next.run(request).await;
     }
 

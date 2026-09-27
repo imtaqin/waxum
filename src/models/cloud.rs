@@ -79,3 +79,85 @@ pub struct SendTemplateRequest {
     #[serde(default)]
     pub components: serde_json::Value,
 }
+
+/// `POST /sessions/{id}/cloud/flows` -- creates a Flow in draft status.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateFlowRequest {
+    #[schema(example = "Appointment booking")]
+    pub name: String,
+    /// At least one of: `SIGN_UP`, `SIGN_IN`, `APPOINTMENT_BOOKING`,
+    /// `LEAD_GENERATION`, `CONTACT_US`, `CUSTOMER_SUPPORT`, `SURVEY`,
+    /// `OTHER`.
+    #[schema(example = json!(["APPOINTMENT_BOOKING"]))]
+    pub categories: Vec<String>,
+    pub clone_flow_id: Option<String>,
+}
+
+/// `POST /sessions/{id}/cloud/flows/{flow_id}` -- updates a Flow's
+/// name/categories/endpoint URI. Every field is optional; only the ones
+/// present are sent to Meta.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateFlowMetadataRequest {
+    pub name: Option<String>,
+    pub categories: Option<Vec<String>>,
+    pub endpoint_uri: Option<String>,
+}
+
+/// `POST /sessions/{id}/cloud/flow-endpoint` -- configures this session
+/// as a Flows Data Exchange endpoint. The public half of the RSA keypair
+/// is registered with Meta; the private half is stored on the session and
+/// never returned by any GET.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ConfigureFlowEndpointRequest {
+    /// PEM RSA private key (PKCS#1 or PKCS#8, 2048-bit or larger). Omit it
+    /// to have waxum generate a fresh 2048-bit keypair, so the private key
+    /// never has to leave this server at all.
+    #[schema(example = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----")]
+    pub private_key: Option<String>,
+    /// Public `http`/`https` URL that decrypted `INIT`/`data_exchange`/
+    /// `BACK` requests are POSTed to as JSON; its JSON reply is encrypted
+    /// and returned to Meta as the next screen. Omit it to answer only
+    /// Meta's health-check ping.
+    #[schema(example = "https://example.com/flows/handler")]
+    pub forward_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ConfigureFlowEndpointResponse {
+    /// The public key that was registered with Meta.
+    pub public_key: String,
+    /// The URL to set as the Flow's `endpoint_uri`.
+    #[schema(
+        example = "https://waxum.example.com/api/v1/sessions/cloud-1/cloud/flow-endpoint/exchange"
+    )]
+    pub endpoint_path: String,
+    /// Meta's raw response to the key registration.
+    pub meta_response: serde_json::Value,
+}
+
+/// `POST /sessions/{id}/cloud/flows/{flow_id}/send` -- sends a Flow as an
+/// interactive message, per "Send Flow".
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SendFlowRequest {
+    #[schema(example = "6281234567890")]
+    pub to: String,
+    #[schema(example = "Book now")]
+    pub flow_cta: String,
+    #[schema(example = "Pick a time slot for your appointment")]
+    pub body: String,
+    pub header: Option<String>,
+    pub footer: Option<String>,
+    /// Opaque token echoed back in every data-exchange request and in the
+    /// completion webhook, for correlating a Flow run with your own state.
+    pub flow_token: Option<String>,
+    /// `published` (default) or `draft` -- draft Flows can only be sent to
+    /// the WABA's own test numbers.
+    pub mode: Option<String>,
+    /// `navigate` (default) opens `screen` directly; `data_exchange` asks
+    /// the Flow endpoint for the first screen instead.
+    pub flow_action: Option<String>,
+    /// First screen ID, required when `flow_action` is `navigate`.
+    pub screen: Option<String>,
+    /// Initial data for `screen`.
+    pub data: Option<serde_json::Value>,
+}

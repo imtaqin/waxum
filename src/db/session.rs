@@ -13,10 +13,20 @@ pub type SqlitePool = SqliteHandle;
 /// serialized into an HTTP response.
 #[derive(Debug, Clone)]
 pub struct CloudCredentials {
+    pub waba_id: String,
     pub phone_number_id: String,
     pub access_token: String,
     pub app_secret: String,
     pub webhook_verify_token: String,
+    /// PEM-encoded RSA private key used to unwrap the per-request AES
+    /// key in a Flows Data Exchange payload (see
+    /// [`crate::cloud::flows_crypto`]). `None` until
+    /// [`SessionManager::set_flow_endpoint`] has been called.
+    pub flow_private_key: Option<String>,
+    /// Where a decrypted Flows Data Exchange request is forwarded so the
+    /// business's own backend can pick the next screen. `None` means only
+    /// Meta's health-check ping is answered.
+    pub flow_forward_url: Option<String>,
 }
 
 #[derive(Clone)]
@@ -374,6 +384,58 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Stores the RSA private key used to unwrap a Flows Data Exchange
+    /// AES key (see [`crate::cloud::flows_crypto`]) and the URL decrypted
+    /// requests are forwarded to. Never read back through [`SessionInfo`]
+    /// -- only via [`Self::get_cloud_credentials`] for internal use by the
+    /// data-exchange handler.
+    pub async fn set_flow_endpoint(
+        &self,
+        id: &str,
+        private_key_pem: &str,
+        forward_url: Option<&str>,
+    ) -> anyhow::Result<()> {
+        match &self.pool {
+            DbPool::Postgres(pool) => {
+                let client = pool.get().await?;
+                client
+                    .execute(
+                        "UPDATE sessions SET cloud_flow_private_key = $1, cloud_flow_forward_url = $2, updated_at = NOW() WHERE id = $3",
+                        &[&private_key_pem, &forward_url, &id],
+                    )
+                    .await?;
+            }
+            DbPool::MySQL(pool) => {
+                let now = now_str();
+                let mut conn = pool.get_conn().await?;
+                conn.exec_drop(
+                    "UPDATE sessions SET cloud_flow_private_key = ?, cloud_flow_forward_url = ?, updated_at = ? WHERE id = ?",
+                    (private_key_pem, forward_url, &now, id),
+                )
+                .await?;
+            }
+            DbPool::SQLite(pool) => {
+                let id_s = id.to_string();
+                let key = private_key_pem.to_string();
+                let forward = match forward_url {
+                    Some(url) => SQ::Text(url.to_string()),
+                    None => SQ::Null,
+                };
+                let now = now_str();
+                sqlite_blocking(pool, move |conn| {
+                    sqlite_raw::execute(
+                        conn,
+                        "UPDATE sessions SET cloud_flow_private_key = ?, cloud_flow_forward_url = ?, updated_at = ? WHERE id = ?",
+                        &[SQ::Text(key), forward, SQ::Text(now), SQ::Text(id_s)],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
     /// Reads back the Cloud API credentials stored by
     /// [`Self::connect_cloud`], for internal use by
     /// [`crate::cloud::client::CloudClient`] and the webhook verifier.
@@ -387,17 +449,20 @@ impl SessionManager {
                 let client = pool.get().await?;
                 let row = client
                     .query_opt(
-                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = $1",
+                        "SELECT provider, cloud_waba_id, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token, cloud_flow_private_key, cloud_flow_forward_url FROM sessions WHERE id = $1",
                         &[&id],
                     )
                     .await?;
                 Ok(row.and_then(|r| {
                     let provider: String = r.get("provider");
                     (provider == "whatsapp_cloud").then(|| CloudCredentials {
+                        waba_id: r.get("cloud_waba_id"),
                         phone_number_id: r.get("cloud_phone_number_id"),
                         access_token: r.get("cloud_access_token"),
                         app_secret: r.get("cloud_app_secret"),
                         webhook_verify_token: r.get("cloud_webhook_verify_token"),
+                        flow_private_key: r.get("cloud_flow_private_key"),
+                        flow_forward_url: r.get("cloud_flow_forward_url"),
                     })
                 }))
             }
@@ -405,19 +470,22 @@ impl SessionManager {
                 let mut conn = pool.get_conn().await?;
                 let row: Option<mysql_async::Row> = conn
                     .exec_first(
-                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = ?",
+                        "SELECT provider, cloud_waba_id, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token, cloud_flow_private_key, cloud_flow_forward_url FROM sessions WHERE id = ?",
                         (id,),
                     )
                     .await?;
                 Ok(row.and_then(|r| {
                     let provider = my_get_string(&r, "provider").unwrap_or_default();
                     (provider == "whatsapp_cloud").then(|| CloudCredentials {
+                        waba_id: my_get_string(&r, "cloud_waba_id").unwrap_or_default(),
                         phone_number_id: my_get_string(&r, "cloud_phone_number_id")
                             .unwrap_or_default(),
                         access_token: my_get_string(&r, "cloud_access_token").unwrap_or_default(),
                         app_secret: my_get_string(&r, "cloud_app_secret").unwrap_or_default(),
                         webhook_verify_token: my_get_string(&r, "cloud_webhook_verify_token")
                             .unwrap_or_default(),
+                        flow_private_key: my_get_string(&r, "cloud_flow_private_key"),
+                        flow_forward_url: my_get_string(&r, "cloud_flow_forward_url"),
                     })
                 }))
             }
@@ -426,15 +494,18 @@ impl SessionManager {
                 sqlite_blocking(pool, move |conn| {
                     let mut out = sqlite_raw::query(
                         conn,
-                        "SELECT provider, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token FROM sessions WHERE id = ?",
+                        "SELECT provider, cloud_waba_id, cloud_phone_number_id, cloud_access_token, cloud_app_secret, cloud_webhook_verify_token, cloud_flow_private_key, cloud_flow_forward_url FROM sessions WHERE id = ?",
                         &[SQ::Text(id_s)],
                         |row| {
                             let provider = row.get_string(0).unwrap_or_default();
                             (provider == "whatsapp_cloud").then(|| CloudCredentials {
-                                phone_number_id: row.get_string(1).unwrap_or_default(),
-                                access_token: row.get_string(2).unwrap_or_default(),
-                                app_secret: row.get_string(3).unwrap_or_default(),
-                                webhook_verify_token: row.get_string(4).unwrap_or_default(),
+                                waba_id: row.get_string(1).unwrap_or_default(),
+                                phone_number_id: row.get_string(2).unwrap_or_default(),
+                                access_token: row.get_string(3).unwrap_or_default(),
+                                app_secret: row.get_string(4).unwrap_or_default(),
+                                webhook_verify_token: row.get_string(5).unwrap_or_default(),
+                                flow_private_key: row.get_string(6),
+                                flow_forward_url: row.get_string(7),
                             })
                         },
                     )?;

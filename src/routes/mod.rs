@@ -147,6 +147,44 @@ fn session_routes() -> Router<AppState> {
             post(handlers::cloud::send_template),
         )
         .route(
+            "/{session_id}/cloud/flows",
+            get(handlers::cloud_flows::list_flows).post(handlers::cloud_flows::create_flow),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}",
+            get(handlers::cloud_flows::get_flow)
+                .post(handlers::cloud_flows::update_flow_metadata)
+                .delete(handlers::cloud_flows::delete_flow),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}/json",
+            put(handlers::cloud_flows::update_flow_json),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}/assets",
+            get(handlers::cloud_flows::get_flow_assets),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}/publish",
+            post(handlers::cloud_flows::publish_flow),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}/deprecate",
+            post(handlers::cloud_flows::deprecate_flow),
+        )
+        .route(
+            "/{session_id}/cloud/flows/{flow_id}/send",
+            post(handlers::cloud_flows::send_flow),
+        )
+        .route(
+            "/{session_id}/cloud/flow-endpoint",
+            post(handlers::cloud_flows::configure_flow_endpoint),
+        )
+        .route(
+            "/{session_id}/cloud/flow-endpoint/exchange",
+            post(handlers::cloud_flows::flow_data_exchange),
+        )
+        .route(
             "/{session_id}/disconnect",
             post(handlers::sessions::disconnect_session),
         )

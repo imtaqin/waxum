@@ -40,7 +40,9 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 cloud_access_token TEXT, \
                 cloud_app_id TEXT, \
                 cloud_app_secret TEXT, \
-                cloud_webhook_verify_token TEXT \
+                cloud_webhook_verify_token TEXT, \
+                cloud_flow_private_key TEXT, \
+                cloud_flow_forward_url TEXT \
              ); \
              CREATE TABLE IF NOT EXISTS webhooks ( \
                 id TEXT PRIMARY KEY, \
@@ -186,6 +188,8 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
             ("cloud_app_id", "TEXT"),
             ("cloud_app_secret", "TEXT"),
             ("cloud_webhook_verify_token", "TEXT"),
+            ("cloud_flow_private_key", "TEXT"),
+            ("cloud_flow_forward_url", "TEXT"),
         ] {
             if !existing_session_columns.contains(column) {
                 sqlite_raw::exec_batch(
@@ -266,6 +270,8 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_app_id VARCHAR(255)",
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_app_secret TEXT",
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_webhook_verify_token TEXT",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_flow_private_key TEXT",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cloud_flow_forward_url TEXT",
     ] {
         client.execute(sql, &[]).await?;
     }
@@ -791,6 +797,8 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
         "ALTER TABLE sessions ADD COLUMN cloud_app_id VARCHAR(255) NULL",
         "ALTER TABLE sessions ADD COLUMN cloud_app_secret TEXT NULL",
         "ALTER TABLE sessions ADD COLUMN cloud_webhook_verify_token TEXT NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_flow_private_key TEXT NULL",
+        "ALTER TABLE sessions ADD COLUMN cloud_flow_forward_url TEXT NULL",
     ];
     for sql in &migrations {
         let _ = conn.query_drop(*sql).await;
