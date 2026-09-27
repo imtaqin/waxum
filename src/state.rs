@@ -231,6 +231,53 @@ pub struct SessionState {
     /// Keeps the chat store's event handler subscribed; dropping it
     /// unsubscribes. Always mirrors the `chat_store` slot.
     pub chat_store_subscription: RwLock<Option<wacore::types::events::Subscription>>,
+
+    /// Recently forwarded `message` event keys, so a message the server
+    /// delivers twice -- once during the offline drain and again live,
+    /// the case in issue #135 -- reaches webhooks/NATS/SSE only once. See
+    /// [`RecentMessageIds`].
+    pub recent_message_ids: parking_lot::Mutex<RecentMessageIds>,
+}
+
+/// Bounded set of the most recent message keys seen on one session,
+/// oldest evicted first.
+///
+/// In memory only: after a process restart the set starts empty, so a
+/// redelivery that straddles a restart can still produce a second event.
+/// Consumers that need exactly-once processing should still key on
+/// `data.message_id`.
+pub struct RecentMessageIds {
+    order: std::collections::VecDeque<String>,
+    seen: std::collections::HashSet<String>,
+    capacity: usize,
+}
+
+impl RecentMessageIds {
+    pub const DEFAULT_CAPACITY: usize = 4096;
+
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            order: std::collections::VecDeque::with_capacity(capacity.min(1024)),
+            seen: std::collections::HashSet::with_capacity(capacity.min(1024)),
+            capacity: capacity.max(1),
+        }
+    }
+
+    /// Records `key` and returns `true` the first time it is seen,
+    /// `false` for a repeat still inside the window.
+    pub fn first_sighting(&mut self, key: &str) -> bool {
+        if self.seen.contains(key) {
+            return false;
+        }
+        if self.order.len() >= self.capacity {
+            if let Some(oldest) = self.order.pop_front() {
+                self.seen.remove(&oldest);
+            }
+        }
+        self.order.push_back(key.to_string());
+        self.seen.insert(key.to_string());
+        true
+    }
 }
 
 /// Snapshot of the latest pair attempt for a session. Lives entirely in
@@ -264,6 +311,9 @@ impl SessionState {
             enc_decrypt_failed_lease: RwLock::new(None),
             chat_store: RwLock::new(None),
             chat_store_subscription: RwLock::new(None),
+            recent_message_ids: parking_lot::Mutex::new(RecentMessageIds::new(
+                RecentMessageIds::DEFAULT_CAPACITY,
+            )),
         }
     }
 
@@ -1305,5 +1355,30 @@ mod tests {
 
         s.clear_reconnecting();
         assert_eq!(s.reconnecting_for_secs(), None);
+    }
+
+    #[test]
+    fn a_redelivered_message_is_only_forwarded_once() {
+        let s = SessionState::new("/tmp/x".to_string());
+        let key = "6281@s.whatsapp.net|3EB0ABC";
+        assert!(s.recent_message_ids.lock().first_sighting(key));
+        assert!(!s.recent_message_ids.lock().first_sighting(key));
+        assert!(s
+            .recent_message_ids
+            .lock()
+            .first_sighting("6282@s.whatsapp.net|3EB0ABC"));
+    }
+
+    #[test]
+    fn recent_message_ids_evict_oldest_first_at_capacity() {
+        let mut ids = RecentMessageIds::new(2);
+        assert!(ids.first_sighting("a"));
+        assert!(ids.first_sighting("b"));
+        assert!(!ids.first_sighting("a"));
+        assert!(ids.first_sighting("c"));
+        assert!(ids.first_sighting("a"), "a was evicted when c arrived");
+        assert!(!ids.first_sighting("c"));
+        assert_eq!(ids.order.len(), 2);
+        assert_eq!(ids.seen.len(), 2);
     }
 }

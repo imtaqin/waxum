@@ -1819,6 +1819,16 @@ async fn handle_event(
             );
         }
         for im in batch.messages.iter() {
+            let key = format!("{}|{}", im.info.source.chat, im.info.id);
+            if !runtime.recent_message_ids.lock().first_sighting(&key) {
+                tracing::debug!(
+                    session_id = %session_id,
+                    message_id = %im.info.id,
+                    offline,
+                    "dropping redelivered message already forwarded"
+                );
+                continue;
+            }
             crate::handlers::search::record_incoming(state, session_id, &im.message, &im.info)
                 .await;
             let from_phone = resolve_jid_phone(&client, &im.info.source.sender).await;
