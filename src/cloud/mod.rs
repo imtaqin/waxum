@@ -13,6 +13,9 @@
 //! - [`webhook`] — inbound webhook verification handshake, signature
 //!   check, and payload normalization into the same event shape
 //!   `handlers::sessions::message_event_data` produces for Web sessions.
+//! - [`embedded_signup`] — the Embedded Signup OAuth code exchange plus
+//!   the WABA `subscribed_apps`/`phone_numbers` onboarding calls.
 
 pub mod client;
+pub mod embedded_signup;
 pub mod webhook;

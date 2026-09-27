@@ -10,16 +10,20 @@
 
 use axum::{
     body::Bytes,
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
 use std::collections::HashMap;
 
-use crate::cloud::webhook;
+use crate::cloud::{embedded_signup, webhook};
 use crate::error::ApiError;
-use crate::models::cloud::{ConnectCloudRequest, ConnectCloudResponse};
+use crate::models::cloud::{
+    ConnectCloudRequest, ConnectCloudResponse, EmbeddedSignupExchangeRequest,
+    EmbeddedSignupExchangeResponse, SendTemplateRequest,
+};
+use crate::models::messages::MessageResponse;
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -51,6 +55,108 @@ pub async fn connect_cloud(
         .await?
         .ok_or(ApiError::SessionNotFound(session_id))?;
     Ok(Json(ConnectCloudResponse { session }))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/cloud/embedded-signup/exchange",
+    tag = "cloud",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = EmbeddedSignupExchangeRequest,
+    responses(
+        (status = 200, description = "Exchanged token + WABA phone numbers", body = EmbeddedSignupExchangeResponse),
+        (status = 502, description = "Meta rejected the exchange or a follow-up call")
+    )
+)]
+pub async fn embedded_signup_exchange(
+    Path(_session_id): Path<String>,
+    Json(request): Json<EmbeddedSignupExchangeRequest>,
+) -> Result<Json<EmbeddedSignupExchangeResponse>, ApiError> {
+    let token_resp =
+        embedded_signup::exchange_code(&request.app_id, &request.app_secret, &request.code)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("embedded signup token exchange failed: {e}"))
+            })?;
+    let access_token = token_resp
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            ApiError::Internal("token exchange response had no access_token".to_string())
+        })?
+        .to_string();
+
+    embedded_signup::subscribe_app(&request.waba_id, &access_token)
+        .await
+        .map_err(|e| ApiError::Internal(format!("failed to subscribe app to WABA: {e}")))?;
+
+    let phone_numbers = embedded_signup::list_phone_numbers(&request.waba_id, &access_token)
+        .await
+        .map_err(|e| ApiError::Internal(format!("failed to list WABA phone numbers: {e}")))?;
+
+    Ok(Json(EmbeddedSignupExchangeResponse {
+        access_token,
+        waba_id: request.waba_id,
+        phone_numbers,
+    }))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/messages/template",
+    tag = "cloud",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    request_body = SendTemplateRequest,
+    responses(
+        (status = 200, description = "Template message sent", body = MessageResponse),
+        (status = 400, description = "Not supported for whatsapp_web sessions"),
+        (status = 404, description = "Session not found")
+    )
+)]
+pub async fn send_template(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SendTemplateRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let creds = state
+        .session_manager()
+        .get_cloud_credentials(&session_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::BadRequest(
+                "messages/template is only supported for whatsapp_cloud sessions".to_string(),
+            )
+        })?;
+
+    let cloud = crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+    let resp = cloud
+        .send_template(
+            &request.to,
+            &request.name,
+            &request.language_code,
+            request.components,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let message_id = resp
+        .get("messages")
+        .and_then(|m| m.as_array())
+        .and_then(|a| a.first())
+        .and_then(|m| m.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    Ok(Json(MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to: request.to,
+    }))
 }
 
 /// `GET /sessions/{session_id}/cloud/webhook` -- Meta's verification
@@ -132,4 +238,121 @@ pub async fn cloud_webhook_receive(
     }
 
     StatusCode::OK
+}
+
+async fn cloud_client_for(
+    state: &AppState,
+    session_id: &str,
+) -> Result<crate::cloud::client::CloudClient, ApiError> {
+    let creds = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::BadRequest("session is not a whatsapp_cloud session".to_string())
+        })?;
+    Ok(crate::cloud::client::CloudClient::new(
+        &creds.phone_number_id,
+        &creds.access_token,
+    ))
+}
+
+/// `POST /sessions/{session_id}/cloud/media` (multipart, field `file`) --
+/// uploads a media file to the Cloud API and returns its media ID, per
+/// "Upload Image"/"Upload Sticker"/"Upload Audio". Cloud-only: there is
+/// no shared schema with the whatsapp-rust `/media/upload` endpoint,
+/// whose response carries `direct_path`/`media_key`/`file_sha256` --
+/// concepts the Cloud API has no equivalent for, since it hands back a
+/// single opaque media ID instead of a raw upload pointer.
+pub async fn cloud_upload_media(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let cloud = cloud_client_for(&state, &session_id).await?;
+
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut mime_type: Option<String> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?
+    {
+        if field.name() == Some("file") {
+            mime_type = field.content_type().map(str::to_string);
+            file_data = Some(
+                field
+                    .bytes()
+                    .await
+                    .map_err(|e| ApiError::BadRequest(e.to_string()))?
+                    .to_vec(),
+            );
+        }
+    }
+    let file_data =
+        file_data.ok_or_else(|| ApiError::BadRequest("No file provided".to_string()))?;
+    let mime_type = mime_type.unwrap_or_else(|| "application/octet-stream".to_string());
+
+    let resp = cloud
+        .upload_media(file_data, &mime_type, "upload")
+        .await
+        .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
+    Ok(Json(resp))
+}
+
+/// `GET /sessions/{session_id}/cloud/media/{media_id}` -- resolves a
+/// media ID to its metadata + short-lived download URL, per "Retrieve
+/// Media URL".
+pub async fn cloud_get_media(
+    State(state): State<AppState>,
+    Path((session_id, media_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let cloud = cloud_client_for(&state, &session_id).await?;
+    let resp = cloud
+        .get_media_url(&media_id)
+        .await
+        .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
+    Ok(Json(resp))
+}
+
+/// `GET /sessions/{session_id}/cloud/media/{media_id}/download` --
+/// resolves the media ID then fetches the bytes from the returned URL,
+/// per "Download Media", and streams them back as the raw body.
+pub async fn cloud_download_media(
+    State(state): State<AppState>,
+    Path((session_id, media_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, ApiError> {
+    let cloud = cloud_client_for(&state, &session_id).await?;
+    let meta = cloud
+        .get_media_url(&media_id)
+        .await
+        .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
+    let url = meta
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::MediaDownloadFailed("media metadata had no url".to_string()))?;
+    let mime_type = meta
+        .get("mime_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let bytes = cloud
+        .download_media_bytes(url)
+        .await
+        .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
+    Ok(([("content-type", mime_type)], bytes))
+}
+
+/// `DELETE /sessions/{session_id}/cloud/media/{media_id}`, per "Delete
+/// Media".
+pub async fn cloud_delete_media(
+    State(state): State<AppState>,
+    Path((session_id, media_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let cloud = cloud_client_for(&state, &session_id).await?;
+    let resp = cloud
+        .delete_media(&media_id)
+        .await
+        .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
+    Ok(Json(resp))
 }

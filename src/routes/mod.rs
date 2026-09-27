@@ -105,8 +105,29 @@ fn session_routes() -> Router<AppState> {
             post(handlers::cloud::connect_cloud),
         )
         .route(
+            "/{session_id}/cloud/embedded-signup/exchange",
+            post(handlers::cloud::embedded_signup_exchange),
+        )
+        .route(
             "/{session_id}/cloud/webhook",
             get(handlers::cloud::cloud_webhook_verify).post(handlers::cloud::cloud_webhook_receive),
+        )
+        .route(
+            "/{session_id}/cloud/media",
+            post(handlers::cloud::cloud_upload_media)
+                .layer(DefaultBodyLimit::max(MAX_MEDIA_UPLOAD_BYTES)),
+        )
+        .route(
+            "/{session_id}/cloud/media/{media_id}",
+            get(handlers::cloud::cloud_get_media).delete(handlers::cloud::cloud_delete_media),
+        )
+        .route(
+            "/{session_id}/cloud/media/{media_id}/download",
+            get(handlers::cloud::cloud_download_media),
+        )
+        .route(
+            "/{session_id}/messages/template",
+            post(handlers::cloud::send_template),
         )
         .route(
             "/{session_id}/disconnect",

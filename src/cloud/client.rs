@@ -25,6 +25,20 @@ pub enum CloudError {
     Api { status: u16, body: String },
 }
 
+/// Arguments for [`CloudClient::send_interactive_list`], grouped into a
+/// struct to stay under clippy's argument-count lint (the same pattern
+/// `ConverseRequest` uses elsewhere in this workspace for the same
+/// reason).
+pub struct SendInteractiveListRequest<'a> {
+    pub to: &'a str,
+    pub header_text: Option<&'a str>,
+    pub body_text: &'a str,
+    pub footer_text: Option<&'a str>,
+    pub button_text: &'a str,
+    pub sections: Value,
+    pub reply_to: Option<&'a str>,
+}
+
 pub struct CloudClient {
     http: reqwest::Client,
     base_url: String,
@@ -116,10 +130,23 @@ impl CloudClient {
     /// `GET {media_id}?phone_number_id=...` -- resolves a media ID to its
     /// short-lived download URL.
     pub async fn get_media_url(&self, media_id: &str) -> Result<Value, CloudError> {
-        let url = format!(
+        self.get_json(&format!(
             "{}/{}?phone_number_id={}",
             self.base_url, media_id, self.phone_number_id
-        );
+        ))
+        .await
+    }
+
+    /// `GET {phone_number_id}/whatsapp_business_profile`
+    pub async fn get_business_profile(&self) -> Result<Value, CloudError> {
+        self.get_json(&format!(
+            "{}/{}/whatsapp_business_profile",
+            self.base_url, self.phone_number_id
+        ))
+        .await
+    }
+
+    async fn get_json(&self, url: &str) -> Result<Value, CloudError> {
         let resp = self
             .http
             .get(url)
@@ -140,15 +167,263 @@ impl CloudClient {
         })
     }
 
-    /// `GET {phone_number_id}/whatsapp_business_profile`
-    pub async fn get_business_profile(&self) -> Result<Value, CloudError> {
+    fn attach_reply(mut body: Value, reply_to: Option<&str>) -> Value {
+        if let Some(stanza_id) = reply_to {
+            body["context"] = json!({ "message_id": stanza_id });
+        }
+        body
+    }
+
+    /// Sends a media message (`image`/`video`/`audio`/`document`/`sticker`)
+    /// by either `{"link": url}` or `{"id": media_id}`, per the "Send Image
+    /// Message by ID/URL" family of requests. `caption`/`filename` are
+    /// merged into the media object where the type supports them --
+    /// stickers and audio accept neither, matching the collection.
+    pub async fn send_media(
+        &self,
+        to: &str,
+        kind: &str,
+        mut media: Value,
+        caption: Option<&str>,
+        filename: Option<&str>,
+        reply_to: Option<&str>,
+    ) -> Result<Value, CloudError> {
+        if let Some(c) = caption {
+            media["caption"] = json!(c);
+        }
+        if let Some(f) = filename {
+            media["filename"] = json!(f);
+        }
+        let body = Self::attach_reply(
+            json!({
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": kind,
+                kind: media,
+            }),
+            reply_to,
+        );
+        self.post_messages(body).await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: location`.
+    pub async fn send_location(
+        &self,
+        to: &str,
+        latitude: f64,
+        longitude: f64,
+        name: Option<&str>,
+        address: Option<&str>,
+        reply_to: Option<&str>,
+    ) -> Result<Value, CloudError> {
+        let body = Self::attach_reply(
+            json!({
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "location",
+                "location": {
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "name": name,
+                    "address": address,
+                },
+            }),
+            reply_to,
+        );
+        self.post_messages(body).await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: contacts`, per the
+    /// "Send Contact Message" request. Takes an already-shaped `contacts`
+    /// array so callers control the full contact-card schema (addresses,
+    /// emails, org, phones, urls) without this client duplicating it.
+    pub async fn send_contacts(&self, to: &str, contacts: Value) -> Result<Value, CloudError> {
+        self.post_messages(json!({
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "contacts",
+            "contacts": contacts,
+        }))
+        .await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: reaction`.
+    pub async fn send_reaction(
+        &self,
+        to: &str,
+        message_id: &str,
+        emoji: &str,
+    ) -> Result<Value, CloudError> {
+        self.post_messages(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "reaction",
+            "reaction": {
+                "message_id": message_id,
+                "emoji": emoji,
+            },
+        }))
+        .await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: interactive`,
+    /// `interactive.type: button`, per "Send Reply Button".
+    pub async fn send_interactive_buttons(
+        &self,
+        to: &str,
+        body_text: &str,
+        buttons: Value,
+        reply_to: Option<&str>,
+    ) -> Result<Value, CloudError> {
+        let body = Self::attach_reply(
+            json!({
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "interactive",
+                "interactive": {
+                    "type": "button",
+                    "body": { "text": body_text },
+                    "action": { "buttons": buttons },
+                },
+            }),
+            reply_to,
+        );
+        self.post_messages(body).await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: interactive`,
+    /// `interactive.type: list`, per "Send List Message".
+    pub async fn send_interactive_list(
+        &self,
+        request: SendInteractiveListRequest<'_>,
+    ) -> Result<Value, CloudError> {
+        let mut interactive = json!({
+            "type": "list",
+            "body": { "text": request.body_text },
+            "action": { "button": request.button_text, "sections": request.sections },
+        });
+        if let Some(h) = request.header_text {
+            interactive["header"] = json!({ "type": "text", "text": h });
+        }
+        if let Some(f) = request.footer_text {
+            interactive["footer"] = json!({ "text": f });
+        }
+        let body = Self::attach_reply(
+            json!({
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": request.to,
+                "type": "interactive",
+                "interactive": interactive,
+            }),
+            request.reply_to,
+        );
+        self.post_messages(body).await
+    }
+
+    /// `POST {phone_number_id}/messages` with `type: template`, per the
+    /// "Send Message Template Text/Media/Interactive" family. `components`
+    /// is the already-shaped Cloud API template-component array (body
+    /// parameters, header media, button quick-reply payloads, ...); this
+    /// client does not attempt to model every parameter/component variant
+    /// as Rust types given how open-ended the template schema is.
+    pub async fn send_template(
+        &self,
+        to: &str,
+        name: &str,
+        language_code: &str,
+        components: Value,
+    ) -> Result<Value, CloudError> {
+        self.post_messages(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": name,
+                "language": { "code": language_code },
+                "components": components,
+            },
+        }))
+        .await
+    }
+
+    /// `POST {phone_number_id}/media` (multipart) -- uploads a media file
+    /// and returns its Cloud API media ID, per "Upload Image"/"Upload
+    /// Sticker"/"Upload Audio".
+    pub async fn upload_media(
+        &self,
+        bytes: Vec<u8>,
+        mime_type: &str,
+        filename: &str,
+    ) -> Result<Value, CloudError> {
+        let url = format!("{}/{}/media", self.base_url, self.phone_number_id);
+        let part = reqwest::multipart::Part::bytes(bytes)
+            .file_name(filename.to_string())
+            .mime_str(mime_type)
+            .map_err(|e| CloudError::Api {
+                status: 0,
+                body: format!("invalid mime type {mime_type}: {e}"),
+            })?;
+        let form = reqwest::multipart::Form::new()
+            .text("messaging_product", "whatsapp")
+            .part("file", part);
+        let resp = self
+            .http
+            .post(url)
+            .bearer_auth(&self.access_token)
+            .multipart(form)
+            .send()
+            .await?;
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(CloudError::Api {
+                status: status.as_u16(),
+                body,
+            });
+        }
+        serde_json::from_str(&body).map_err(|e| CloudError::Api {
+            status: status.as_u16(),
+            body: format!("failed to parse response: {e}: {body}"),
+        })
+    }
+
+    /// `GET` the short-lived signed URL [`Self::get_media_url`] returns,
+    /// with the same bearer token, per "Download Media" -- Meta's media
+    /// URLs require the same app access token as every other Graph call,
+    /// unlike a plain public link.
+    pub async fn download_media_bytes(&self, media_url: &str) -> Result<Vec<u8>, CloudError> {
+        let resp = self
+            .http
+            .get(media_url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(CloudError::Api {
+                status: status.as_u16(),
+                body,
+            });
+        }
+        Ok(resp.bytes().await?.to_vec())
+    }
+
+    /// `DELETE {media_id}?phone_number_id=...`, per "Delete Media".
+    pub async fn delete_media(&self, media_id: &str) -> Result<Value, CloudError> {
         let url = format!(
-            "{}/{}/whatsapp_business_profile",
-            self.base_url, self.phone_number_id
+            "{}/{}?phone_number_id={}",
+            self.base_url, media_id, self.phone_number_id
         );
         let resp = self
             .http
-            .get(url)
+            .delete(url)
             .bearer_auth(&self.access_token)
             .send()
             .await?;

@@ -223,7 +223,28 @@ pub async fn execute_image(
     session_id: &str,
     request: SendImageRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let media = cloud_media_object(&cloud, &request.image).await?;
+        let resp = cloud
+            .send_media(
+                &request.to,
+                "image",
+                media,
+                request.caption.as_deref(),
+                None,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -332,7 +353,28 @@ pub async fn execute_video(
     session_id: &str,
     request: SendVideoRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let media = cloud_media_object(&cloud, &request.video).await?;
+        let resp = cloud
+            .send_media(
+                &request.to,
+                "video",
+                media,
+                request.caption.as_deref(),
+                None,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -441,7 +483,28 @@ pub async fn execute_audio(
     session_id: &str,
     request: SendAudioRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let media = cloud_media_object(&cloud, &request.audio).await?;
+        let resp = cloud
+            .send_media(
+                &request.to,
+                "audio",
+                media,
+                None,
+                None,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -536,7 +599,28 @@ pub async fn execute_document(
     session_id: &str,
     request: SendDocumentRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let media = cloud_media_object(&cloud, &request.document).await?;
+        let resp = cloud
+            .send_media(
+                &request.to,
+                "document",
+                media,
+                request.caption.as_deref(),
+                Some(&request.filename),
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -646,7 +730,28 @@ pub async fn execute_sticker(
     session_id: &str,
     request: SendStickerRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let media = cloud_media_object(&cloud, &request.sticker).await?;
+        let resp = cloud
+            .send_media(
+                &request.to,
+                "sticker",
+                media,
+                None,
+                None,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -740,7 +845,27 @@ pub async fn execute_location(
     session_id: &str,
     request: SendLocationRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let resp = cloud
+            .send_location(
+                &request.to,
+                request.latitude,
+                request.longitude,
+                request.name.as_deref(),
+                request.address.as_deref(),
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -820,7 +945,31 @@ pub async fn execute_contact(
     session_id: &str,
     request: SendContactRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let contacts = serde_json::json!([{
+            "name": {
+                "formatted_name": request.contact.display_name,
+                "first_name": request.contact.display_name,
+            },
+            "phones": request.contact.phones.iter().map(|p| serde_json::json!({
+                "phone": p.number,
+                "type": p.phone_type,
+            })).collect::<Vec<_>>(),
+            "org": request.contact.organization.as_ref().map(|c| serde_json::json!({ "company": c })),
+        }]);
+        let resp = cloud
+            .send_contacts(&request.to, contacts)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -921,7 +1070,20 @@ pub async fn send_reaction(
     Path(session_id): Path<String>,
     Json(request): Json<SendReactionRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
-    require_web_provider(&state, &session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(&session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let resp = cloud
+            .send_reaction(&request.to, &request.message_id, &request.emoji)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(Json(cloud_message_response(resp, request.to)));
+    }
+
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -1082,7 +1244,33 @@ pub async fn execute_buttons(
     session_id: &str,
     request: SendButtonsRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let buttons = serde_json::json!(request
+            .buttons
+            .iter()
+            .map(|b| serde_json::json!({
+                "type": "reply",
+                "reply": { "id": b.button_id, "title": b.display_text },
+            }))
+            .collect::<Vec<_>>());
+        let resp = cloud
+            .send_interactive_buttons(
+                &request.to,
+                &request.content_text,
+                buttons,
+                request.reply_to.as_deref(),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -1189,7 +1377,40 @@ pub async fn execute_list(
     session_id: &str,
     request: SendListRequest,
 ) -> Result<MessageResponse, ApiError> {
-    require_web_provider(state, session_id).await?;
+    if let Some(creds) = state
+        .session_manager()
+        .get_cloud_credentials(session_id)
+        .await?
+    {
+        let cloud =
+            crate::cloud::client::CloudClient::new(&creds.phone_number_id, &creds.access_token);
+        let sections = serde_json::json!(request
+            .sections
+            .iter()
+            .map(|s| serde_json::json!({
+                "title": s.title,
+                "rows": s.rows.iter().map(|r| serde_json::json!({
+                    "id": r.row_id,
+                    "title": r.title,
+                    "description": r.description.as_deref().unwrap_or(""),
+                })).collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>());
+        let resp = cloud
+            .send_interactive_list(crate::cloud::client::SendInteractiveListRequest {
+                to: &request.to,
+                header_text: Some(&request.title),
+                body_text: &request.description,
+                footer_text: request.footer.as_deref(),
+                button_text: &request.button_text,
+                sections,
+                reply_to: request.reply_to.as_deref(),
+            })
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        return Ok(cloud_message_response(resp, request.to));
+    }
+
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
@@ -3618,27 +3839,52 @@ pub async fn mark_as_read(
     Ok(Json(SuccessResponse { success: true }))
 }
 
-/// Rejects a request against a handler that has no `whatsapp_cloud`
-/// counterpart yet (groups, polls, calls, presence, most interactive
-/// message types) with a clear 400 instead of letting it fall through
-/// to [`get_client`], which would return a confusing 503 -- there is no
-/// live whatsapp-rust client to find for a Cloud API session, since it
-/// never opens one.
-pub(crate) async fn require_web_provider(
-    state: &AppState,
-    session_id: &str,
-) -> Result<(), ApiError> {
-    if state
-        .session_manager()
-        .get_cloud_credentials(session_id)
-        .await?
-        .is_some()
-    {
-        return Err(ApiError::BadRequest(
-            "this endpoint is not supported for whatsapp_cloud sessions".to_string(),
-        ));
+/// Converts a whatsapp-rust-shaped [`MediaData`] into the Cloud API's own
+/// `{"link": ...}`/`{"id": ...}` media object, uploading base64 payloads
+/// through [`crate::cloud::client::CloudClient::upload_media`] first.
+/// `MediaData::Uploaded` (whatsapp-rust's own pre-uploaded media pointer,
+/// with its `direct_path`/`media_key`/... fields) has no Cloud API
+/// equivalent, so it is rejected rather than silently dropped.
+async fn cloud_media_object(
+    cloud: &crate::cloud::client::CloudClient,
+    media: &MediaData,
+) -> Result<serde_json::Value, ApiError> {
+    match media {
+        MediaData::Url { url } => Ok(serde_json::json!({ "link": url })),
+        MediaData::Base64 { data, mimetype } => {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| ApiError::BadRequest(format!("invalid base64 media data: {e}")))?;
+            let resp = cloud
+                .upload_media(bytes, mimetype, "upload")
+                .await
+                .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
+            let id = resp
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ApiError::MediaUploadFailed("cloud upload response missing id".to_string()))?;
+            Ok(serde_json::json!({ "id": id }))
+        }
+        MediaData::Uploaded { .. } => Err(ApiError::BadRequest(
+            "uploaded media pointers are whatsapp_web-specific; use image.url or image.data for whatsapp_cloud sessions".to_string(),
+        )),
     }
-    Ok(())
+}
+
+fn cloud_message_response(resp: serde_json::Value, to: String) -> MessageResponse {
+    let message_id = resp
+        .get("messages")
+        .and_then(|m| m.as_array())
+        .and_then(|a| a.first())
+        .and_then(|m| m.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    MessageResponse {
+        message_id,
+        timestamp: chrono::Utc::now().timestamp(),
+        to,
+    }
 }
 
 pub(crate) fn get_client(
