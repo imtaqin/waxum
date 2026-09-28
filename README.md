@@ -18,7 +18,9 @@
 
 Native single-binary. Multi-session. Multi-DB. Webhooks + HMAC. JWT + Bearer. Swagger. Prometheus. NATS JetStream (optional).
 
-Production-grade. **180+ REST endpoints across 29 feature modules.**
+**Two WhatsApp providers behind one API.** Each session runs on the multi-device protocol (QR / pair code) or on Meta's official WhatsApp Cloud API. Both share the same `/messages/*` routes and the same webhook events.
+
+Production-grade. **230+ REST endpoints across 34 feature modules.**
 
 ## Features
 
@@ -115,6 +117,7 @@ Production-grade. **180+ REST endpoints across 29 feature modules.**
 | Circuit breaker (auto-trip on Nx 5xx) | env `WEBHOOK_CB_THRESHOLD` |
 | Dead-letter queue + replay | `GET /webhooks/dlq`, `POST /webhooks/dlq/replay` |
 | Re-enable all tripped circuits (bulk) | `POST /webhooks/reenable-all` |
+| A message the server redelivers (offline replay, then live) is forwarded once | per session, last 4096 message ids |
 
 ### Ops / observability
 
@@ -238,17 +241,36 @@ and the bump cadence are written down in
 
 ## Providers
 
-A session's `provider` is `whatsapp_web` (default, the unofficial
-multi-device protocol above) or `whatsapp_cloud` (Meta's official WhatsApp
-Cloud API). Attach Cloud API credentials with `POST
-/sessions/{id}/cloud/connect`; Meta's webhook deliveries land on `GET`/`POST
-/sessions/{id}/cloud/webhook` (exempt from the normal bearer-auth check --
-verified instead against that session's own `cloud_app_secret`). Text
-messages and read receipts dispatch to the Cloud API for a `whatsapp_cloud`
-session; other send endpoints without a Cloud equivalent yet return `400`
-rather than a confusing `503`. Phase 1 -- templates, media by upload, the
-Embedded Signup OAuth exchange, and the rest of the message types are not
-in this pass yet.
+Each session has a `provider`:
+
+| Provider | Connects via | Best for |
+|---|---|---|
+| `whatsapp_web` (default) | QR code / pair code, the unofficial multi-device protocol | Personal and small-business numbers; groups, calls, channels, polls |
+| `whatsapp_cloud` | Meta's official WhatsApp Cloud API: a WABA plus a system-user token | Verified business numbers at scale; templates, Flows, commerce, payments |
+
+A Cloud session sends and receives through the same `/messages/*` routes:
+text, media, location, contact, reaction, buttons, list, and read receipts.
+Meta's webhooks are normalized into the same `message` event, so a consumer
+works unchanged across both providers.
+
+On top of that, a Cloud session gets:
+
+| Feature | Endpoint |
+|---|---|
+| Attach credentials / Embedded Signup onboarding | `POST /sessions/{id}/cloud/connect`, `/cloud/embedded-signup/exchange` |
+| Meta webhook receiver (HMAC `X-Hub-Signature-256`) | `GET/POST /sessions/{id}/cloud/webhook` |
+| Delivery, read, failed and payment status as structured `receipt` events | webhook |
+| Message templates: send, create, edit, delete, list | `/messages/template`, `/cloud/templates` |
+| WhatsApp Flows: manage, send, encrypted Data Exchange endpoint | `/cloud/flows`, `/cloud/flow-endpoint` |
+| Commerce: product, multi-product and catalog messages; inbound orders | `/messages/product`, `/messages/product-list`, `/messages/catalog` |
+| Payments API (India, Singapore) | `/messages/order-details`, `/messages/order-status` |
+| Phone number registration, verification, 2FA PIN | `/cloud/register`, `/cloud/request-code`, `/cloud/verify-code` |
+| Business profile incl. photo | `/cloud/business-profile` |
+| QR codes, blocked users, typing indicator | `/cloud/qr-codes`, `/cloud/blocked-users`, `/cloud/typing` |
+| Analytics, conversation analytics, credit lines | `/cloud/analytics`, `/cloud/conversation-analytics` |
+| BSP: system users, credit-line sharing | `/cloud/assigned-users`, `/cloud/credit-sharing` |
+
+Full reference: **[waxum.imtaqin.id/docs/api/cloud](https://waxum.imtaqin.id/docs/api/cloud)**.
 
 ## Endpoints
 
@@ -270,6 +292,7 @@ Rust nightly · Axum 0.8 · Tokio · [whatsapp-rust](https://github.com/oxidezap
 |---|---|
 | [waxum-studio](https://github.com/imtaqin/waxum-studio) | Visual WhatsApp workflow builder — nodes, integrations, drag-and-drop automation, powered by waxum. |
 | [waxum-mcp](https://github.com/imtaqin/waxum-mcp) | MCP server for WhatsApp, backed by waxum — send/read/media tools for any MCP client (Claude Desktop, Claude Code, etc). |
+| [waxum-channel](https://github.com/imtaqin/waxum-channel) | Claude Code channel plugin — pushes allowlisted WhatsApp messages into a running Claude Code session, replies back, and lets allowlisted senders approve tool calls from WhatsApp. |
 | [waxum-sdk](https://github.com/imtaqin/waxum-sdk) | TypeScript SDK, types generated from waxum's OpenAPI spec. |
 | [waxum-php-client](https://github.com/imtaqin/waxum-php-client) | PHP client for the waxum REST API. |
 | [waxum-doc](https://github.com/imtaqin/waxum-doc) | Docs site — [waxum.imtaqin.id](https://waxum.imtaqin.id). |
