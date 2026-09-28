@@ -19,6 +19,7 @@ use crate::models::sessions::{
 };
 use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 use crate::state::AppState;
+use wacore::proto_helpers::MessageExt;
 
 #[utoipa::path(
     post,
@@ -1952,6 +1953,7 @@ fn get_event_type(event: &wacore::types::events::Event) -> String {
 /// /sessions/:id/media/download for an inbound media message. Returns null
 /// for non-media or text-only messages.
 fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value {
+    let msg = msg.get_base_message();
     use base64::Engine as _;
     fn b64(b: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(b)
@@ -2072,6 +2074,7 @@ pub(crate) fn extract_media_pointer(
 /// Extracts location data (lat/lng + optional name/address/url) from a
 /// LocationMessage / LiveLocationMessage when present. Returns null otherwise.
 fn extract_location(msg: &waproto::whatsapp::Message) -> serde_json::Value {
+    let msg = msg.get_base_message();
     if let Some(loc) = msg.location_message.as_option() {
         return serde_json::json!({
             "latitude": loc.degrees_latitude,
@@ -2110,6 +2113,11 @@ fn message_event_data(
     let quoted = extract_quoted_context(msg);
     let quoted_message_id = quoted.as_ref().map(|(id, _)| id.clone());
     let quoted_sender_jid = quoted.and_then(|(_, participant)| participant);
+    let selection = extract_interactive_selection(msg);
+    let native_flow = selection
+        .as_ref()
+        .filter(|s| s.flow_name.is_some() || s.flow_params.is_some())
+        .map(|s| serde_json::json!({ "name": s.flow_name, "params": s.flow_params }));
     serde_json::json!({
         "from": info.source.sender.to_string(),
         "from_phone": from_phone,
@@ -2130,6 +2138,9 @@ fn message_event_data(
         "media_mimetype": media_mimetype,
         "media": media_meta,
         "location": location,
+        "selected_id": selection.as_ref().and_then(|s| s.id.clone()),
+        "selected_text": selection.as_ref().and_then(|s| s.text.clone()),
+        "native_flow": native_flow,
         "is_group": info.source.chat.to_string().ends_with("@g.us"),
         "participant": info.source.sender.to_string(),
     })
@@ -2170,9 +2181,20 @@ async fn resolve_jid_phone(
 /// optional caption, the high-level type slug, and the media mimetype if any.
 /// Shared with the message-history ingestion in
 /// [`crate::handlers::search`].
+///
+/// Every `extract_*` helper here first unwraps the ephemeral / view-once /
+/// device-sent / document-with-caption wrappers via
+/// [`MessageExt::get_base_message`], so a message in a chat with
+/// disappearing messages on is read the same as one without.
+///
+/// A tap on a button or list row is typed by the response kind (see
+/// [`extract_interactive_selection`]) with `text` set to the chosen label,
+/// falling back to the chosen id, so consumers that only read `text` still
+/// see what was picked.
 pub(crate) fn extract_message_content(
     msg: &waproto::whatsapp::Message,
 ) -> (Option<String>, Option<String>, String, Option<String>) {
+    let msg = msg.get_base_message();
     let mut text: Option<String> = None;
     let mut caption: Option<String> = None;
     let mut message_type = "unknown".to_string();
@@ -2254,10 +2276,112 @@ pub(crate) fn extract_message_content(
             message_type = "list".to_string();
         } else if msg.template_message.is_set() {
             message_type = "template".to_string();
+        } else if let Some(selection) = extract_interactive_selection(msg) {
+            message_type = selection.kind.to_string();
+            text = selection.text.or(selection.id);
         }
     }
 
     (text, caption, message_type, media_mimetype)
+}
+
+/// What the user picked when replying to an interactive message.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct InteractiveSelection {
+    /// `interactive_response`, `buttons_response`, `list_response` or
+    /// `template_button_reply` -- also used as the event's `message_type`.
+    pub kind: &'static str,
+    /// The button id or list row id the sender defined, e.g. `approve`.
+    pub id: Option<String>,
+    /// The label the user saw and tapped, e.g. `✅ Setuju`.
+    pub text: Option<String>,
+    /// Native flow name (`quick_reply`, `single_select`, a Flow's name,
+    /// ...), only for `interactive_response`.
+    pub flow_name: Option<String>,
+    /// The native flow `params_json`, parsed. Carries the full submitted
+    /// form for a WhatsApp Flow, not just an id.
+    pub flow_params: Option<serde_json::Value>,
+}
+
+/// Reads the selection out of a reply to buttons, a list, a template
+/// button or a native-flow (quick-reply / single-select / Flow) message.
+/// `None` for every other message kind.
+///
+/// Native-flow replies carry their choice in `params_json`, a JSON string
+/// whose `id` is the button or row id the sender defined; when it has no
+/// `id` (a submitted Flow form), the parsed object is still returned in
+/// `flow_params`.
+pub(crate) fn extract_interactive_selection(
+    msg: &waproto::whatsapp::Message,
+) -> Option<InteractiveSelection> {
+    let msg = msg.get_base_message();
+    if let Some(r) = msg.interactive_response_message.as_option() {
+        let native = match &r.interactive_response_message {
+            Some(
+                waproto::whatsapp::message::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(n),
+            ) => Some(n.as_ref()),
+            _ => None,
+        };
+        let flow_params = native
+            .and_then(|n| n.params_json.as_deref())
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
+        let id = flow_params
+            .as_ref()
+            .and_then(|p| p.get("id"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let text = r
+            .body
+            .as_option()
+            .and_then(|b| b.text.clone())
+            .filter(|t| !t.is_empty());
+        return Some(InteractiveSelection {
+            kind: "interactive_response",
+            id,
+            text,
+            flow_name: native.and_then(|n| n.name.clone()),
+            flow_params,
+        });
+    }
+    if let Some(r) = msg.buttons_response_message.as_option() {
+        let text = match &r.response {
+            Some(
+                waproto::whatsapp::message::buttons_response_message::Response::SelectedDisplayText(
+                    t,
+                ),
+            ) => Some(t.clone()),
+            _ => None,
+        };
+        return Some(InteractiveSelection {
+            kind: "buttons_response",
+            id: r.selected_button_id.clone(),
+            text,
+            flow_name: None,
+            flow_params: None,
+        });
+    }
+    if let Some(r) = msg.list_response_message.as_option() {
+        return Some(InteractiveSelection {
+            kind: "list_response",
+            id: r
+                .single_select_reply
+                .as_option()
+                .and_then(|s| s.selected_row_id.clone()),
+            text: r.title.clone(),
+            flow_name: None,
+            flow_params: None,
+        });
+    }
+    if let Some(r) = msg.template_button_reply_message.as_option() {
+        return Some(InteractiveSelection {
+            kind: "template_button_reply",
+            id: r.selected_id.clone(),
+            text: r.selected_display_text.clone(),
+            flow_name: None,
+            flow_params: None,
+        });
+    }
+    None
 }
 
 /// Extracts the WhatsApp reply/quote linkage (`ContextInfo.stanzaId` +
@@ -2270,6 +2394,7 @@ pub(crate) fn extract_message_content(
 pub(crate) fn extract_quoted_context(
     msg: &waproto::whatsapp::Message,
 ) -> Option<(String, Option<String>)> {
+    let msg = msg.get_base_message();
     let ctx = msg
         .extended_text_message
         .as_option()
@@ -2690,6 +2815,206 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod interactive_replies {
+        use super::super::*;
+        use waproto::buffa::MessageField;
+        use waproto::whatsapp::message as wm;
+        use waproto::whatsapp::{ContextInfo, Message};
+
+        fn quoted(id: &str) -> MessageField<ContextInfo> {
+            MessageField::some(ContextInfo {
+                stanza_id: Some(id.to_string()),
+                ..Default::default()
+            })
+        }
+
+        fn quick_reply_tap() -> Message {
+            Message {
+                interactive_response_message: MessageField::some(wm::InteractiveResponseMessage {
+                    body: MessageField::some(wm::interactive_response_message::Body {
+                        text: Some("✅ Setuju".to_string()),
+                        ..Default::default()
+                    }),
+                    context_info: quoted("3EB0D7A57AA45E7D72FE2B"),
+                    interactive_response_message: Some(
+                        wm::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(
+                            Box::new(wm::interactive_response_message::NativeFlowResponseMessage {
+                                name: Some("quick_reply".to_string()),
+                                params_json: Some(r#"{"id":"approve"}"#.to_string()),
+                                version: Some(3),
+                            }),
+                        ),
+                    ),
+                }),
+                ..Default::default()
+            }
+        }
+
+        fn info() -> wacore::types::message::MessageInfo {
+            wacore::types::message::MessageInfo {
+                source: wacore::types::message::MessageSource {
+                    chat: "628123456789@s.whatsapp.net".parse().unwrap(),
+                    sender: "628123456789@s.whatsapp.net".parse().unwrap(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn quick_reply_tap_reports_the_chosen_button() {
+            let msg = quick_reply_tap();
+            let (text, _, message_type, _) = extract_message_content(&msg);
+            assert_eq!(message_type, "interactive_response");
+            assert_eq!(text.as_deref(), Some("✅ Setuju"));
+
+            let data = message_event_data(&msg, &info(), None, None);
+            assert_eq!(data["message_type"], "interactive_response");
+            assert_eq!(data["selected_id"], "approve");
+            assert_eq!(data["selected_text"], "✅ Setuju");
+            assert_eq!(data["text"], "✅ Setuju");
+            assert_eq!(data["quoted_message_id"], "3EB0D7A57AA45E7D72FE2B");
+            assert_eq!(data["native_flow"]["name"], "quick_reply");
+            assert_eq!(data["native_flow"]["params"]["id"], "approve");
+        }
+
+        #[test]
+        fn list_row_pick_reports_the_row_id_and_title() {
+            let msg = Message {
+                list_response_message: MessageField::some(wm::ListResponseMessage {
+                    title: Some("Hari ini".to_string()),
+                    list_type: Some(wm::list_response_message::ListType::SINGLE_SELECT),
+                    single_select_reply: MessageField::some(
+                        wm::list_response_message::SingleSelectReply {
+                            selected_row_id: Some("rep_today".to_string()),
+                        },
+                    ),
+                    context_info: quoted("3EB096CDC66E16DACCA06C"),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let data = message_event_data(&msg, &info(), None, None);
+            assert_eq!(data["message_type"], "list_response");
+            assert_eq!(data["selected_id"], "rep_today");
+            assert_eq!(data["selected_text"], "Hari ini");
+            assert_eq!(data["text"], "Hari ini");
+            assert_eq!(data["quoted_message_id"], "3EB096CDC66E16DACCA06C");
+            assert_eq!(data["native_flow"], serde_json::Value::Null);
+        }
+
+        #[test]
+        fn legacy_buttons_and_template_buttons_report_the_selection() {
+            let buttons = Message {
+                buttons_response_message: MessageField::some(wm::ButtonsResponseMessage {
+                    selected_button_id: Some("reject".to_string()),
+                    r#type: Some(wm::buttons_response_message::Type::DISPLAY_TEXT),
+                    response: Some(wm::buttons_response_message::Response::SelectedDisplayText(
+                        "❌ Tolak".to_string(),
+                    )),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let sel = extract_interactive_selection(&buttons).unwrap();
+            assert_eq!(sel.kind, "buttons_response");
+            assert_eq!(sel.id.as_deref(), Some("reject"));
+            assert_eq!(sel.text.as_deref(), Some("❌ Tolak"));
+
+            let template = Message {
+                template_button_reply_message: MessageField::some(wm::TemplateButtonReplyMessage {
+                    selected_id: Some("track".to_string()),
+                    selected_display_text: Some("Track order".to_string()),
+                    selected_index: Some(0),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let (text, _, message_type, _) = extract_message_content(&template);
+            assert_eq!(message_type, "template_button_reply");
+            assert_eq!(text.as_deref(), Some("Track order"));
+        }
+
+        #[test]
+        fn a_flow_submission_keeps_the_whole_form_and_falls_back_to_id_for_text() {
+            let msg = Message {
+                interactive_response_message: MessageField::some(wm::InteractiveResponseMessage {
+                    interactive_response_message: Some(
+                        wm::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(
+                            Box::new(wm::interactive_response_message::NativeFlowResponseMessage {
+                                name: Some("flow".to_string()),
+                                params_json: Some(
+                                    r#"{"flow_token":"t1","slot":"09:00"}"#.to_string(),
+                                ),
+                                version: Some(3),
+                            }),
+                        ),
+                    ),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let data = message_event_data(&msg, &info(), None, None);
+            assert_eq!(data["message_type"], "interactive_response");
+            assert_eq!(data["selected_id"], serde_json::Value::Null);
+            assert_eq!(data["native_flow"]["params"]["slot"], "09:00");
+
+            let text_only = Message {
+                list_response_message: MessageField::some(wm::ListResponseMessage {
+                    single_select_reply: MessageField::some(
+                        wm::list_response_message::SingleSelectReply {
+                            selected_row_id: Some("row_9".to_string()),
+                        },
+                    ),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let (text, _, _, _) = extract_message_content(&text_only);
+            assert_eq!(text.as_deref(), Some("row_9"));
+        }
+
+        #[test]
+        fn replies_in_a_disappearing_messages_chat_are_unwrapped() {
+            let wrapped = Message {
+                ephemeral_message: MessageField::some(wm::FutureProofMessage {
+                    message: MessageField::some(quick_reply_tap()),
+                }),
+                ..Default::default()
+            };
+            let data = message_event_data(&wrapped, &info(), None, None);
+            assert_eq!(data["message_type"], "interactive_response");
+            assert_eq!(data["selected_id"], "approve");
+            assert_eq!(data["quoted_message_id"], "3EB0D7A57AA45E7D72FE2B");
+
+            let plain_text = Message {
+                ephemeral_message: MessageField::some(wm::FutureProofMessage {
+                    message: MessageField::some(Message {
+                        conversation: Some("halo".to_string()),
+                        ..Default::default()
+                    }),
+                }),
+                ..Default::default()
+            };
+            let (text, _, message_type, _) = extract_message_content(&plain_text);
+            assert_eq!(message_type, "text");
+            assert_eq!(text.as_deref(), Some("halo"));
+        }
+
+        #[test]
+        fn ordinary_messages_have_no_selection() {
+            let msg = Message {
+                conversation: Some("hi".to_string()),
+                ..Default::default()
+            };
+            assert!(extract_interactive_selection(&msg).is_none());
+            let data = message_event_data(&msg, &info(), None, None);
+            assert_eq!(data["selected_id"], serde_json::Value::Null);
+            assert_eq!(data["selected_text"], serde_json::Value::Null);
+            assert_eq!(data["native_flow"], serde_json::Value::Null);
+        }
+    }
 
     #[test]
     fn message_event_data_carries_a_chat_phone_alongside_the_chat_jid() {
