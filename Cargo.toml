@@ -1,10 +1,10 @@
 [package]
 name = "waxum"
-version = "0.12.9"
+version = "0.13.0"
 edition = "2021"
 authors = ["taqin"]
 license = "MIT"
-description = "REST API gateway for WhatsApp-Rust client"
+description = "WhatsApp REST API gateway: multi-device (whatsapp-rust) and the official WhatsApp Cloud API behind one API"
 repository = "https://github.com/imtaqin/waxum"
 
 [dependencies]
