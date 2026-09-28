@@ -115,7 +115,7 @@ Production-grade. **230+ REST endpoints across 34 feature modules.**
 | HMAC-SHA256 signature (`X-Webhook-Signature`) | header |
 | Event filter mask (message, receipt, call, presence, …) | `event_mask` field |
 | Circuit breaker (auto-trip on Nx 5xx) | env `WEBHOOK_CB_THRESHOLD` |
-| Dead-letter queue + replay | `GET /webhooks/dlq`, `POST /webhooks/dlq/replay` |
+| Dead-letter queue + replay | `GET /sessions/{sid}/webhooks/dlq`, `POST /sessions/{sid}/webhooks/dlq/{entry_id}/replay` |
 | Re-enable all tripped circuits (bulk) | `POST /webhooks/reenable-all` |
 | A message the server redelivers (offline replay, then live) is forwarded once | per session, last 4096 message ids |
 
