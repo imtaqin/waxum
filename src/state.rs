@@ -237,6 +237,12 @@ pub struct SessionState {
     /// the case in issue #135 -- reaches webhooks/NATS/SSE only once. See
     /// [`RecentMessageIds`].
     pub recent_message_ids: parking_lot::Mutex<RecentMessageIds>,
+
+    /// `message` events forwarded to webhooks/NATS/SSE, and when the last
+    /// one was (unix seconds, 0 = never). Surfaced in the status
+    /// diagnostics.
+    pub messages_forwarded: std::sync::atomic::AtomicU64,
+    pub last_message_forwarded_at: std::sync::atomic::AtomicI64,
 }
 
 /// Bounded set of the most recent message keys seen on one session,
@@ -314,6 +320,8 @@ impl SessionState {
             recent_message_ids: parking_lot::Mutex::new(RecentMessageIds::new(
                 RecentMessageIds::DEFAULT_CAPACITY,
             )),
+            messages_forwarded: std::sync::atomic::AtomicU64::new(0),
+            last_message_forwarded_at: std::sync::atomic::AtomicI64::new(0),
         }
     }
 
@@ -873,6 +881,15 @@ impl AppState {
                 None => true,
             },
             None => true,
+        }
+    }
+
+    /// `(circuit_open, consecutive_failures)` for one webhook URL.
+    pub fn webhook_circuit_snapshot(&self, url: &str) -> (bool, u32) {
+        let now = std::time::Instant::now();
+        match self.inner.webhook_circuits.get(url) {
+            Some(c) => (c.opened_until.map(|u| now < u).unwrap_or(false), c.failures),
+            None => (false, 0),
         }
     }
 

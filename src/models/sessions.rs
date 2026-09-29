@@ -255,6 +255,56 @@ pub struct SessionStatusResponse {
     /// `null` when there is no live client in this process at all (the
     /// coarse `status`/`is_logged_in` above already cover that case).
     pub reachability: Option<String>,
+    /// Where inbound traffic stops, for "connected but no webhooks"
+    /// reports: compare `last_data_received_at` (the socket), the client's
+    /// `messages_received` (decrypted), `messages_forwarded` (reached
+    /// waxum's webhook fan-out) and each webhook's health.
+    pub diagnostics: SessionDiagnostics,
+}
+
+/// Counters behind [`SessionStatusResponse::diagnostics`]. The `client_*`
+/// fields come from the whatsapp-rust client and are `null` when no client
+/// is running in this process; they reset whenever the client is rebuilt.
+#[derive(Debug, Default, Serialize, ToSchema)]
+pub struct SessionDiagnostics {
+    /// Unix seconds when data last arrived on the socket.
+    pub last_data_received_at: Option<i64>,
+    /// Frames received on the socket.
+    pub client_frames_received: Option<u64>,
+    /// Messages the client decrypted and dispatched.
+    pub client_messages_received: Option<u64>,
+    /// Decrypted messages the client did not dispatch because the same
+    /// message already had been.
+    pub client_messages_suppressed_duplicate: Option<u64>,
+    /// Events the client shed because a consumer could not keep up.
+    pub client_events_dropped: Option<u64>,
+    /// Reconnects started by the client's auto-reconnect loop.
+    pub client_reconnects: Option<u64>,
+    /// Consecutive failed reconnects (resets on success).
+    pub client_reconnect_errors: Option<u32>,
+    /// `message` events waxum handed to webhooks/NATS/SSE since this
+    /// process started.
+    pub messages_forwarded: u64,
+    /// Unix seconds of the last `message` event handed to webhooks.
+    pub last_message_forwarded_at: Option<i64>,
+    /// Every webhook registered on this session.
+    pub webhooks: Vec<WebhookHealth>,
+}
+
+/// Delivery health of one webhook, as seen by the fan-out.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct WebhookHealth {
+    pub id: String,
+    pub url: String,
+    /// `false` once auto-disabled after repeated failures (re-enable it
+    /// with `POST /sessions/{id}/webhooks/{webhook_id}/enable`).
+    pub enabled: bool,
+    /// Whether this webhook's event filter includes `message`.
+    pub receives_messages: bool,
+    /// `true` while the circuit breaker is skipping this URL.
+    pub circuit_open: bool,
+    /// Consecutive failed deliveries to this URL.
+    pub consecutive_failures: u32,
 }
 
 /// Device information

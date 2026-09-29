@@ -321,6 +321,7 @@ pub async fn get_session_status(
             )
         };
 
+    let diagnostics = session_diagnostics(&state, &session_id);
     Ok(Json(SessionStatusResponse {
         status,
         is_logged_in,
@@ -330,7 +331,48 @@ pub async fn get_session_status(
         push_name: session.push_name,
         pair,
         reachability,
+        diagnostics,
     }))
+}
+
+fn session_diagnostics(
+    state: &AppState,
+    session_id: &str,
+) -> crate::models::sessions::SessionDiagnostics {
+    use std::sync::atomic::Ordering;
+    let mut d = crate::models::sessions::SessionDiagnostics::default();
+    if let Some(runtime) = state.get_session(session_id) {
+        d.messages_forwarded = runtime.messages_forwarded.load(Ordering::Relaxed);
+        let last = runtime.last_message_forwarded_at.load(Ordering::Relaxed);
+        d.last_message_forwarded_at = (last > 0).then_some(last);
+        if let Some(client) = runtime.get_client() {
+            let s = client.stats();
+            d.last_data_received_at =
+                (s.last_data_received_ms > 0).then_some((s.last_data_received_ms / 1000) as i64);
+            d.client_frames_received = Some(s.frames_received);
+            d.client_messages_received = Some(s.messages_received);
+            d.client_messages_suppressed_duplicate = Some(s.messages_suppressed_duplicate);
+            d.client_events_dropped = Some(s.events_dropped);
+            d.client_reconnects = Some(s.reconnects);
+            d.client_reconnect_errors = Some(s.reconnect_errors);
+        }
+    }
+    d.webhooks = state
+        .get_webhooks(session_id)
+        .into_iter()
+        .map(|(id, config)| {
+            let (circuit_open, consecutive_failures) = state.webhook_circuit_snapshot(&config.url);
+            crate::models::sessions::WebhookHealth {
+                id,
+                receives_messages: config.events.iter().any(|e| e.matches("message")),
+                enabled: config.enabled,
+                url: config.url,
+                circuit_open,
+                consecutive_failures,
+            }
+        })
+        .collect();
+    d
 }
 
 /// `whatsapp_rust::Reachability` carries no `Serialize`/`Display` of its own
@@ -1848,6 +1890,12 @@ async fn handle_event(
                     .await;
                 state.publish_to_nats(session_id, "message", &payload).await;
                 runtime.broadcast_event(payload);
+                runtime
+                    .messages_forwarded
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                runtime
+                    .last_message_forwarded_at
+                    .store(timestamp, std::sync::atomic::Ordering::Relaxed);
             }
         }
     } else if let Ok(payload) = serde_json::to_string(&event_to_json(event.as_ref(), session_id)) {

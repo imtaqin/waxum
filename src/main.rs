@@ -374,6 +374,8 @@ use state::AppState;
             models::sessions::DevicePropsRequest,
             models::sessions::QrCodeResponse,
             models::sessions::SessionStatusResponse,
+            models::sessions::SessionDiagnostics,
+            models::sessions::WebhookHealth,
             models::sessions::DeviceInfo,
 
             models::cloud::ConnectCloudRequest,

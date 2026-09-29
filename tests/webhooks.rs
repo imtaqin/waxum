@@ -211,3 +211,55 @@ async fn register_webhook_accepts_upstream_sync_events() {
         vec!["call_log_sync", "stream_error", "enc_decrypt_failed"]
     );
 }
+
+#[tokio::test]
+async fn status_diagnostics_report_each_webhooks_delivery_health() {
+    let h = Harness::new().await;
+    seed_session(&h, "wh-diag").await;
+    for (url, events) in [
+        ("https://example.com/replies", json!(["message"])),
+        ("https://example.com/audit", json!(["connected"])),
+    ] {
+        let (status, _) = call(
+            &h.app,
+            req_json(
+                Method::POST,
+                "/api/v1/sessions/wh-diag/webhooks",
+                Some(TEST_TOKEN),
+                json!({"url": url, "events": events}),
+            ),
+        )
+        .await;
+        assert!(status.is_success());
+    }
+    for _ in 0..30 {
+        h.state
+            .webhook_record_failure("https://example.com/replies");
+    }
+
+    let (status, body) = call(
+        &h.app,
+        req_get("/api/v1/sessions/wh-diag/status", Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let d = &body["diagnostics"];
+    assert_eq!(d["messages_forwarded"], 0);
+    assert_eq!(d["last_message_forwarded_at"], serde_json::Value::Null);
+    let hooks = d["webhooks"].as_array().expect("webhooks array");
+    assert_eq!(hooks.len(), 2);
+    let replies = hooks
+        .iter()
+        .find(|w| w["url"] == "https://example.com/replies")
+        .unwrap();
+    assert_eq!(replies["receives_messages"], true);
+    assert_eq!(replies["enabled"], true);
+    assert_eq!(replies["circuit_open"], true);
+    assert_eq!(replies["consecutive_failures"], 30);
+    let audit = hooks
+        .iter()
+        .find(|w| w["url"] == "https://example.com/audit")
+        .unwrap();
+    assert_eq!(audit["receives_messages"], false);
+    assert_eq!(audit["circuit_open"], false);
+}
