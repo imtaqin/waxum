@@ -46,6 +46,9 @@ pub async fn purge_sessions(
 
     let mut targets: Vec<String> = Vec::new();
     for s in &sessions {
+        if crate::handlers::sessions::is_cloud_session(s) && q.filter != "all" {
+            continue;
+        }
         let hit = match q.filter.as_str() {
             "logged_out" => !s.is_logged_in,
             "disconnected" => s.status == SessionStatus::Disconnected,
@@ -273,6 +276,10 @@ pub async fn fleet_stats(State(state): State<AppState>) -> Result<Json<FleetStat
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     let (mut connected, mut connecting, mut disconnected, mut logged_out) = (0, 0, 0, 0);
     for s in &sessions {
+        if crate::handlers::sessions::is_cloud_session(s) {
+            connected += 1;
+            continue;
+        }
         let effective = state
             .get_session(&s.id)
             .map(|r| r.effective_status())

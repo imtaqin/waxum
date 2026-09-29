@@ -28,9 +28,37 @@
       <div class="session-meta">
         <span class="status-pill {{status_class}}"><span class="status-dot"></span>{{status_label}}</span>
         {{#if phone}}<span class="phone mono">{{phone}}</span>{{/if}}
+        {{#if cloud}}<span class="provider-badge cloud">Cloud API</span>{{else}}<span class="provider-badge">Web</span>{{/if}}
       </div>
     </div>
   </section>
+
+  {{#if cloud}}
+  <section class="panel cloud-panel">
+    <header class="panel-head">
+      <span class="panel-title">Cloud API</span>
+      <span class="panel-serial">META WHATSAPP CLOUD API</span>
+    </header>
+    <div class="cloud-grid">
+      <div class="field"><label>WABA ID</label><span class="val">{{#if cloud.waba_id}}{{cloud.waba_id}}{{else}}—{{/if}}</span></div>
+      <div class="field"><label>Phone number ID</label><span class="val">{{#if cloud.phone_number_id}}{{cloud.phone_number_id}}{{else}}—{{/if}}</span></div>
+      <div class="field"><label>Business ID</label><span class="val">{{#if cloud.business_id}}{{cloud.business_id}}{{else}}— <span class="form-hint">(not set)</span>{{/if}}</span></div>
+      <div class="field"><label>App ID</label><span class="val">{{#if cloud.app_id}}{{cloud.app_id}}{{else}}— <span class="form-hint">(not set)</span>{{/if}}</span></div>
+    </div>
+    <div class="cloud-urls">
+      <div class="field">
+        <label>Webhook callback URL</label>
+        <div class="copy-row"><code id="cloud-webhook-url" class="val"></code><button type="button" class="btn" data-copy="cloud-webhook-url">Copy</button></div>
+        <div class="form-hint">Paste into your Meta app → WhatsApp → Configuration → Callback URL, with the verify token you set for this session, then subscribe to the <b>messages</b> field.</div>
+      </div>
+      <div class="field">
+        <label>Flow endpoint URL</label>
+        <div class="copy-row"><code id="cloud-flow-url" class="val"></code><button type="button" class="btn" data-copy="cloud-flow-url">Copy</button></div>
+        <div class="form-hint">Use as a Flow's <b>endpoint_uri</b> after configuring the endpoint under <b>Cloud · Flows</b> below.</div>
+      </div>
+    </div>
+  </section>
+  {{/if}}
 
   <section id="pair-panel" class="pair-panel panel" hidden>
     <header class="panel-head">
@@ -102,7 +130,7 @@
   </div>
 </main>
 
-<script>window.__SID__ = {{{sid_json}}};</script>
+<script>window.__SID__ = {{{sid_json}}}; window.__PROVIDER__ = {{{provider_json}}};</script>
 <script src="/assets/playground.js"></script>
 <script>
 (function () {
@@ -115,8 +143,26 @@
   const resBodyEl = document.getElementById('pg-result-body');
 
   const sid = window.__SID__;
-  const endpoints = window.__ENDPOINTS__ || [];
+  const provider = window.__PROVIDER__ || 'web';
   const groups = window.__GROUP_META__ || {};
+  const endpoints = (window.__ENDPOINTS__ || []).filter(e => {
+    const only = e.only || (groups[e.group] && groups[e.group].only);
+    return !only || only === provider;
+  });
+
+  const origin = window.location.origin;
+  const enc = encodeURIComponent(sid);
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setText('cloud-webhook-url', origin + '/api/v1/sessions/' + enc + '/cloud/webhook');
+  setText('cloud-flow-url', origin + '/api/v1/sessions/' + enc + '/cloud/flow-endpoint/exchange');
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = document.getElementById(btn.dataset.copy).textContent;
+      try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
+      catch (_) { btn.textContent = 'Select & copy'; }
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
   const groupKeys = Array.from(new Set(endpoints.map(e => e.group)));
   const expandedGroups = new Set([groupKeys[0]]);
   let activeEndpoint = null;
@@ -258,7 +304,7 @@
   function stripPathFields(values) {
     const out = {};
     activeEndpoint.fields.forEach(f => {
-      if (!f.in_path && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
+      if (!f.in_path && !f.in_query && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
         out[f.name] = values[f.name];
       }
     });
@@ -303,6 +349,13 @@
     let path = buildPath(values);
     const body = stripPathFields(values);
     const method = activeEndpoint.method;
+    const queryOnly = {};
+    activeEndpoint.fields.forEach(f => {
+      if (f.in_query && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
+        queryOnly[f.name] = values[f.name];
+      }
+    });
+    path = appendQuery(path, queryOnly);
 
     const opts = {
       method,
@@ -316,6 +369,9 @@
       const form = new FormData();
       Object.keys(body).forEach(k => form.append(k, body[k]));
       opts.body = form;
+    } else if (activeEndpoint.raw_body) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body[activeEndpoint.raw_body]);
     } else if (Object.keys(body).length) {
       opts.headers['content-type'] = 'application/json';
       opts.body = JSON.stringify(body);
@@ -465,8 +521,12 @@
     }
   });
 
-  refreshStatus();
-  refreshQr();
-  qrTimer = setInterval(() => { refreshQr(); refreshStatus(); }, 20000);
+  if (provider === 'cloud') {
+    pairPanel.hidden = true;
+  } else {
+    refreshStatus();
+    refreshQr();
+    qrTimer = setInterval(() => { refreshQr(); refreshStatus(); }, 20000);
+  }
 })();
 </script>

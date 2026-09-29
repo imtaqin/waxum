@@ -11,6 +11,7 @@
 //! - `GET  /data`                   — fragment used by the poll loop
 //! - `GET  /drawer/{sid}`           — session drawer partial
 //! - `POST /sessions`               — create session (proxies handlers::sessions)
+//! - `POST /sessions/cloud`         — create a session and attach Cloud API credentials
 //! - `POST /sessions/{sid}/{op}`    — connect/disconnect/logout/delete
 //! - `GET  /assets/console.css`    — one CSS file
 //!
@@ -109,6 +110,10 @@ pub fn console_router() -> Router<AppState> {
         .route("/s/{sid}", get(handlers::session_page))
         .route("/qr-svg/{sid}", get(handlers::qr_svg))
         .route("/sessions", post(handlers::create_session_proxy))
+        .route(
+            "/sessions/cloud",
+            post(handlers::create_cloud_session_proxy),
+        )
         .route("/sessions/{sid}/{op}", post(handlers::session_action_proxy))
         .route("/assets/console.css", get(handlers::css))
         .route("/assets/playground.js", get(handlers::playground_js))

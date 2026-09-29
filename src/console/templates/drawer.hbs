@@ -42,8 +42,20 @@
   </div>
   {{/if}}
 
+  {{#if is_cloud}}
+  <div class="field">
+    <label>Provider</label>
+    <span class="val">WhatsApp Cloud API</span>
+  </div>
+  {{/if}}
+
   <div class="actions">
-    {{#if is_connected}}
+    {{#if is_cloud}}
+    <a class="btn primary" href="/s/{{session_id}}">
+      <svg class="icon sm"><use href="#i-arrow"/></svg>
+      Open
+    </a>
+    {{else if is_connected}}
     <button class="btn" onclick="sessionAction('{{session_id}}','disconnect')">
       <svg class="icon sm"><use href="#i-power"/></svg>
       Disconnect

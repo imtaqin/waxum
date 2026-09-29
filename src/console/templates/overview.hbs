@@ -64,6 +64,93 @@
     if (res.ok) { closeDrawer(); refreshOverview(); }
   }
 
+  const CLOUD_FIELDS = [
+    { name: 'id', label: 'Session ID', required: true, placeholder: 'acme-cloud' },
+    { name: 'waba_id', label: 'WhatsApp Business Account ID', required: true, placeholder: '102290129340398' },
+    { name: 'phone_number_id', label: 'Phone number ID', required: true, placeholder: '106540352242922' },
+    { name: 'access_token', label: 'Access token (system user)', required: true, secret: true, placeholder: 'EAAG…' },
+    { name: 'app_secret', label: 'App secret', required: true, secret: true, hint: 'Verifies X-Hub-Signature-256 on Meta webhooks.' },
+    { name: 'webhook_verify_token', label: 'Webhook verify token', required: true, hint: 'Any string you choose; paste the same value into Meta.' },
+    { name: 'business_id', label: 'Business ID (optional)', placeholder: '102290129340399', hint: 'Needed for owned/client WABAs, credit lines, system users.' },
+    { name: 'app_id', label: 'App ID (optional)', hint: 'Needed for the business profile photo upload.' },
+  ];
+
+  function openCloudForm() {
+    const esc = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fields = CLOUD_FIELDS.map(f => `
+      <div class="field">
+        <label for="cf-${f.name}">${esc(f.label)}</label>
+        <input class="form-input" id="cf-${f.name}" name="${f.name}" type="${f.secret ? 'password' : 'text'}"
+               autocomplete="off" placeholder="${esc(f.placeholder)}" ${f.required ? 'required' : ''}>
+        ${f.hint ? `<div class="form-hint">${esc(f.hint)}</div>` : ''}
+      </div>`).join('');
+    const d = document.getElementById('drawer');
+    d.innerHTML = `
+      <header class="drawer-head">
+        <div>
+          <div class="drawer-title">New Cloud API session</div>
+          <div class="panel-serial" style="margin-top:4px">META WHATSAPP CLOUD API</div>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">
+          <svg class="icon lg"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <form class="drawer-body" id="cloud-form" onsubmit="submitCloudForm(event)">
+        <div class="form-hint">
+          Attach a number from your Meta app. The access token and app secret
+          are stored on the server and never shown again.
+        </div>
+        ${fields}
+        <div id="cloud-form-error" class="err" hidden></div>
+        <div class="actions">
+          <button type="submit" class="btn primary" id="cloud-form-submit">
+            <svg class="icon sm"><use href="#i-plus"/></svg>
+            Create session
+          </button>
+          <button type="button" class="btn" onclick="closeDrawer()">Cancel</button>
+        </div>
+      </form>`;
+    d.classList.add('open');
+    d.setAttribute('aria-hidden', 'false');
+    document.getElementById('drawer-scrim').classList.add('open');
+    document.getElementById('cf-id').focus();
+  }
+
+  async function submitCloudForm(ev) {
+    ev.preventDefault();
+    const form = ev.target;
+    const errEl = document.getElementById('cloud-form-error');
+    const btn = document.getElementById('cloud-form-submit');
+    errEl.hidden = true;
+    const body = {};
+    CLOUD_FIELDS.forEach(f => {
+      const v = form.elements[f.name].value.trim();
+      if (v) body[f.name] = v;
+    });
+    btn.disabled = true;
+    try {
+      const res = await fetch('/sessions/cloud', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        location.href = '/s/' + encodeURIComponent(body.id);
+        return;
+      }
+      let msg = 'Could not create session (' + res.status + ')';
+      try { const j = await res.json(); msg = (j.error && j.error.message) || j.message || msg; } catch (_) {}
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    } catch (e) {
+      errEl.textContent = String(e);
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function createSession() {
     const id = prompt('New session id (letters, digits, dashes):');
     if (!id) return;

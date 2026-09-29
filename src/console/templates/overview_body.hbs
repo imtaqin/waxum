@@ -34,6 +34,7 @@
         <thead>
           <tr>
             <th>ID</th>
+            <th>Provider</th>
             <th>Phone</th>
             <th>Status</th>
             <th style="text-align:right;padding-right:24px">Actions</th>
@@ -43,6 +44,7 @@
         {{#each sessions}}
           <tr onclick="location.href='/s/'+encodeURIComponent('{{id}}')">
             <td class="id">{{id}}</td>
+            <td>{{#if is_cloud}}<span class="provider-badge cloud">Cloud API</span>{{else}}<span class="provider-badge">Web</span>{{/if}}</td>
             <td class="phone">{{#if phone}}{{phone}}{{else}}<span style="color:var(--color-border)">—</span>{{/if}}</td>
             <td>
               <span class="status-pill {{status_class}}">
@@ -62,18 +64,27 @@
       </table>
       {{else}}
       <div class="empty">
-        No sessions yet. Create one to start pairing.
-        <div style="margin-top:16px">
+        No sessions yet. Create one to start pairing, or attach a Meta
+        WhatsApp Cloud API number.
+        <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <button class="btn primary" onclick="createSession()">
             <svg class="icon sm"><use href="#i-plus"/></svg>
             New session
+          </button>
+          <button class="btn" onclick="openCloudForm()">
+            <svg class="icon sm"><use href="#i-plus"/></svg>
+            New Cloud API session
           </button>
         </div>
       </div>
       {{/if}}
     </div>
     {{#if has_sessions}}
-    <div style="padding:14px 20px;border-top:1px solid var(--color-border);display:flex;justify-content:flex-end;align-items:center">
+    <div style="padding:14px 20px;border-top:1px solid var(--color-border);display:flex;justify-content:flex-end;align-items:center;gap:10px">
+      <button class="btn" onclick="openCloudForm()">
+        <svg class="icon sm"><use href="#i-plus"/></svg>
+        New Cloud API session
+      </button>
       <button class="btn primary" onclick="createSession()">
         <svg class="icon sm"><use href="#i-plus"/></svg>
         New session

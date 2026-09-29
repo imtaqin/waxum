@@ -19,7 +19,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::console::{render_page, render_partial, CONSOLE_COOKIE};
-use crate::models::sessions::SessionStatus;
+use crate::models::sessions::{SessionInfo, SessionStatus};
 use crate::state::AppState;
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
@@ -119,6 +119,7 @@ struct SessionRow {
     phone: Option<String>,
     status_class: String,
     status_label: String,
+    is_cloud: bool,
 }
 
 #[derive(Serialize)]
@@ -136,6 +137,20 @@ struct OverviewData {
     has_sessions: bool,
     events: Vec<EventRow>,
     has_events: bool,
+}
+
+/// A `whatsapp_cloud` session has no socket: once its credentials are
+/// stored it is reachable, so it always shows as connected, labelled with
+/// its provider instead of a socket state.
+fn session_status(state: &AppState, s: &SessionInfo) -> (&'static str, &'static str) {
+    if crate::handlers::sessions::is_cloud_session(s) {
+        return ("connected", "CLOUD API");
+    }
+    let runtime_status = state
+        .get_session(&s.id)
+        .map(|r| r.effective_status())
+        .unwrap_or(s.status);
+    status_row(runtime_status)
 }
 
 fn status_row(s: SessionStatus) -> (&'static str, &'static str) {
@@ -158,11 +173,7 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
     let (mut connected, mut pairing, mut offline) = (0u32, 0u32, 0u32);
 
     for s in &db_sessions {
-        let runtime_status = state
-            .get_session(&s.id)
-            .map(|r| r.effective_status())
-            .unwrap_or(s.status);
-        let (cls, label) = status_row(runtime_status);
+        let (cls, label) = session_status(state, s);
         match cls {
             "connected" => connected += 1,
             "connecting" => pairing += 1,
@@ -173,6 +184,7 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
             phone: s.phone_number.clone(),
             status_class: cls.to_string(),
             status_label: label.to_string(),
+            is_cloud: crate::handlers::sessions::is_cloud_session(s),
         });
     }
 
@@ -321,6 +333,7 @@ struct DrawerData {
     storage_path: String,
     qr_svg: Option<String>,
     is_connected: bool,
+    is_cloud: bool,
 }
 
 pub async fn drawer(
@@ -346,8 +359,10 @@ pub async fn drawer(
         .as_ref()
         .map(|r| r.effective_status())
         .unwrap_or(info.status);
-    let (cls, label) = status_row(status);
-    let is_connected = matches!(status, SessionStatus::Connected | SessionStatus::LoggedIn);
+    let is_cloud = crate::handlers::sessions::is_cloud_session(&info);
+    let (cls, label) = session_status(&state, &info);
+    let is_connected =
+        is_cloud || matches!(status, SessionStatus::Connected | SessionStatus::LoggedIn);
 
     let qr_svg = if !is_connected {
         runtime
@@ -375,6 +390,7 @@ pub async fn drawer(
         storage_path,
         qr_svg,
         is_connected,
+        is_cloud,
     };
     html(render_partial("drawer", &data))
 }
@@ -384,10 +400,24 @@ struct SessionPageData {
     version: &'static str,
     session_id: String,
     sid_json: String,
+    provider_json: String,
     status_class: String,
     status_label: String,
     phone: Option<String>,
     storage_path: String,
+    cloud: Option<CloudPanel>,
+}
+
+/// Non-secret Cloud API identifiers shown on a `whatsapp_cloud` session's
+/// page. The webhook and Flow endpoint URLs the operator pastes into Meta's
+/// app dashboard are built client-side from `location.origin`, since the
+/// console can't know the public host waxum is reachable at behind a proxy.
+#[derive(Serialize)]
+struct CloudPanel {
+    waba_id: Option<String>,
+    phone_number_id: Option<String>,
+    business_id: Option<String>,
+    app_id: Option<String>,
 }
 
 pub async fn session_page(
@@ -404,11 +434,8 @@ pub async fn session_page(
         _ => return redirect_to("/"),
     };
 
-    let runtime_status = state
-        .get_session(&sid)
-        .map(|r| r.effective_status())
-        .unwrap_or(info.status);
-    let (cls, label) = status_row(runtime_status);
+    let (cls, label) = session_status(&state, &info);
+    let is_cloud = crate::handlers::sessions::is_cloud_session(&info);
 
     let storage_path = state
         .session_manager()
@@ -418,14 +445,24 @@ pub async fn session_page(
         .flatten()
         .unwrap_or_default();
 
+    let cloud = is_cloud.then(|| CloudPanel {
+        waba_id: info.cloud_waba_id.clone(),
+        phone_number_id: info.cloud_phone_number_id.clone(),
+        business_id: info.cloud_business_id.clone(),
+        app_id: info.cloud_app_id.clone(),
+    });
+
     let data = SessionPageData {
         version: env!("CARGO_PKG_VERSION"),
         session_id: sid.clone(),
         sid_json: serde_json::to_string(&sid).unwrap_or_else(|_| "\"\"".to_string()),
+        provider_json: serde_json::to_string(if is_cloud { "cloud" } else { "web" })
+            .unwrap_or_else(|_| "\"web\"".to_string()),
         status_class: cls.to_string(),
         status_label: label.to_string(),
         phone: info.phone_number.clone(),
         storage_path,
+        cloud,
     };
     html(render_page(&format!("Session · {}", sid), "session", &data))
 }
@@ -469,6 +506,46 @@ pub async fn create_session_proxy(
     };
 
     match crate::handlers::sessions::create_session(State(state), Json(create_req)).await {
+        Ok(Json(resp)) => (StatusCode::CREATED, Json(resp)).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+/// Body for `POST /sessions/cloud`: creates a session and attaches Cloud
+/// API credentials to it in one step.
+#[derive(Deserialize)]
+pub struct CreateCloudReq {
+    id: String,
+    #[serde(flatten)]
+    credentials: crate::models::cloud::ConnectCloudRequest,
+}
+
+pub async fn create_cloud_session_proxy(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<CreateCloudReq>,
+) -> Response {
+    if let Err(r) = require_auth(&headers) {
+        return *r;
+    }
+
+    use crate::models::sessions::CreateSessionRequest;
+    let create_req = CreateSessionRequest {
+        id: Some(req.id.clone()),
+        name: Some(req.id.clone()),
+        reuse: None,
+        webhook: None,
+        device: None,
+    };
+    if let Err(e) =
+        crate::handlers::sessions::create_session(State(state.clone()), Json(create_req)).await
+    {
+        return e.into_response();
+    }
+
+    match crate::handlers::cloud::connect_cloud(State(state), Path(req.id), Json(req.credentials))
+        .await
+    {
         Ok(Json(resp)) => (StatusCode::CREATED, Json(resp)).into_response(),
         Err(e) => e.into_response(),
     }

@@ -910,3 +910,66 @@ a:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- PROVIDER / CLOUD API ---------- */
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--spacing-2);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-element);
+  font-family: var(--font-family-code);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.provider-badge.cloud {
+  color: var(--color-text-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-muted);
+}
+.form-input {
+  width: 100%;
+  height: var(--size-element-md);
+  padding: 0 var(--spacing-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-body);
+  font-family: var(--font-family-code);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.form-input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent-muted); }
+.form-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.form-hint b { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+.cloud-panel { margin-bottom: var(--spacing-6); }
+.cloud-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-5);
+  padding: var(--spacing-6) var(--spacing-6) 0;
+}
+.cloud-urls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+  padding: var(--spacing-6);
+}
+.copy-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-body);
+}
+.copy-row code { flex: 1; min-width: 0; }

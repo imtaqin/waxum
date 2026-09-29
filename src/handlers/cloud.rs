@@ -7,6 +7,13 @@
 //! delivery endpoints Meta calls directly -- exempted from the normal
 //! bearer-auth middleware in [`crate::middleware::jwt`] since Meta only
 //! ever presents its own `X-Hub-Signature-256`, never a waxum token.
+//!
+//! `POST /sessions` starts a multi-device client right away, so a session
+//! created and then attached to the Cloud API would otherwise keep that
+//! client running (and asking for a QR scan) next to its Cloud
+//! credentials. `connect_cloud` disconnects and drops any such runtime,
+//! and `connect_client` re-checks the provider before opening a socket
+//! in case the client was still being built.
 
 use axum::{
     body::Bytes,
@@ -50,6 +57,12 @@ pub async fn connect_cloud(
         return Err(ApiError::SessionNotFound(session_id));
     }
     manager.connect_cloud(&session_id, &request).await?;
+    if let Some(runtime) = state.remove_session(&session_id) {
+        if let Some(client) = runtime.get_client() {
+            client.disconnect().await;
+        }
+        runtime.set_client(None);
+    }
     let session = manager
         .get_session(&session_id)
         .await?

@@ -272,7 +272,16 @@ pub async fn get_session_status(
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
 
     let (status, is_logged_in, socket_alive, paused, pair, reachability) =
-        if let Some(runtime) = state.get_session(&session_id) {
+        if is_cloud_session(&session) {
+            (
+                SessionStatus::LoggedIn,
+                true,
+                false,
+                false,
+                crate::models::sessions::PairStatus::default(),
+                None,
+            )
+        } else if let Some(runtime) = state.get_session(&session_id) {
             let ps = runtime.get_pair_state();
             let pair = crate::models::sessions::PairStatus {
                 last_qr_at: ps.last_qr_at,
@@ -375,6 +384,34 @@ fn session_diagnostics(
     d
 }
 
+/// `true` for a session attached to Meta's WhatsApp Cloud API.
+pub(crate) fn is_cloud_session(session: &SessionInfo) -> bool {
+    session.provider == "whatsapp_cloud"
+}
+
+/// Looks the session up and reports whether it is a `whatsapp_cloud`
+/// session. A lookup failure counts as "not cloud", so a transient DB
+/// error never blocks a normal multi-device connect.
+async fn session_is_cloud(state: &AppState, session_id: &str) -> bool {
+    matches!(
+        state.session_manager().get_session(session_id).await,
+        Ok(Some(s)) if is_cloud_session(&s)
+    )
+}
+
+/// Refuses a multi-device lifecycle operation (connect, pair, QR wait) on
+/// a `whatsapp_cloud` session. Such a session has no socket to open: its
+/// credentials are its connection, so starting a whatsapp-rust client
+/// there would just try to pair a second, unrelated WhatsApp account.
+fn reject_cloud_session(session: &SessionInfo, op: &str) -> Result<(), ApiError> {
+    if is_cloud_session(session) {
+        return Err(ApiError::BadRequest(format!(
+            "{op} is not applicable to a whatsapp_cloud session; it is connected through its Cloud API credentials"
+        )));
+    }
+    Ok(())
+}
+
 /// `whatsapp_rust::Reachability` carries no `Serialize`/`Display` of its own
 /// (see its upstream doc: reported by `Client::reachability`, waited out by
 /// `Client::wait_until_reachable`) -- own the string mapping here so a
@@ -466,12 +503,13 @@ pub async fn connect_session(
             d.version.as_deref(),
         )
     });
-    let _ = state
+    let session = state
         .session_manager()
         .get_session(&session_id)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
+    reject_cloud_session(&session, "connect")?;
 
     if let Some(runtime) = state.get_session(&session_id) {
         if runtime.is_alive() {
@@ -685,6 +723,9 @@ async fn ensure_connecting_for_wait(
         .get_session(session_id)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    if let Some(session) = &existing {
+        reject_cloud_session(session, "connect/wait")?;
+    }
 
     let storage_path = if existing.is_some() {
         state
@@ -776,12 +817,13 @@ pub async fn pair_session(
     Path(session_id): Path<String>,
     Json(request): Json<PairCodeRequest>,
 ) -> Result<Json<PairCodeResponse>, ApiError> {
-    let _ = state
+    let session = state
         .session_manager()
         .get_session(&session_id)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
+    reject_cloud_session(&session, "pair")?;
 
     if let Some(runtime) = state.get_session(&session_id) {
         let status = runtime.get_status();
@@ -1262,6 +1304,10 @@ pub async fn reconnect_all_on_startup(state: AppState) {
     );
 
     for session in sessions {
+        if is_cloud_session(&session) {
+            tracing::debug!("[startup] skip session {} (whatsapp_cloud)", session.id);
+            continue;
+        }
         let should_reconnect = matches!(
             session.status,
             SessionStatus::LoggedIn | SessionStatus::Connected | SessionStatus::Connecting
@@ -1491,6 +1537,14 @@ async fn connect_client(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
+    if session_is_cloud(state, session_id).await {
+        tracing::info!(
+            session_id = %session_id,
+            "session switched to whatsapp_cloud before its multi-device client started; not connecting"
+        );
+        return Ok(());
+    }
+
     if let Some(runtime) = state.get_session(session_id) {
         let c = bot.client();
         c.enable_auto_reconnect.store(
@@ -1599,6 +1653,14 @@ async fn connect_client_with_pair_code(
         .build()
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    if session_is_cloud(state, session_id).await {
+        tracing::info!(
+            session_id = %session_id,
+            "session switched to whatsapp_cloud before its multi-device client started; not connecting"
+        );
+        return Ok(());
+    }
 
     if let Some(runtime) = state.get_session(session_id) {
         let c = bot.client();
