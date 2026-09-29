@@ -85,6 +85,10 @@ aes-gcm = "0.10"
 # host before any server-side fetch of a caller-supplied URL.
 url = "2"
 
+# Link preview thumbnails (link_preview.rs): decode a page's og:image and
+# re-encode it as a small JPEG for ExtendedTextMessage.jpeg_thumbnail.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+
 # JWT authentication
 jsonwebtoken = "9"
 

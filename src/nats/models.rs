@@ -16,6 +16,9 @@ pub enum OutboundCommand {
         text: String,
         reply_to: Option<String>,
         request_id: Option<String>,
+        /// Same as `link_preview` on `POST /messages/text`.
+        #[serde(default)]
+        link_preview: Option<bool>,
     },
     Image {
         to: String,

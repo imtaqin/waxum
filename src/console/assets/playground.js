@@ -62,6 +62,7 @@
         fields: [
           { name: 'to', label: 'To (phone or JID)', type: 'text', required: true },
           { name: 'text', label: 'Text', type: 'textarea', required: true },
+          { name: 'link_preview', label: 'Attach a link preview for the first URL', type: 'checkbox' },
         ] },
       { key: 'image', label: 'Image', method: 'POST',
         path: '/api/v1/sessions/{sid}/messages/image',

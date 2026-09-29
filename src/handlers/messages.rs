@@ -68,7 +68,7 @@ pub async fn execute_text(
             .send_text(
                 &request.to,
                 &request.text,
-                false,
+                request.link_preview.unwrap_or(false),
                 request.reply_to.as_deref(),
             )
             .await
@@ -147,14 +147,21 @@ pub async fn execute_text(
         context_info.get_or_insert_default().mentioned_jid = mentioned;
     }
 
+    let preview = if request.link_preview == Some(true) {
+        crate::link_preview::for_text(&text).await
+    } else {
+        None
+    };
+    let mut extended = waproto::whatsapp::message::ExtendedTextMessage {
+        text: Some(text),
+        context_info,
+        ..Default::default()
+    };
+    if let Some(preview) = preview {
+        crate::link_preview::apply(&mut extended, preview);
+    }
     let message = waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
-            waproto::whatsapp::message::ExtendedTextMessage {
-                text: Some(text),
-                context_info,
-                ..Default::default()
-            },
-        ),
+        extended_text_message: MessageField::some(extended),
         ..Default::default()
     };
 
@@ -3738,6 +3745,7 @@ pub async fn send_message(
             mentions: None,
             mention_all: None,
             send_at: None,
+            link_preview: None,
         }),
     )
     .await

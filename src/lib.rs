@@ -8,6 +8,7 @@ pub mod db;
 pub mod device_props;
 pub mod error;
 pub mod handlers;
+pub mod link_preview;
 pub mod metrics;
 pub mod middleware;
 pub mod models;

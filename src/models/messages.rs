@@ -58,6 +58,16 @@ pub struct SendTextRequest {
     #[serde(default)]
     #[schema(example = "2026-01-01T12:00:00Z")]
     pub send_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// When `true`, attach a preview card (title, description, thumbnail)
+    /// for the first `http(s)` URL in `text`. waxum fetches the page itself,
+    /// through the same SSRF guard as media-by-URL and within a few
+    /// seconds; if nothing usable comes back, the text is sent unchanged
+    /// without a preview. Off by default. On a `whatsapp_cloud` session this
+    /// sets Meta's `preview_url` and Meta builds the preview.
+    #[serde(default)]
+    #[schema(example = true)]
+    pub link_preview: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

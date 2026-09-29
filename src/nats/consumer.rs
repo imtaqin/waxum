@@ -124,15 +124,27 @@ async fn dispatch_command(
     command: OutboundCommand,
 ) -> anyhow::Result<String> {
     match command {
-        OutboundCommand::Text { to, text, .. } => {
+        OutboundCommand::Text {
+            to,
+            text,
+            link_preview,
+            ..
+        } => {
             let to_jid = parse_jid(&to)?;
+            let preview = if link_preview == Some(true) {
+                crate::link_preview::for_text(&text).await
+            } else {
+                None
+            };
+            let mut extended = waproto::whatsapp::message::ExtendedTextMessage {
+                text: Some(text),
+                ..Default::default()
+            };
+            if let Some(preview) = preview {
+                crate::link_preview::apply(&mut extended, preview);
+            }
             let message = waproto::whatsapp::Message {
-                extended_text_message: MessageField::some(
-                    waproto::whatsapp::message::ExtendedTextMessage {
-                        text: Some(text),
-                        ..Default::default()
-                    },
-                ),
+                extended_text_message: MessageField::some(extended),
                 ..Default::default()
             };
             client
