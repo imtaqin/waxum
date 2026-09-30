@@ -1364,24 +1364,35 @@ pub async fn reconnect_all_on_startup(state: AppState) {
     }
 }
 
-/// Self-heal for a session wedged in whatsapp-rust's own reconnect backoff.
+/// Self-heal for sessions whose whatsapp-rust client has stopped making
+/// progress, in two shapes. For either one, this forces the same full
+/// rebuild a manual `POST .../connect` performs: disconnect the client
+/// (bounded by [`REBUILD_DISCONNECT_TIMEOUT`]) and spawn [`connect_client`]
+/// fresh.
 ///
-/// whatsapp-rust's internal retry loop (inside `bot.run()`) has no attempt
-/// cap of its own -- it backs off up to 15 minutes between tries and keeps
-/// going forever, which in practice reads as "auto-reconnect enabled but
-/// stuck" during a prolonged outage or a wedged handshake. This watchdog
-/// ticks every `RECONNECT_WATCHDOG_POLL_MS` (default 30s) and, for any
-/// session that has been in `Connecting` for longer than
-/// `RECONNECT_MAX_STUCK_SECS` (default 600s) *or* whose
-/// `client.stats().reconnect_errors` has crossed `RECONNECT_MAX_ATTEMPTS`
-/// (default 10), forces the same full rebuild a manual `POST .../connect`
-/// performs: cleanly disconnect the wedged client (stopping its internal
-/// loop) and spawn [`connect_client`] fresh, rather than trusting the
-/// crate to eventually recover on its own. Also broadcasts a synthetic
-/// `disconnected` webhook/event as a safety net -- see the module docs on
-/// `Event::Disconnected` for why the crate doesn't always dispatch one for
-/// a socket that dies silently. Sessions paused by an account-lock
-/// cooldown (`ACCOUNT_LOCK_BACKOFF_SECS`) are skipped outright.
+/// Ticks every `RECONNECT_WATCHDOG_POLL_MS` (default 30 s).
+///
+/// **Stuck reconnecting.** whatsapp-rust's retry loop (inside `bot.run()`)
+/// has no attempt cap. It backs off up to 15 minutes between tries and
+/// keeps going forever, which reads as "auto-reconnect enabled but stuck"
+/// during a long outage or a wedged handshake. A session that has been
+/// `Connecting` for longer than `RECONNECT_MAX_STUCK_SECS` (default 600),
+/// or whose `reconnect_errors` has reached `RECONNECT_MAX_ATTEMPTS`
+/// (default 10), is rebuilt.
+///
+/// **Stale socket.** A logged-in session whose socket has received nothing
+/// for `STALE_SOCKET_SECS` (default 150, `0` disables) is rebuilt. On a
+/// healthy connection the client's own keepalive guarantees traffic well
+/// inside that window: it pings after 15-30 s of silence and waits 20 s for
+/// the reply. Issue #143 showed a socket silent for 51 minutes after the
+/// host's IP changed, still reported connected and `reachable`, with no
+/// keepalive ping sent and no reconnect attempted. That one-sided,
+/// half-open state is what this catches.
+///
+/// Both paths broadcast a synthetic `disconnected` event, with `forced_by`
+/// naming the check, because the crate doesn't always dispatch one for a
+/// socket that dies silently. Sessions in an account-lock cooldown
+/// (`ACCOUNT_LOCK_BACKOFF_SECS`) and paused sessions are skipped.
 pub async fn run_reconnect_watchdog(state: AppState) {
     let poll_ms: u64 = std::env::var("RECONNECT_WATCHDOG_POLL_MS")
         .ok()
@@ -1395,6 +1406,10 @@ pub async fn run_reconnect_watchdog(state: AppState) {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(600);
+    let stale_socket_secs: u64 = std::env::var("STALE_SOCKET_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(150);
 
     let mut ticker = tokio::time::interval(Duration::from_millis(poll_ms));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1402,15 +1417,14 @@ pub async fn run_reconnect_watchdog(state: AppState) {
         poll_ms,
         max_attempts,
         max_stuck_secs,
+        stale_socket_secs,
         "reconnect watchdog started"
     );
 
     loop {
         ticker.tick().await;
+        let now_ms = chrono::Utc::now().timestamp_millis().max(0) as u64;
         for (session_id, runtime) in state.session_iter_with_ids() {
-            if runtime.get_status() != SessionStatus::Connecting {
-                continue;
-            }
             if let Some(remaining) = runtime.lock_cooldown_remaining() {
                 tracing::debug!(
                     session_id = %session_id,
@@ -1422,62 +1436,200 @@ pub async fn run_reconnect_watchdog(state: AppState) {
             let Some(client) = runtime.get_client() else {
                 continue;
             };
-            let stuck_secs = runtime.reconnecting_for_secs().unwrap_or(0);
-            let reconnect_errors = client.stats().reconnect_errors;
-            if reconnect_errors < max_attempts && stuck_secs < max_stuck_secs {
-                continue;
-            }
 
-            tracing::warn!(
-                session_id = %session_id,
-                reconnect_errors,
-                stuck_secs,
-                "reconnect watchdog: forcing full rebuild after a stuck retry window"
-            );
-
-            client.disconnect().await;
-            runtime.set_client(None);
-            runtime.set_status(SessionStatus::Disconnected);
-            runtime.clear_reconnecting();
-            let _ = state
-                .session_manager()
-                .update_session_status(&session_id, SessionStatus::Disconnected, false)
-                .await;
-
-            let payload = serde_json::json!({
-                "session_id": session_id,
-                "event": "disconnected",
-                "timestamp": chrono::Utc::now().timestamp(),
-                "data": { "forced_by": "reconnect_watchdog" },
-            });
-            if let Ok(payload_str) = serde_json::to_string(&payload) {
-                state
-                    .broadcast_to_webhooks(&session_id, "disconnected", &payload_str)
-                    .await;
-                state
-                    .publish_to_nats(&session_id, "disconnected", &payload_str)
-                    .await;
-                runtime.broadcast_event(payload_str);
-            }
-
-            runtime.set_status(SessionStatus::Connecting);
-            let state_clone = state.clone();
-            let session_id_clone = session_id.clone();
-            tokio::spawn(async move {
-                if let Err(e) = connect_client(&state_clone, &session_id_clone, None).await {
-                    tracing::error!(
-                        "reconnect watchdog: rebuild failed for {}: {}",
-                        session_id_clone,
-                        e
-                    );
-                    if let Some(rt) = state_clone.get_session(&session_id_clone) {
-                        rt.set_status(SessionStatus::Disconnected);
-                        rt.set_client(None);
+            let forced_by = match runtime.get_status() {
+                SessionStatus::Connecting => {
+                    let stuck_secs = runtime.reconnecting_for_secs().unwrap_or(0);
+                    let reconnect_errors = client.stats().reconnect_errors;
+                    if reconnect_errors < max_attempts && stuck_secs < max_stuck_secs {
+                        continue;
                     }
+                    tracing::warn!(
+                        session_id = %session_id,
+                        reconnect_errors,
+                        stuck_secs,
+                        "reconnect watchdog: forcing full rebuild after a stuck retry window"
+                    );
+                    "reconnect_watchdog"
                 }
-            });
+                SessionStatus::LoggedIn | SessionStatus::Connected => {
+                    if client.is_paused() {
+                        continue;
+                    }
+                    let last_ms = client.stats().last_data_received_ms;
+                    let Some(silent_secs) =
+                        stale_socket_silence(now_ms, last_ms, stale_socket_secs)
+                    else {
+                        continue;
+                    };
+                    tracing::warn!(
+                        session_id = %session_id,
+                        silent_secs,
+                        "reconnect watchdog: socket received nothing for too long while connected, forcing full rebuild"
+                    );
+                    "stale_socket_watchdog"
+                }
+                _ => continue,
+            };
+
+            force_rebuild(&state, &session_id, &runtime, &client, forced_by).await;
         }
     }
+}
+
+/// How long [`force_rebuild`] waits for the old client to disconnect. A
+/// half-open socket can hang a graceful close indefinitely, so this is
+/// bounded and the client is dropped either way.
+const REBUILD_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Seconds of silence when a connected socket counts as stale, or `None`
+/// when it doesn't: the check is disabled (`threshold_secs == 0`),
+/// nothing has been received yet (`last_data_received_ms == 0`), or the
+/// silence is within the threshold.
+fn stale_socket_silence(
+    now_ms: u64,
+    last_data_received_ms: u64,
+    threshold_secs: u64,
+) -> Option<u64> {
+    if threshold_secs == 0 || last_data_received_ms == 0 {
+        return None;
+    }
+    let silent_secs = now_ms.saturating_sub(last_data_received_ms) / 1000;
+    (silent_secs > threshold_secs).then_some(silent_secs)
+}
+
+async fn force_rebuild(
+    state: &AppState,
+    session_id: &str,
+    runtime: &std::sync::Arc<crate::state::SessionState>,
+    client: &std::sync::Arc<whatsapp_rust::Client>,
+    forced_by: &str,
+) {
+    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.disconnect())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            session_id = %session_id,
+            "reconnect watchdog: old client did not disconnect within {}s; dropping it",
+            REBUILD_DISCONNECT_TIMEOUT.as_secs()
+        );
+    }
+    runtime.set_client(None);
+    runtime.set_status(SessionStatus::Disconnected);
+    runtime.clear_reconnecting();
+    let _ = state
+        .session_manager()
+        .update_session_status(session_id, SessionStatus::Disconnected, false)
+        .await;
+
+    let payload = serde_json::json!({
+        "session_id": session_id,
+        "event": "disconnected",
+        "timestamp": chrono::Utc::now().timestamp(),
+        "data": { "forced_by": forced_by },
+    });
+    if let Ok(payload_str) = serde_json::to_string(&payload) {
+        state
+            .broadcast_to_webhooks(session_id, "disconnected", &payload_str)
+            .await;
+        state
+            .publish_to_nats(session_id, "disconnected", &payload_str)
+            .await;
+        runtime.broadcast_event(payload_str);
+    }
+
+    runtime.set_status(SessionStatus::Connecting);
+    let state_clone = state.clone();
+    let session_id_clone = session_id.to_string();
+    let forced_by = forced_by.to_string();
+    tokio::spawn(async move {
+        if let Err(e) = connect_client(&state_clone, &session_id_clone, None).await {
+            tracing::error!(
+                "{}: rebuild failed for {}: {}",
+                forced_by,
+                session_id_clone,
+                e
+            );
+            if let Some(rt) = state_clone.get_session(&session_id_clone) {
+                rt.set_status(SessionStatus::Disconnected);
+                rt.set_client(None);
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod client_guard_tests {
+    use super::is_current_client;
+    use std::sync::Arc;
+
+    #[test]
+    fn only_the_installed_client_is_current() {
+        let current = Arc::new(1u8);
+        let replaced = Arc::new(1u8);
+        assert!(is_current_client(Some(current.clone()), &current));
+        assert!(
+            !is_current_client(Some(current.clone()), &replaced),
+            "an equal value in a different client is still a different client"
+        );
+        assert!(
+            !is_current_client(None, &current),
+            "nothing is current after a disconnect"
+        );
+    }
+}
+
+#[cfg(test)]
+mod stale_socket_tests {
+    use super::stale_socket_silence;
+
+    #[test]
+    fn a_socket_silent_past_the_threshold_is_stale() {
+        let now = 1_790_774_900_000;
+        let last = 1_790_771_858_000;
+        assert_eq!(stale_socket_silence(now, last, 150), Some(3042));
+    }
+
+    #[test]
+    fn recent_traffic_disabled_check_or_no_traffic_yet_is_not_stale() {
+        let now = 1_000_000_000;
+        assert_eq!(stale_socket_silence(now, now - 30_000, 150), None);
+        assert_eq!(stale_socket_silence(now, now - 150_000, 150), None);
+        assert_eq!(stale_socket_silence(now, now - 3_600_000, 0), None);
+        assert_eq!(stale_socket_silence(now, 0, 150), None);
+        assert_eq!(stale_socket_silence(now, now + 5_000, 150), None);
+    }
+}
+
+/// Clears the session's runtime after its client's `bot.run()` returned,
+/// but only if that client is still the one installed. A watchdog rebuild
+/// (see [`force_rebuild`]) installs a new client while the old `run()` may
+/// still be draining a half-open socket; when the old one finally returns
+/// it must not mark the session disconnected or drop the new client.
+async fn mark_disconnected_if_still_current(
+    state: &AppState,
+    session_id: &str,
+    own_client: &std::sync::Arc<whatsapp_rust::Client>,
+) {
+    if let Some(runtime) = state.get_session(session_id) {
+        let still_current = runtime
+            .get_client()
+            .is_none_or(|installed| is_current_client(Some(installed), own_client));
+        if !still_current {
+            tracing::debug!(
+                session_id = %session_id,
+                "a replaced client finished running; leaving the current one in place"
+            );
+            return;
+        }
+        runtime.set_status(SessionStatus::Disconnected);
+        runtime.set_client(None);
+    }
+    let _ = state
+        .session_manager()
+        .update_session_status(session_id, SessionStatus::Disconnected, false)
+        .await;
 }
 
 async fn connect_client(
@@ -1571,17 +1723,9 @@ async fn connect_client(
         .update_session_status(session_id, SessionStatus::WaitingForQr, false)
         .await;
 
+    let own_client = bot.client();
     bot.run().await;
-
-    if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_status(SessionStatus::Disconnected);
-        runtime.set_client(None);
-    }
-
-    let _ = state
-        .session_manager()
-        .update_session_status(session_id, SessionStatus::Disconnected, false)
-        .await;
+    mark_disconnected_if_still_current(state, session_id, &own_client).await;
 
     Ok(())
 }
@@ -1682,17 +1826,9 @@ async fn connect_client_with_pair_code(
         runtime.set_client(Some(c));
     }
 
+    let own_client = bot.client();
     bot.run().await;
-
-    if let Some(runtime) = state.get_session(session_id) {
-        runtime.set_status(SessionStatus::Disconnected);
-        runtime.set_client(None);
-    }
-
-    let _ = state
-        .session_manager()
-        .update_session_status(session_id, SessionStatus::Disconnected, false)
-        .await;
+    mark_disconnected_if_still_current(state, session_id, &own_client).await;
 
     Ok(())
 }
@@ -1709,6 +1845,21 @@ fn auto_reject_incoming_calls() -> bool {
     })
 }
 
+/// Whether `emitter` is the client currently installed on the session.
+///
+/// A session can briefly have two clients: a watchdog rebuild or a manual
+/// reconnect installs a new one while the old one is still winding down,
+/// and on a half-open socket that can take minutes. Events from the old
+/// client must not act on the session: its `Disconnected` would mark the
+/// new connection down, and its `LoggedOut` could purge the session and
+/// its keys. [`handle_event`] therefore drops every event from a client
+/// that is not the installed one, except `Messages`, which are real
+/// inbound messages (and deduplicated per session). With no client
+/// installed at all (after a disconnect), nothing is current.
+fn is_current_client<T>(installed: Option<std::sync::Arc<T>>, emitter: &std::sync::Arc<T>) -> bool {
+    installed.is_some_and(|c| std::sync::Arc::ptr_eq(&c, emitter))
+}
+
 async fn handle_event(
     event: std::sync::Arc<wacore::types::events::Event>,
     state: &AppState,
@@ -1721,6 +1872,17 @@ async fn handle_event(
         Some(r) => r,
         None => return,
     };
+
+    if !is_current_client(runtime.get_client(), &client)
+        && !matches!(event.as_ref(), Event::Messages(_))
+    {
+        tracing::debug!(
+            session_id = %session_id,
+            event = %get_event_type(event.as_ref()),
+            "ignoring an event from a replaced client"
+        );
+        return;
+    }
 
     match event.as_ref() {
         Event::PairingQrCode(wacore::types::events::PairingQrCode { code, .. }) => {
