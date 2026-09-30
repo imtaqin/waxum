@@ -8,11 +8,21 @@ pub struct MintTokenRequest {
     /// used for anything security-relevant).
     #[schema(example = "customer-mobile-app")]
     pub name: Option<String>,
-    /// Session IDs this token may access. Must be non-empty -- a token
-    /// scoped to zero sessions can't reach any `/sessions/{id}/*` route and
-    /// is never a useful credential to mint.
+    /// Session IDs this token may access. Each must already exist. At least
+    /// one of `session_ids` / `session_prefixes` must be non-empty -- a
+    /// token scoped to nothing can't reach any `/sessions/{id}/*` route.
     #[schema(example = json!(["my-session"]))]
+    #[serde(default)]
     pub session_ids: Vec<String>,
+    /// Session-id prefixes this token may use, e.g. `["rq-mkt-"]`. The
+    /// token can then reach every session whose id starts with one of
+    /// them, create new sessions with such an id (`POST /sessions`), delete
+    /// them, and list them (`GET /sessions` returns only sessions in
+    /// scope). At least 3 characters of `A-Z a-z 0-9 - _`, so a prefix can
+    /// never widen a token to every session.
+    #[schema(example = json!(["rq-mkt-"]))]
+    #[serde(default)]
+    pub session_prefixes: Vec<String>,
     /// How long the token stays valid. Defaults to 720 (30 days) when omitted.
     #[schema(example = 720)]
     pub expires_in_hours: Option<i64>,
@@ -29,6 +39,7 @@ pub struct MintTokenResponse {
     pub token: String,
     pub name: Option<String>,
     pub session_ids: Vec<String>,
+    pub session_prefixes: Vec<String>,
     /// Unix timestamp the token stops validating.
     pub expires_at: i64,
 }
@@ -39,6 +50,7 @@ pub struct TokenSummary {
     pub id: String,
     pub name: Option<String>,
     pub session_ids: Vec<String>,
+    pub session_prefixes: Vec<String>,
     pub created_at: String,
     pub expires_at: Option<String>,
     pub revoked: bool,

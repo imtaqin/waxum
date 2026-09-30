@@ -36,8 +36,17 @@ use wacore::proto_helpers::MessageExt;
 )]
 pub async fn create_session(
     State(state): State<AppState>,
+    scope: Option<axum::Extension<crate::middleware::jwt::TokenScope>>,
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<Json<CreateSessionResponse>, ApiError> {
+    if let Some(axum::Extension(scope)) = &scope {
+        let allowed = request.id.as_deref().is_some_and(|id| scope.0.covers(id));
+        if !allowed {
+            return Err(ApiError::Forbidden(
+                "a scoped token can only create a session whose id starts with one of its prefixes; pass that id explicitly".to_string(),
+            ));
+        }
+    }
     let session_id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
     if let Some(existing) = state
@@ -131,6 +140,7 @@ pub struct ListSessionsQuery {
 )]
 pub async fn list_sessions(
     State(state): State<AppState>,
+    scope: Option<axum::Extension<crate::middleware::jwt::TokenScope>>,
     axum::extract::Query(q): axum::extract::Query<ListSessionsQuery>,
 ) -> Result<Json<SessionListResponse>, ApiError> {
     let sessions = state
@@ -147,6 +157,11 @@ pub async fn list_sessions(
     for mut session in sessions {
         if let Some(ref set) = allowed {
             if !set.contains(&session.id) {
+                continue;
+            }
+        }
+        if let Some(axum::Extension(scope)) = &scope {
+            if !scope.0.covers(&session.id) {
                 continue;
             }
         }

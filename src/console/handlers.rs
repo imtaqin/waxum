@@ -505,7 +505,7 @@ pub async fn create_session_proxy(
         device: None,
     };
 
-    match crate::handlers::sessions::create_session(State(state), Json(create_req)).await {
+    match crate::handlers::sessions::create_session(State(state), None, Json(create_req)).await {
         Ok(Json(resp)) => (StatusCode::CREATED, Json(resp)).into_response(),
         Err(e) => e.into_response(),
     }
@@ -538,7 +538,8 @@ pub async fn create_cloud_session_proxy(
         device: None,
     };
     if let Err(e) =
-        crate::handlers::sessions::create_session(State(state.clone()), Json(create_req)).await
+        crate::handlers::sessions::create_session(State(state.clone()), None, Json(create_req))
+            .await
     {
         return e.into_response();
     }

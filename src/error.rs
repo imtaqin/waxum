@@ -67,6 +67,9 @@ pub enum ApiError {
     #[error("Bad request: {0}")]
     BadRequest(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Session error: {0}")]
     SessionError(String),
 
@@ -110,6 +113,7 @@ impl IntoResponse for ApiError {
             ApiError::TemporaryBan(_) => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             ApiError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Forbidden(_) => (StatusCode::FORBIDDEN, self.to_string()),
             ApiError::SessionError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::NatsError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
