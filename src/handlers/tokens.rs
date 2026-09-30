@@ -25,10 +25,17 @@ pub async fn mint_token(
     State(state): State<AppState>,
     Json(request): Json<MintTokenRequest>,
 ) -> Result<Json<MintTokenResponse>, ApiError> {
-    if request.session_ids.is_empty() {
+    if request.session_ids.is_empty() && request.session_prefixes.is_empty() {
         return Err(ApiError::BadRequest(
-            "session_ids must not be empty".to_string(),
+            "at least one of session_ids / session_prefixes is required".to_string(),
         ));
+    }
+    for prefix in &request.session_prefixes {
+        if !valid_session_prefix(prefix) {
+            return Err(ApiError::BadRequest(format!(
+                "invalid session prefix {prefix:?}: use at least 3 characters of A-Z a-z 0-9 - _"
+            )));
+        }
     }
 
     for session_id in &request.session_ids {
@@ -51,6 +58,7 @@ pub async fn mint_token(
             request.name.as_deref(),
             Some(expires_at),
             &request.session_ids,
+            &request.session_prefixes,
         )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -65,6 +73,7 @@ pub async fn mint_token(
         token,
         name: request.name,
         session_ids: request.session_ids,
+        session_prefixes: request.session_prefixes,
         expires_at: expires_at.timestamp(),
     }))
 }
@@ -93,6 +102,7 @@ pub async fn list_tokens(
             id: r.id,
             name: r.name,
             session_ids: r.session_ids,
+            session_prefixes: r.session_prefixes,
             created_at: r.created_at,
             expires_at: r.expires_at,
             revoked: r.revoked_at.is_some(),
@@ -127,5 +137,29 @@ pub async fn revoke_token(
         Ok(Json(SuccessResponse::with_message("Token revoked")))
     } else {
         Err(ApiError::TokenNotFound(id))
+    }
+}
+
+/// A prefix must be specific enough that it can't widen a token to every
+/// session (so no empty or one-letter prefixes), and use only characters
+/// that session ids are made of.
+fn valid_session_prefix(prefix: &str) -> bool {
+    prefix.len() >= 3
+        && prefix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_session_prefix;
+
+    #[test]
+    fn prefixes_must_be_specific_and_plain() {
+        assert!(valid_session_prefix("rq-mkt-"));
+        assert!(valid_session_prefix("abc"));
+        for bad in ["", "a", "ab", "rq/", "rq mkt", "rq%", "é-ab"] {
+            assert!(!valid_session_prefix(bad), "{bad:?}");
+        }
     }
 }

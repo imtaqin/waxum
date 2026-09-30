@@ -155,12 +155,22 @@ fn peer_ip(request: &Request<Body>) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+/// The scope of the bearer token on this request, attached as a request
+/// extension when the token is session-scoped (carries a `jti`). Absent
+/// for the superadmin token. Handlers for the `/sessions` collection read
+/// it: `POST /sessions` only creates ids inside the scope, and
+/// `GET /sessions` lists only sessions inside it.
+#[derive(Debug, Clone)]
+pub struct TokenScope(pub crate::db::tokens::TokenStatus);
+
 pub async fn jwt_auth_middleware(
     State(state): State<AppState>,
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
+    let path_owned = request.uri().path().to_string();
+    let path = path_owned.as_str();
+    let method = request.method().clone();
     if matches!(path, "/health" | "/livez" | "/readyz" | "/metrics") {
         return next.run(request).await;
     }
@@ -240,16 +250,18 @@ pub async fn jwt_auth_middleware(
                     tracing::warn!(peer = %peer, path = %path, jti = %jti, "auth: revoked token used");
                     return forbidden_response("Token has been revoked");
                 }
-                match session_id_from_path(path) {
-                    Some(requested) if status.session_ids.iter().any(|s| s == requested) => {}
-                    _ => {
-                        tracing::warn!(
-                            peer = %peer, path = %path, jti = %jti,
-                            "auth: token attempted access outside its bound sessions"
-                        );
-                        return forbidden_response("Token is not authorized for this session");
-                    }
+                let allowed = match session_id_from_path(path) {
+                    Some(requested) => status.covers(requested),
+                    None => scoped_collection_access(&method, path, &status),
+                };
+                if !allowed {
+                    tracing::warn!(
+                        peer = %peer, path = %path, jti = %jti,
+                        "auth: token attempted access outside its bound sessions"
+                    );
+                    return forbidden_response("Token is not authorized for this session");
                 }
+                request.extensions_mut().insert(TokenScope(status));
             }
 
             next.run(request).await
@@ -264,6 +276,27 @@ pub async fn jwt_auth_middleware(
             };
             unauthorized_response(message)
         }
+    }
+}
+
+/// Which `/api/v1/sessions` collection routes a session-scoped token may
+/// call. `GET` lists sessions (filtered to the token's scope by the
+/// handler). `POST` creates one, and only for a token with prefixes; the
+/// handler then checks the new id is inside them. Everything else on the
+/// collection (purge, disconnect-all, ...) stays superadmin-only.
+fn scoped_collection_access(
+    method: &axum::http::Method,
+    path: &str,
+    status: &crate::db::tokens::TokenStatus,
+) -> bool {
+    let collection = matches!(path, "/api/v1/sessions" | "/api/v1/sessions/");
+    if !collection {
+        return false;
+    }
+    match *method {
+        axum::http::Method::GET => true,
+        axum::http::Method::POST => !status.session_prefixes.is_empty(),
+        _ => false,
     }
 }
 

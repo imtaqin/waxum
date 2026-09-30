@@ -181,11 +181,7 @@ async fn scoped_token_cannot_reach_fleet_wide_endpoints() {
 
     let (_, token) = mint_token(&h, &["s-scope-fleet"], None).await;
 
-    for path in [
-        "/api/v1/sessions",
-        "/api/v1/sessions/search",
-        "/api/v1/tokens",
-    ] {
+    for path in ["/api/v1/sessions/search", "/api/v1/tokens"] {
         let (status, _) = call(&h.app, req_get(path, Some(&token))).await;
         assert_eq!(
             status,
@@ -193,6 +189,17 @@ async fn scoped_token_cannot_reach_fleet_wide_endpoints() {
             "{path} is fleet-wide and must reject a session-scoped token"
         );
     }
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/purge",
+            Some(&token),
+            json!({}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -294,4 +301,158 @@ async fn unscoped_jwt_still_reaches_every_session() {
 
     let (status, _) = call(&h.app, req_get("/api/v1/sessions", Some(&token))).await;
     assert_eq!(status, StatusCode::OK);
+}
+
+async fn mint_prefix_token(h: &Harness, session_ids: &[&str], prefixes: &[&str]) -> String {
+    let (status, body) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/tokens",
+            Some(TEST_TOKEN),
+            json!({"session_ids": session_ids, "session_prefixes": prefixes, "name": "panel"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "mint failed: {body:?}");
+    assert_eq!(body["session_prefixes"], json!(prefixes));
+    body["token"].as_str().expect("token").to_string()
+}
+
+#[tokio::test]
+async fn prefix_token_creates_uses_and_deletes_sessions_under_its_prefix() {
+    let h = Harness::new().await;
+    let token = mint_prefix_token(&h, &[], &["rq-mkt-"]).await;
+
+    let (status, body) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(&token),
+            json!({"id": "rq-mkt-8f3k2a"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, _) = call(
+        &h.app,
+        req_get("/api/v1/sessions/rq-mkt-8f3k2a/status", Some(&token)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = call(
+        &h.app,
+        common::req_delete("/api/v1/sessions/rq-mkt-8f3k2a", Some(&token)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn prefix_token_cannot_create_or_reach_sessions_outside_its_prefix() {
+    let h = Harness::new().await;
+    create_session(&h, "other-tenant").await;
+    let token = mint_prefix_token(&h, &[], &["rq-mkt-"]).await;
+
+    for body in [
+        json!({"id": "other-new"}),
+        json!({"id": "rq-mk"}),
+        json!({"name": "no id given"}),
+    ] {
+        let (status, resp) = call(
+            &h.app,
+            req_json(Method::POST, "/api/v1/sessions", Some(&token), body.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}: {resp}");
+    }
+
+    for path in [
+        "/api/v1/sessions/other-tenant",
+        "/api/v1/sessions/other-tenant/status",
+    ] {
+        let (status, _) = call(&h.app, req_get(path, Some(&token))).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{path}");
+    }
+    let (status, _) = call(
+        &h.app,
+        common::req_delete("/api/v1/sessions/other-tenant", Some(&token)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(
+        &h.app,
+        req_get("/api/v1/sessions/other-tenant", Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the other tenant's session must survive"
+    );
+}
+
+#[tokio::test]
+async fn scoped_token_lists_only_its_own_sessions() {
+    let h = Harness::new().await;
+    create_session(&h, "other-tenant").await;
+    create_session(&h, "rq-exact").await;
+    create_session(&h, "rq-mkt-a").await;
+    let token = mint_prefix_token(&h, &["rq-exact"], &["rq-mkt-"]).await;
+
+    let (status, body) = call(&h.app, req_get("/api/v1/sessions", Some(&token))).await;
+    assert_eq!(status, StatusCode::OK);
+    let mut ids: Vec<String> = body["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_str().unwrap().to_string())
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec!["rq-exact", "rq-mkt-a"]);
+}
+
+#[tokio::test]
+async fn a_token_without_prefixes_still_cannot_create_sessions() {
+    let h = Harness::new().await;
+    create_session(&h, "s-exact-only").await;
+    let (_, token) = mint_token(&h, &["s-exact-only"], None).await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(&token),
+            json!({"id": "s-exact-only-2"}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn mint_rejects_prefixes_that_are_too_broad_or_malformed() {
+    let h = Harness::new().await;
+    for prefixes in [json!([""]), json!(["r"]), json!(["rq/"]), json!(["rq mkt"])] {
+        let (status, body) = call(
+            &h.app,
+            req_json(
+                Method::POST,
+                "/api/v1/tokens",
+                Some(TEST_TOKEN),
+                json!({"session_prefixes": prefixes}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{prefixes}: {body}");
+    }
+    let (status, _) = call(
+        &h.app,
+        req_json(Method::POST, "/api/v1/tokens", Some(TEST_TOKEN), json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

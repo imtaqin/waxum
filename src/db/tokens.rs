@@ -1,5 +1,5 @@
 //! Persistence for session-scoped bearer tokens (`tokens` +
-//! `token_sessions`). A minted token's JWT carries only a `jti`; whether
+//! `token_sessions` + `token_session_prefixes`). A minted token's JWT carries only a `jti`; whether
 //! it's still valid and which sessions it may touch both live here, looked
 //! up on every authenticated request in [`crate::middleware::jwt`] --
 //! that's what makes revocation and rebinding possible without reissuing
@@ -16,6 +16,7 @@ pub struct TokenRecord {
     pub id: String,
     pub name: Option<String>,
     pub session_ids: Vec<String>,
+    pub session_prefixes: Vec<String>,
     pub created_at: String,
     pub expires_at: Option<String>,
     pub revoked_at: Option<String>,
@@ -24,10 +25,24 @@ pub struct TokenRecord {
 /// Just enough to answer "is this token still usable, and for which
 /// sessions" -- the hot-path query run once per authenticated request for
 /// any token that carries a `jti`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TokenStatus {
     pub revoked: bool,
     pub session_ids: Vec<String>,
+    /// Session-id prefixes this token may use (and create sessions under).
+    pub session_prefixes: Vec<String>,
+}
+
+impl TokenStatus {
+    /// Whether `session_id` is inside this token's scope: listed exactly,
+    /// or starting with one of its prefixes.
+    pub fn covers(&self, session_id: &str) -> bool {
+        self.session_ids.iter().any(|s| s == session_id)
+            || self
+                .session_prefixes
+                .iter()
+                .any(|p| session_id.starts_with(p.as_str()))
+    }
 }
 
 pub struct TokenStore<'a> {
@@ -45,6 +60,7 @@ impl<'a> TokenStore<'a> {
         name: Option<&str>,
         expires_at: Option<DateTime<Utc>>,
         session_ids: &[String],
+        session_prefixes: &[String],
     ) -> anyhow::Result<()> {
         match self.pool {
             DbPool::Postgres(pg) => {
@@ -60,6 +76,14 @@ impl<'a> TokenStore<'a> {
                         .execute(
                             "INSERT INTO token_sessions (token_id, session_id) VALUES ($1, $2)",
                             &[&id, sid],
+                        )
+                        .await?;
+                }
+                for prefix in session_prefixes {
+                    client
+                        .execute(
+                            "INSERT INTO token_session_prefixes (token_id, prefix) VALUES ($1, $2)",
+                            &[&id, prefix],
                         )
                         .await?;
                 }
@@ -80,12 +104,20 @@ impl<'a> TokenStore<'a> {
                     )
                     .await?;
                 }
+                for prefix in session_prefixes {
+                    conn.exec_drop(
+                        "INSERT INTO token_session_prefixes (token_id, prefix) VALUES (?, ?)",
+                        (id, prefix),
+                    )
+                    .await?;
+                }
             }
             DbPool::SQLite(pool) => {
                 let id = id.to_string();
                 let name = SQ::from_opt_str(name);
                 let expires_str = expires_at.map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string());
                 let session_ids = session_ids.to_vec();
+                let session_prefixes = session_prefixes.to_vec();
                 sqlite_blocking(pool, move |conn| {
                     sqlite_raw::execute(
                         conn,
@@ -101,6 +133,13 @@ impl<'a> TokenStore<'a> {
                             conn,
                             "INSERT INTO token_sessions (token_id, session_id) VALUES (?, ?)",
                             &[SQ::Text(id.clone()), SQ::Text(sid.clone())],
+                        )?;
+                    }
+                    for prefix in &session_prefixes {
+                        sqlite_raw::execute(
+                            conn,
+                            "INSERT INTO token_session_prefixes (token_id, prefix) VALUES (?, ?)",
+                            &[SQ::Text(id.clone()), SQ::Text(prefix.clone())],
                         )?;
                     }
                     Ok(())
@@ -128,9 +167,16 @@ impl<'a> TokenStore<'a> {
                         &[&id],
                     )
                     .await?;
+                let prefix_rows = client
+                    .query(
+                        "SELECT prefix FROM token_session_prefixes WHERE token_id = $1",
+                        &[&id],
+                    )
+                    .await?;
                 Ok(Some(TokenStatus {
                     revoked: revoked.is_some(),
                     session_ids: session_rows.iter().map(|r| r.get(0)).collect(),
+                    session_prefixes: prefix_rows.iter().map(|r| r.get(0)).collect(),
                 }))
             }
             DbPool::MySQL(my) => {
@@ -148,9 +194,16 @@ impl<'a> TokenStore<'a> {
                         (id,),
                     )
                     .await?;
+                let session_prefixes: Vec<String> = conn
+                    .exec(
+                        "SELECT prefix FROM token_session_prefixes WHERE token_id = ?",
+                        (id,),
+                    )
+                    .await?;
                 Ok(Some(TokenStatus {
                     revoked: revoked_at.is_some(),
                     session_ids,
+                    session_prefixes,
                 }))
             }
             DbPool::SQLite(pool) => {
@@ -171,9 +224,16 @@ impl<'a> TokenStore<'a> {
                         &[SQ::Text(id.clone())],
                         |r| r.get_string(0).unwrap_or_default(),
                     )?;
+                    let session_prefixes = sqlite_raw::query(
+                        conn,
+                        "SELECT prefix FROM token_session_prefixes WHERE token_id = ?",
+                        &[SQ::Text(id.clone())],
+                        |r| r.get_string(0).unwrap_or_default(),
+                    )?;
                     Ok(Some(TokenStatus {
                         revoked: revoked_at.is_some(),
                         session_ids,
+                        session_prefixes,
                     }))
                 })
                 .await
@@ -202,6 +262,7 @@ impl<'a> TokenStore<'a> {
                         id: r.get(0),
                         name: r.get(1),
                         session_ids: Vec::new(),
+                        session_prefixes: Vec::new(),
                         created_at: r.get(2),
                         expires_at: r.get(3),
                         revoked_at: r.get(4),
@@ -229,6 +290,7 @@ impl<'a> TokenStore<'a> {
                         id: r.0,
                         name: r.1,
                         session_ids: Vec::new(),
+                        session_prefixes: Vec::new(),
                         created_at: r.2,
                         expires_at: r.3,
                         revoked_at: r.4,
@@ -246,6 +308,7 @@ impl<'a> TokenStore<'a> {
                             id: r.get_string(0).unwrap_or_default(),
                             name: r.get_string(1),
                             session_ids: Vec::new(),
+                            session_prefixes: Vec::new(),
                             created_at: r.get_string(2).unwrap_or_default(),
                             expires_at: r.get_string(3),
                             revoked_at: r.get_string(4),
@@ -259,6 +322,7 @@ impl<'a> TokenStore<'a> {
         for record in &mut records {
             if let Some(status) = self.status(&record.id).await? {
                 record.session_ids = status.session_ids;
+                record.session_prefixes = status.session_prefixes;
             }
         }
         Ok(records)

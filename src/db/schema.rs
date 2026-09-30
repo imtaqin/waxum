@@ -169,7 +169,13 @@ async fn init_sqlite(pool: &crate::db::session::SqlitePool) -> anyhow::Result<()
                 FOREIGN KEY (token_id) REFERENCES tokens(id) ON DELETE CASCADE, \
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE \
              ); \
-             CREATE INDEX IF NOT EXISTS idx_token_sessions_session ON token_sessions(session_id);",
+             CREATE INDEX IF NOT EXISTS idx_token_sessions_session ON token_sessions(session_id); \
+             CREATE TABLE IF NOT EXISTS token_session_prefixes ( \
+                token_id TEXT NOT NULL, \
+                prefix TEXT NOT NULL, \
+                PRIMARY KEY (token_id, prefix), \
+                FOREIGN KEY (token_id) REFERENCES tokens(id) ON DELETE CASCADE \
+             );",
         )?;
         let existing_session_columns: HashSet<String> = sqlite_raw::query(
             conn,
@@ -550,6 +556,18 @@ async fn init_postgres(pool: &deadpool_postgres::Pool) -> anyhow::Result<()> {
         .await?;
     client
         .execute(
+            r#"
+            CREATE TABLE IF NOT EXISTS token_session_prefixes (
+                token_id VARCHAR(255) NOT NULL REFERENCES tokens(id) ON DELETE CASCADE,
+                prefix VARCHAR(255) NOT NULL,
+                PRIMARY KEY (token_id, prefix)
+            )
+            "#,
+            &[],
+        )
+        .await?;
+    client
+        .execute(
             "CREATE INDEX IF NOT EXISTS idx_token_sessions_session ON token_sessions(session_id)",
             &[],
         )
@@ -756,6 +774,17 @@ async fn init_mysql(pool: &mysql_async::Pool) -> anyhow::Result<()> {
             INDEX idx_token_sessions_session (session_id),
             FOREIGN KEY (token_id) REFERENCES tokens(id) ON DELETE CASCADE,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        ) DEFAULT CHARSET=utf8mb4
+        "#,
+    )
+    .await?;
+    conn.query_drop(
+        r#"
+        CREATE TABLE IF NOT EXISTS token_session_prefixes (
+            token_id VARCHAR(255) NOT NULL,
+            prefix VARCHAR(191) NOT NULL,
+            PRIMARY KEY (token_id, prefix),
+            FOREIGN KEY (token_id) REFERENCES tokens(id) ON DELETE CASCADE
         ) DEFAULT CHARSET=utf8mb4
         "#,
     )
