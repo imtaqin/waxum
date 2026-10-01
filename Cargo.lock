@@ -5479,6 +5479,7 @@ dependencies = [
  "http-body-util",
  "image",
  "jsonwebtoken",
+ "libc",
  "libsqlite3-sys",
  "msedge-tts",
  "mysql_async",

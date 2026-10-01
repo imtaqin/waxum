@@ -127,6 +127,10 @@ zip = { version = "3", default-features = false, features = ["deflate"] }
 tower_governor = { version = "0.8.0", default-features = false, features = ["axum"] }
 governor = { version = "0.10", default-features = false }
 
+[target.'cfg(unix)'.dependencies]
+# setuid/setgid/setgroups for dropping root in the container (bootstrap.rs).
+libc = "0.2"
+
 [dev-dependencies]
 http-body-util = "0.1"
 tempfile = "3"

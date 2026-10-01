@@ -30,40 +30,31 @@ COPY src/ ./src/
 
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+RUN mkdir -p /out/app/whatsapp_sessions \
+    && cp target/release/waxum /out/app/waxum
+
+# Runtime: distroless. The binary links only glibc, libm and libgcc (TLS
+# and SQLite are compiled in), so nothing else is needed: no shell, no
+# package manager, no curl, no gosu. The jobs those did are in the binary
+# (src/bootstrap.rs): dropping root, chowning volumes, the healthcheck.
+FROM gcr.io/distroless/cc-debian12
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
-    libsqlite3-0 \
-    curl \
-    gosu \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /var/cache/apt/*
-
-COPY --from=rust-builder /app/target/release/waxum /app/waxum
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-
-RUN mkdir -p /app/whatsapp_sessions \
-    && groupadd --system --gid 1000 waxum \
-    && useradd --system --uid 1000 --gid waxum --no-create-home --shell /usr/sbin/nologin waxum \
-    && chown -R waxum:waxum /app \
-    && chmod +x /app/docker-entrypoint.sh
+COPY --from=rust-builder --chown=1000:1000 /out/app /app
 
 ENV WHATSAPP_STORAGE_PATH=/app/whatsapp_sessions
 ENV RUST_LOG=waxum=info,tower_http=info
+ENV HOME=/app
+
+# The container starts as root so waxum can chown mounted volumes (which
+# may still be owned by root from a pre-0.11.1 image), then it drops to
+# this uid:gid before doing anything else. The gateway never runs as root.
+ENV WAXUM_RUN_AS=1000:1000
 
 EXPOSE 3451
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS --max-time 4 http://127.0.0.1:3451/health || exit 1
+    CMD ["/app/waxum", "--healthcheck"]
 
-# No `USER waxum` here: the container starts as root so the entrypoint can
-# chown mounted volumes (which may still be owned by root from a
-# pre-0.11.1 image) before dropping to the unprivileged `waxum` user via
-# gosu to actually run the binary. The process that ends up running the
-# app is never root -- only the brief setup step is.
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["/app/waxum"]
