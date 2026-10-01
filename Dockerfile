@@ -37,7 +37,7 @@ RUN mkdir -p /out/app/whatsapp_sessions \
 # and SQLite are compiled in), so nothing else is needed: no shell, no
 # package manager, no curl, no gosu. The jobs those did are in the binary
 # (src/bootstrap.rs): dropping root, chowning volumes, the healthcheck.
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian13
 
 WORKDIR /app
 
