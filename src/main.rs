@@ -782,6 +782,9 @@ fn parse_cli_args(args: &[String]) {
                 println!(
                     "      --proxy <URL>      HTTP/HTTPS proxy for outbound WA media/http calls"
                 );
+                println!(
+                    "      --healthcheck      Exit 0 if the local /health answers 200, else 1"
+                );
                 println!("  -h, --help             Show this help");
                 println!();
                 println!("Examples:");
@@ -800,6 +803,16 @@ fn parse_cli_args(args: &[String]) {
 }
 
 fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
+    if std::env::args().skip(1).any(|a| a == "--healthcheck") {
+        std::process::exit(if waxum::bootstrap::healthcheck() {
+            0
+        } else {
+            1
+        });
+    }
+    waxum::bootstrap::drop_root_privileges();
+
     let worker_threads = std::env::var("WA_RS_WORKER_THREADS")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
@@ -1078,11 +1091,16 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     println!();
 
     let listener = TcpListener::bind(addr).await?;
-    axum::serve(
+    let server = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    );
+    tokio::select! {
+        served = server => served?,
+        signal = waxum::bootstrap::shutdown_signal() => {
+            tracing::info!("received {signal}, shutting down");
+        }
+    }
 
     Ok(())
 }
