@@ -202,8 +202,13 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           IMAGE="${{ env.IMAGE_NAME }}"
+          # A pre-release (0.13.6-rc.1) moves the `rc` tag, never `latest`.
+          case "$VERSION" in
+            *-*) CHANNEL=rc ;;
+            *) CHANNEL=latest ;;
+          esac
           docker buildx imagetools create \
-            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${CHANNEL}" \
             -t "${IMAGE}:${VERSION}" \
             "${IMAGE}:${VERSION}-amd64" \
             "${IMAGE}:${VERSION}-arm64"
@@ -295,7 +300,7 @@ jobs:
           tag_name: ${{ needs.version.outputs.tag }}
           name: Waxum v${{ needs.version.outputs.version }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
           files: |
             release/*.tar.gz
             release/*.zip
