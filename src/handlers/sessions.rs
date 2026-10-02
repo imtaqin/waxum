@@ -866,6 +866,9 @@ pub async fn pair_session(
     };
 
     if let Some(client) = runtime.get_client() {
+        if is_linked(&client) {
+            return Err(ApiError::AlreadyConnected);
+        }
         let code = client
             .pair_with_code(opts_for_client)
             .await
@@ -931,6 +934,9 @@ pub async fn pair_session(
                 pair_code = c;
                 break;
             }
+        }
+        if session_client_is_linked(&state, &session_id) {
+            return Err(ApiError::AlreadyConnected);
         }
     }
 
@@ -1778,6 +1784,7 @@ async fn connect_client_with_pair_code(
     let state_for_events = state.clone();
     let session_id_for_events = session_id.to_string();
 
+    let fallback_device_props = device_props.clone();
     let dp = device_props.unwrap_or_else(crate::device_props::resolve_from_env);
     let pair_options = PairCodeOptions {
         phone_number: phone_number.to_string(),
@@ -1821,6 +1828,15 @@ async fn connect_client_with_pair_code(
         return Ok(());
     }
 
+    if is_linked(&bot.client()) {
+        tracing::warn!(
+            session_id = %session_id,
+            "pair code requested for a session that is already linked; connecting with the stored login instead"
+        );
+        drop(bot);
+        return connect_client(state, session_id, fallback_device_props).await;
+    }
+
     if let Some(runtime) = state.get_session(session_id) {
         let c = bot.client();
         c.enable_auto_reconnect.store(
@@ -1846,6 +1862,28 @@ async fn connect_client_with_pair_code(
     mark_disconnected_if_still_current(state, session_id, &own_client).await;
 
     Ok(())
+}
+
+/// Whether the client already holds a WhatsApp login, i.e. the device was
+/// linked at some point and its identity is in the session store. True from
+/// the moment the store is loaded, before the socket has logged in.
+///
+/// A pair-code request must never be sent for such a session (#154). The
+/// library only skips it when the client is already *logged in*, and a
+/// reconnecting client is not: its socket is up a moment before `<success>`
+/// arrives. In that window the request went out, WhatsApp refused it, and
+/// the session reported `pairing_code_error` while otherwise connected.
+/// `status == LoggedIn` has the same gap, which is why `POST .../pair`
+/// checks this instead of the status alone.
+fn is_linked(client: &whatsapp_rust::client::Client) -> bool {
+    client.pn().is_some()
+}
+
+fn session_client_is_linked(state: &AppState, session_id: &str) -> bool {
+    state
+        .get_session(session_id)
+        .and_then(|r| r.get_client())
+        .is_some_and(|c| is_linked(&c))
 }
 
 /// Whether incoming calls are auto-rejected instead of registered for
@@ -3088,6 +3126,21 @@ fn event_to_json(event: &wacore::types::events::Event, session_id: &str) -> serd
                 "timeout_seconds": pair.timeout.as_secs(),
             })
         }
+        Event::PairingCodeError(failed) => {
+            serde_json::json!({
+                "error": failed.error,
+                "rejection": failed.rejection.map(|r| format!("{r:?}")),
+                "throttled": failed.rejection.is_some_and(|r| r.is_throttled()),
+                "retry_after_seconds": failed.backoff.map(|d| d.as_secs()),
+            })
+        }
+        Event::PairError(failed) => {
+            serde_json::json!({
+                "jid": failed.id.to_string(),
+                "platform": failed.platform,
+                "error": failed.error,
+            })
+        }
         _ => serde_json::json!({}),
     };
 
@@ -3449,6 +3502,40 @@ mod tests {
         assert_eq!(json["event"], "pair_code");
         assert_eq!(json["data"]["code"], "ABCD1234");
         assert_eq!(json["data"]["timeout_seconds"], 180);
+    }
+
+    #[test]
+    fn pairing_code_error_carries_the_reason() {
+        use wacore::pair_code::PairCodeRejection;
+        use wacore::types::events::{Event, PairingCodeError};
+
+        let refused = Event::PairingCodeError(
+            PairingCodeError::builder()
+                .rejection(PairCodeRejection::RateOverlimit)
+                .backoff(std::time::Duration::from_secs(90))
+                .error("server refused the pair code request: 429".to_string())
+                .build(),
+        );
+        let json = event_to_json(&refused, "sess");
+        assert_eq!(json["event"], "pairing_code_error");
+        assert_eq!(
+            json["data"]["error"],
+            "server refused the pair code request: 429"
+        );
+        assert_eq!(json["data"]["rejection"], "RateOverlimit");
+        assert_eq!(json["data"]["throttled"], true);
+        assert_eq!(json["data"]["retry_after_seconds"], 90);
+
+        let local = Event::PairingCodeError(
+            PairingCodeError::builder()
+                .error("not connected".to_string())
+                .build(),
+        );
+        let json = event_to_json(&local, "sess");
+        assert_eq!(json["data"]["error"], "not connected");
+        assert!(json["data"]["rejection"].is_null());
+        assert_eq!(json["data"]["throttled"], false);
+        assert!(json["data"]["retry_after_seconds"].is_null());
     }
 
     #[test]

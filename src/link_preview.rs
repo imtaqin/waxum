@@ -10,7 +10,8 @@
 //! The fetch is caller-driven: whoever calls the API chooses the URL. It
 //! therefore goes through [`crate::net_guard`] exactly like media-by-URL
 //! (public addresses only, re-checked on every redirect hop) and is
-//! bounded in time and size. The page gets [`PAGE_BUDGET`] and is read
+//! bounded in time and size. The page gets [`page_budget`] (5 s unless
+//! `LINK_PREVIEW_PAGE_TIMEOUT_MS` says otherwise, #155) and is read
 //! only up to `</head>` (at most [`MAX_HTML_BYTES`]); the thumbnail gets
 //! its own [`THUMBNAIL_BUDGET`] and [`MAX_IMAGE_BYTES`], so a slow image
 //! still leaves a title-and-description preview. A page that fails yields
@@ -26,13 +27,48 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 
-const PAGE_BUDGET: Duration = Duration::from_secs(5);
+const DEFAULT_PAGE_BUDGET_MS: u64 = 5_000;
+const MIN_PAGE_BUDGET_MS: u64 = 1_000;
+const MAX_PAGE_BUDGET_MS: u64 = 30_000;
 const THUMBNAIL_BUDGET: Duration = Duration::from_secs(3);
 const MAX_HTML_BYTES: usize = 512 * 1024;
 const MAX_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 const THUMBNAIL_MAX_SIDE: u32 = 300;
 const CACHE_TTL: Duration = Duration::from_secs(10 * 60);
 const CACHE_CAPACITY: usize = 256;
+
+/// Parses `LINK_PREVIEW_PAGE_TIMEOUT_MS`. `Err` carries the rejected
+/// value; the caller falls back to the default. The upper bound exists
+/// because the send request waits for the preview: a budget of minutes
+/// would hold every `link_preview` send to a dead host for that long.
+fn parse_page_budget(raw: Option<&str>) -> Result<Duration, String> {
+    let Some(raw) = raw.map(str::trim).filter(|r| !r.is_empty()) else {
+        return Ok(Duration::from_millis(DEFAULT_PAGE_BUDGET_MS));
+    };
+    match raw.parse::<u64>() {
+        Ok(ms) if (MIN_PAGE_BUDGET_MS..=MAX_PAGE_BUDGET_MS).contains(&ms) => {
+            Ok(Duration::from_millis(ms))
+        }
+        _ => Err(raw.to_string()),
+    }
+}
+
+/// How long the page fetch may take, read once from
+/// `LINK_PREVIEW_PAGE_TIMEOUT_MS` (1000-30000, default 5000). Some pages
+/// take ~10 s to send their first byte (#155), longer than the default.
+/// An invalid value is logged and ignored rather than failing startup.
+fn page_budget() -> Duration {
+    static BUDGET: Lazy<Duration> = Lazy::new(|| {
+        let raw = std::env::var("LINK_PREVIEW_PAGE_TIMEOUT_MS").ok();
+        parse_page_budget(raw.as_deref()).unwrap_or_else(|bad| {
+            tracing::warn!(
+                "LINK_PREVIEW_PAGE_TIMEOUT_MS={bad:?} is not a number in {MIN_PAGE_BUDGET_MS}..={MAX_PAGE_BUDGET_MS}; using {DEFAULT_PAGE_BUDGET_MS}"
+            );
+            Duration::from_millis(DEFAULT_PAGE_BUDGET_MS)
+        })
+    });
+    *BUDGET
+}
 
 /// Page metadata to attach to an `ExtendedTextMessage`.
 #[derive(Debug, Clone, PartialEq)]
@@ -123,7 +159,7 @@ pub async fn for_text(text: &str) -> Option<LinkPreview> {
 }
 
 async fn fetch(url: &str) -> Option<LinkPreview> {
-    let (meta, final_url) = tokio::time::timeout(PAGE_BUDGET, fetch_page(url))
+    let (meta, final_url) = tokio::time::timeout(page_budget(), fetch_page(url))
         .await
         .ok()
         .flatten()?;
@@ -489,6 +525,19 @@ mod tests {
         assert_eq!(m.description.as_deref(), Some("Desc"));
         assert_eq!(m.thumbnail_width, Some(300));
         assert!(m.jpeg_thumbnail.is_some());
+    }
+
+    #[test]
+    fn page_budget_defaults_to_five_seconds_and_accepts_only_the_documented_range() {
+        let ms = |raw| parse_page_budget(raw).map(|d| d.as_millis());
+        assert_eq!(ms(None), Ok(5_000));
+        assert_eq!(ms(Some("")), Ok(5_000));
+        assert_eq!(ms(Some(" 15000 ")), Ok(15_000));
+        assert_eq!(ms(Some("1000")), Ok(1_000));
+        assert_eq!(ms(Some("30000")), Ok(30_000));
+        for bad in ["999", "30001", "0", "-5", "15s", "abc"] {
+            assert_eq!(ms(Some(bad)), Err(bad.to_string()), "{bad:?}");
+        }
     }
 
     #[test]
