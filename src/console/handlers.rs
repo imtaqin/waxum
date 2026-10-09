@@ -574,7 +574,13 @@ pub async fn session_action_proxy(
                 Err(e) => e.into_response(),
             }
         }
-        "logout" | "delete" => {
+        "logout" => {
+            match crate::handlers::sessions::logout_session(State(state), Path(sid)).await {
+                Ok(Json(_)) => StatusCode::OK.into_response(),
+                Err(e) => e.into_response(),
+            }
+        }
+        "delete" => {
             match crate::handlers::sessions::delete_session(State(state), Path(sid)).await {
                 Ok(Json(_)) => StatusCode::OK.into_response(),
                 Err(e) => e.into_response(),

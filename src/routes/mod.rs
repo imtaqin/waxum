@@ -346,6 +346,10 @@ fn session_routes() -> Router<AppState> {
             post(handlers::sessions::disconnect_session),
         )
         .route(
+            "/{session_id}/logout",
+            post(handlers::sessions::logout_session),
+        )
+        .route(
             "/{session_id}/export",
             post(handlers::sessions::export_session),
         )
@@ -761,6 +765,12 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/settings/link-previews",
             post(handlers::labels::set_link_previews),
+        )
+        .route(
+            "/{session_id}/settings/new-chat-limit",
+            get(handlers::new_chats::get_new_chat_limit)
+                .put(handlers::new_chats::set_new_chat_limit)
+                .delete(handlers::new_chats::clear_new_chat_limit),
         )
         .route("/{session_id}/bots", get(handlers::bots::list_bots))
         .route("/{session_id}/capping", get(handlers::bots::get_capping))

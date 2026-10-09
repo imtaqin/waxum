@@ -630,6 +630,12 @@ pub struct CircuitState {
     pub failures: u32,
     pub opened_until: Option<std::time::Instant>,
     pub last_event: std::time::Instant,
+    /// Suspensions in a row without a successful delivery in between.
+    /// Drives the growing cooldown.
+    pub trips: u32,
+    pub last_error: Option<String>,
+    /// Events not attempted because the circuit was open.
+    pub skipped: u64,
 }
 
 impl Default for CircuitState {
@@ -638,18 +644,39 @@ impl Default for CircuitState {
             failures: 0,
             opened_until: None,
             last_event: std::time::Instant::now(),
+            trips: 0,
+            last_error: None,
+            skipped: 0,
         }
     }
 }
 
-/// Return code from [`AppState::webhook_record_failure`]: describes the
-/// state change the failure just caused, so the caller can log and, in
-/// the case of `HardDisable`, persist to the DB + purge in-memory.
+/// What a failed delivery did to the URL's circuit breaker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebhookFailureAction {
     Noop,
-    Open,
-    HardDisable,
+    /// The circuit opened (or re-opened after a failed probe): deliveries
+    /// to this URL are skipped for the given time.
+    Suspended(std::time::Duration),
+}
+
+/// Delivery health of one webhook URL, for `/status` and the console.
+#[derive(Debug, Clone, Default)]
+pub struct WebhookCircuitSnapshot {
+    pub open: bool,
+    pub failures: u32,
+    pub retry_in_secs: Option<u64>,
+    pub last_error: Option<String>,
+    pub skipped: u64,
+}
+
+/// Cooldown for the `trips`-th suspension in a row: 5 min, doubling up to
+/// an hour. A receiver that stays down is probed less and less often, but
+/// it is always probed again.
+fn webhook_cooldown(trips: u32) -> std::time::Duration {
+    const BASE_SECS: u64 = 300;
+    const MAX_SECS: u64 = 3600;
+    std::time::Duration::from_secs((BASE_SECS << trips.min(4)).min(MAX_SECS))
 }
 
 impl AppState {
@@ -884,12 +911,21 @@ impl AppState {
         }
     }
 
-    /// `(circuit_open, consecutive_failures)` for one webhook URL.
-    pub fn webhook_circuit_snapshot(&self, url: &str) -> (bool, u32) {
+    /// Health of one webhook URL's circuit.
+    pub fn webhook_circuit_snapshot(&self, url: &str) -> WebhookCircuitSnapshot {
         let now = std::time::Instant::now();
         match self.inner.webhook_circuits.get(url) {
-            Some(c) => (c.opened_until.map(|u| now < u).unwrap_or(false), c.failures),
-            None => (false, 0),
+            Some(c) => {
+                let remaining = c.opened_until.and_then(|u| u.checked_duration_since(now));
+                WebhookCircuitSnapshot {
+                    open: remaining.is_some(),
+                    failures: c.failures,
+                    retry_in_secs: remaining.map(|d| d.as_secs()),
+                    last_error: c.last_error.clone(),
+                    skipped: c.skipped,
+                }
+            }
+            None => WebhookCircuitSnapshot::default(),
         }
     }
 
@@ -902,66 +938,80 @@ impl AppState {
             .count()
     }
 
-    pub fn webhook_record_success(&self, url: &str) {
+    /// Records a delivered event. Returns `true` when this delivery ended
+    /// a suspension, i.e. the receiver is back.
+    pub fn webhook_record_success(&self, url: &str) -> bool {
         let map = &self.inner.webhook_circuits;
         if let Some(mut c) = map.get_mut(url) {
+            let was_suspended = c.opened_until.is_some();
             c.failures = 0;
             c.opened_until = None;
+            c.trips = 0;
+            c.last_error = None;
             c.last_event = std::time::Instant::now();
+            return was_suspended;
         }
+        false
     }
 
-    /// Returns the delta after this failure: `Open` when the circuit
-    /// first tripped and should skip dispatch for 5 min, `HardDisable`
-    /// when the target has been failing so long we're going to persist
-    /// `enabled=false` and stop even queuing events for it.
-    pub fn webhook_record_failure(&self, url: &str) -> WebhookFailureAction {
+    /// Records a delivery that failed every retry.
+    ///
+    /// The circuit opens after 25 consecutive failures and skips the URL
+    /// for a cooldown ([`webhook_cooldown`]). When the cooldown ends the
+    /// next event is delivered as a probe: success closes the circuit, a
+    /// failure re-opens it with a longer cooldown.
+    ///
+    /// A webhook is never switched off or removed here. Up to 0.13.6 the
+    /// 100th failure disabled it for good and dropped it from memory, and
+    /// because failures were counted per in-flight request, one burst of
+    /// events hitting a receiver that was briefly down did that within
+    /// seconds (#143). Failures that land while the circuit is already
+    /// open are stragglers from that same burst and no longer escalate.
+    pub fn webhook_record_failure(&self, url: &str, error: &str) -> WebhookFailureAction {
         const OPEN_THRESHOLD: u32 = 25;
-        const HARD_DISABLE_THRESHOLD: u32 = 100;
-        const COOLDOWN: std::time::Duration = std::time::Duration::from_secs(300);
+        let now = std::time::Instant::now();
         let map = &self.inner.webhook_circuits;
         let mut entry = map.entry(url.to_string()).or_default();
-        entry.last_event = std::time::Instant::now();
-        entry.failures = entry.failures.saturating_add(1);
-        if entry.failures >= HARD_DISABLE_THRESHOLD {
-            return WebhookFailureAction::HardDisable;
-        }
-        if entry.failures >= OPEN_THRESHOLD && entry.opened_until.is_none() {
-            entry.opened_until = Some(std::time::Instant::now() + COOLDOWN);
-            return WebhookFailureAction::Open;
-        }
-        WebhookFailureAction::Noop
-    }
-
-    /// Wipe every in-memory registration for `url` so once the DB row is
-    /// marked disabled the dispatcher stops considering it too.
-    pub fn purge_webhook_by_url(&self, url: &str) {
-        let sessions_with_url: Vec<(String, Vec<String>)> = self
-            .inner
-            .webhooks
-            .iter()
-            .filter_map(|entry| {
-                let ids: Vec<String> = entry
-                    .value()
-                    .iter()
-                    .filter(|w| w.value().url == url)
-                    .map(|w| w.key().clone())
-                    .collect();
-                if ids.is_empty() {
-                    None
-                } else {
-                    Some((entry.key().clone(), ids))
+        entry.last_event = now;
+        entry.last_error = Some(error.chars().take(200).collect());
+        match entry.opened_until {
+            Some(until) if now < until => WebhookFailureAction::Noop,
+            Some(_) => {
+                entry.trips = entry.trips.saturating_add(1);
+                let cooldown = webhook_cooldown(entry.trips);
+                entry.opened_until = Some(now + cooldown);
+                WebhookFailureAction::Suspended(cooldown)
+            }
+            None => {
+                entry.failures = entry.failures.saturating_add(1);
+                if entry.failures < OPEN_THRESHOLD {
+                    return WebhookFailureAction::Noop;
                 }
-            })
-            .collect();
-        for (session_id, ids) in sessions_with_url {
-            if let Some(session_map) = self.inner.webhooks.get(&session_id) {
-                for id in ids {
-                    session_map.remove(&id);
-                }
+                let cooldown = webhook_cooldown(entry.trips);
+                entry.opened_until = Some(now + cooldown);
+                WebhookFailureAction::Suspended(cooldown)
             }
         }
-        self.inner.webhook_circuits.remove(url);
+    }
+
+    fn webhook_note_skipped(&self, url: &str) {
+        if let Some(mut c) = self.inner.webhook_circuits.get_mut(url) {
+            c.skipped = c.skipped.saturating_add(1);
+        }
+    }
+
+    /// Flips `enabled` on a registered webhook. `false` when it isn't
+    /// registered on this session.
+    pub fn set_webhook_enabled(&self, session_id: &str, webhook_id: &str, enabled: bool) -> bool {
+        let Some(session_map) = self.inner.webhooks.get(session_id) else {
+            return false;
+        };
+        let Some(mut config) = session_map.get_mut(webhook_id) else {
+            return false;
+        };
+        config.enabled = enabled;
+        self.inner.webhook_circuits.remove(&config.url);
+        true
     }
 
     pub fn purge_webhooks_for_session(&self, session_id: &str) {
@@ -1159,6 +1209,19 @@ impl AppState {
             }
 
             if !self.webhook_circuit_allows(&config.url) {
+                self.webhook_note_skipped(&config.url);
+                self.webhook_dlq_push(WebhookDlqEntry {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    session_id: session_id.to_string(),
+                    webhook_url: config.url.clone(),
+                    event: event.to_string(),
+                    payload: payload.to_string(),
+                    secret: config.secret.clone(),
+                    last_error: "not attempted: webhook suspended after repeated failures"
+                        .to_string(),
+                    attempts: 0,
+                    failed_at: chrono::Utc::now().timestamp(),
+                });
                 continue;
             }
 
@@ -1242,7 +1305,14 @@ impl AppState {
                 Ok(resp) => {
                     let status = resp.status();
                     if status.is_success() {
-                        self.webhook_record_success(url);
+                        if self.webhook_record_success(url) {
+                            tracing::info!(
+                                "Webhook {} is reachable again; deliveries resumed",
+                                url
+                            );
+                            let note = serde_json::json!({ "url": url }).to_string();
+                            self.push_event(session_id, "webhook_resumed", &note);
+                        }
                         return true;
                     }
                     if !retry_cfg.retry_on_4xx
@@ -1271,35 +1341,21 @@ impl AppState {
             None => return false,
         };
 
-        let action = self.webhook_record_failure(url);
-        match action {
-            WebhookFailureAction::HardDisable => {
+        match self.webhook_record_failure(url, &err) {
+            WebhookFailureAction::Suspended(cooldown) => {
                 tracing::warn!(
-                    "Webhook {} auto-DISABLED after 100 consecutive failures — DB row switched to enabled=false",
-                    url
+                    "Webhook {} suspended for {} min after repeated failures ({}); it stays registered and is retried after that",
+                    url,
+                    cooldown.as_secs() / 60,
+                    err
                 );
-                let reason = format!("100 consecutive failures ({err})");
-                match self
-                    .session_manager()
-                    .disable_webhook_by_url(url, &reason)
-                    .await
-                {
-                    Ok(n) => tracing::info!(
-                        "webhook auto-disable: {} row(s) marked enabled=false for {}",
-                        n,
-                        url
-                    ),
-                    Err(err) => {
-                        tracing::warn!("webhook auto-disable persist failed for {}: {}", url, err)
-                    }
-                }
-                self.purge_webhook_by_url(url);
-            }
-            WebhookFailureAction::Open => {
-                tracing::warn!(
-                    "Webhook {} circuit OPEN after 25 consecutive failures — skipping dispatch for 5 min",
-                    url
-                );
+                let note = serde_json::json!({
+                    "url": url,
+                    "retry_in_seconds": cooldown.as_secs(),
+                    "last_error": err,
+                })
+                .to_string();
+                self.push_event(session_id, "webhook_suspended", &note);
             }
             WebhookFailureAction::Noop => {
                 tracing::warn!(

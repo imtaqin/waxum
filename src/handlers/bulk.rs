@@ -93,6 +93,7 @@ pub async fn purge_sessions(
         }
         state.remove_session(&id);
         state.purge_webhooks_for_session(&id);
+        crate::db::new_chats::purge(state.session_manager().pool(), &id).await;
         if let Some(path) = storage_path {
             let _ = tokio::fs::remove_dir_all(&path).await;
         }

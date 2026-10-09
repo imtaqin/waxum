@@ -289,6 +289,9 @@ pub struct SessionDiagnostics {
     pub last_message_forwarded_at: Option<i64>,
     /// Every webhook registered on this session.
     pub webhooks: Vec<WebhookHealth>,
+    /// New outgoing chats started through waxum, by rolling window. See
+    /// `GET .../settings/new-chat-limit` for the limit and past incidents.
+    pub new_chats: crate::handlers::new_chats::NewChatCounts,
 }
 
 /// Delivery health of one webhook, as seen by the fan-out.
@@ -296,15 +299,23 @@ pub struct SessionDiagnostics {
 pub struct WebhookHealth {
     pub id: String,
     pub url: String,
-    /// `false` once auto-disabled after repeated failures (re-enable it
-    /// with `POST /sessions/{id}/webhooks/{webhook_id}/enable`).
+    /// `false` only when a caller disabled it. waxum never disables a
+    /// webhook on its own (it did, permanently, up to 0.13.6).
     pub enabled: bool,
     /// Whether this webhook's event filter includes `message`.
     pub receives_messages: bool,
-    /// `true` while the circuit breaker is skipping this URL.
+    /// `true` while deliveries to this URL are suspended after repeated
+    /// failures. The webhook stays registered and is retried.
     pub circuit_open: bool,
     /// Consecutive failed deliveries to this URL.
     pub consecutive_failures: u32,
+    /// Seconds until the next delivery attempt, while suspended.
+    pub retry_in_seconds: Option<u64>,
+    /// Error of the most recent failed delivery.
+    pub last_error: Option<String>,
+    /// Events not attempted while suspended. The most recent ones are in
+    /// the dead-letter queue (`GET .../webhooks/dlq`) and can be replayed.
+    pub skipped_while_suspended: u64,
 }
 
 /// Device information

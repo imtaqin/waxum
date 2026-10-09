@@ -6,7 +6,8 @@ pub async fn init_schema(pool: &DbPool) -> anyhow::Result<()> {
         DbPool::Postgres(pg) => init_postgres(pg).await,
         DbPool::MySQL(my) => init_mysql(my).await,
         DbPool::SQLite(s) => init_sqlite(s).await,
-    }
+    }?;
+    crate::db::new_chats::init_schema(pool).await
 }
 
 /// `CREATE TABLE IF NOT EXISTS` is a no-op on a table that already

@@ -239,6 +239,7 @@ pub async fn delete_session(
     state.remove_session(&session_id);
     state.purge_webhooks_for_session(&session_id);
     state.drop_tags_for(&session_id).await;
+    crate::db::new_chats::purge(state.session_manager().pool(), &session_id).await;
 
     if let Some(storage_path) = state
         .session_manager()
@@ -345,7 +346,8 @@ pub async fn get_session_status(
             )
         };
 
-    let diagnostics = session_diagnostics(&state, &session_id);
+    let mut diagnostics = session_diagnostics(&state, &session_id);
+    diagnostics.new_chats = crate::handlers::new_chats::counts(&state, &session_id).await;
     Ok(Json(SessionStatusResponse {
         status,
         is_logged_in,
@@ -385,14 +387,17 @@ fn session_diagnostics(
         .get_webhooks(session_id)
         .into_iter()
         .map(|(id, config)| {
-            let (circuit_open, consecutive_failures) = state.webhook_circuit_snapshot(&config.url);
+            let circuit = state.webhook_circuit_snapshot(&config.url);
             crate::models::sessions::WebhookHealth {
                 id,
                 receives_messages: config.events.iter().any(|e| e.matches("message")),
                 enabled: config.enabled,
                 url: config.url,
-                circuit_open,
-                consecutive_failures,
+                circuit_open: circuit.open,
+                consecutive_failures: circuit.failures,
+                retry_in_seconds: circuit.retry_in_secs,
+                last_error: circuit.last_error,
+                skipped_while_suspended: circuit.skipped,
             }
         })
         .collect();
@@ -1008,6 +1013,112 @@ pub async fn disconnect_session(
     Ok(Json(SuccessResponse::with_message("Disconnected")))
 }
 
+/// Turns a session dormant: its WhatsApp login is dropped, everything
+/// else stays.
+///
+/// What goes is the device identity in the session's store (noise and
+/// Signal keys, app-state), so the next `connect` shows a fresh QR. What
+/// stays is the session row, its webhooks, settings, stored messages and
+/// chat list, so scanning again continues the same session.
+///
+/// This replaces deleting the session, which is what a repeated
+/// `LoggedOut` and the console's "log out" used to do: the session id
+/// vanished along with its webhooks and history, and whatever was
+/// integrated against it had to be set up again.
+///
+/// The caller must have stopped the client first.
+pub(crate) async fn unlink_session(state: &AppState, session_id: &str) {
+    if let Some(runtime) = state.get_session(session_id) {
+        runtime.set_client(None);
+        runtime.set_status(SessionStatus::Disconnected);
+        runtime.clear_reconnecting();
+        runtime.clear_pair_state();
+        runtime.set_pair_code(None);
+    }
+
+    if let Ok(Some(storage_path)) = state.session_manager().get_storage_path(session_id).await {
+        let db_path = format!("{}/whatsapp.db", storage_path);
+        if tokio::fs::try_exists(&db_path).await.unwrap_or(false) {
+            let reset = match whatsapp_rust_sqlite_storage::SqliteStore::new(&db_path).await {
+                Ok(store) => store.reset_device(1).await.map(|_| ()),
+                Err(e) => Err(e),
+            };
+            if let Err(e) = reset {
+                tracing::warn!(
+                    session_id = %session_id,
+                    "could not reset the device identity ({e}); the next connect may need a manual re-pair"
+                );
+            }
+        }
+    }
+
+    let _ = state
+        .session_manager()
+        .update_session_status(session_id, SessionStatus::Disconnected, false)
+        .await;
+}
+
+/// How long [`logout_session`] waits for WhatsApp to acknowledge the
+/// device removal before unlinking locally anyway.
+const LOGOUT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Log the session out of WhatsApp without deleting it.
+///
+/// Removes waxum from the account's linked devices, then makes the session
+/// dormant ([`unlink_session`]): the id, webhooks, settings and stored
+/// messages are kept, and `POST .../connect` followed by a QR scan (or
+/// `POST .../pair`) brings the same session back. Use `DELETE
+/// /sessions/{id}` to remove a session and its data for good.
+#[utoipa::path(
+    post,
+    path = "/api/v1/sessions/{session_id}/logout",
+    tag = "sessions",
+    security(("bearer_auth" = [])),
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    responses(
+        (status = 200, description = "Logged out; the session is kept and can be linked again", body = SuccessResponse),
+        (status = 400, description = "Not available on a whatsapp_cloud session"),
+        (status = 404, description = "Session not found")
+    )
+)]
+pub async fn logout_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    let session = state
+        .session_manager()
+        .get_session(&session_id)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .ok_or_else(|| ApiError::SessionNotFound(session_id.clone()))?;
+    reject_cloud_session(&session, "logout")?;
+
+    let client = state.get_session(&session_id).and_then(|runtime| {
+        let client = runtime.get_client();
+        runtime.set_client(None);
+        client
+    });
+    if let Some(client) = client {
+        if tokio::time::timeout(LOGOUT_TIMEOUT, client.logout())
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                session_id = %session_id,
+                "logout: WhatsApp did not acknowledge within {}s; unlinking locally",
+                LOGOUT_TIMEOUT.as_secs()
+            );
+        }
+    }
+    unlink_session(&state, &session_id).await;
+
+    Ok(Json(SuccessResponse::with_message(
+        "Logged out. The session is kept; connect and scan again to link it.",
+    )))
+}
+
 /// Package a session's local storage directory (device identity, Signal
 /// protocol keys, noise handshake state — everything `whatsapp-rust`
 /// itself persists) as a zip, so it can be moved to another waxum
@@ -1304,6 +1415,24 @@ pub async fn get_device_info(
     }))
 }
 
+/// Loads a session's webhooks from the database into the in-memory
+/// registry the fan-out reads.
+///
+/// Runs for every session at boot, whatever its state. It used to run
+/// only for sessions that were about to reconnect, so a session that was
+/// disconnected, logged out or on the Cloud API when waxum restarted came
+/// back with no webhooks until they were registered again.
+async fn load_session_webhooks(state: &AppState, session_id: &str) {
+    match state.session_manager().get_webhooks(session_id).await {
+        Ok(rows) => {
+            for (webhook_id, config) in rows {
+                state.register_webhook(session_id, &webhook_id, config);
+            }
+        }
+        Err(e) => tracing::warn!("[startup] get_webhooks failed for {}: {}", session_id, e),
+    }
+}
+
 /// On engine boot, walk every previously-paired session and start a
 /// reconnect attempt in the background. Sessions that have no stored
 /// credentials (never paired or freshly logged out) are skipped — those
@@ -1324,7 +1453,17 @@ pub async fn reconnect_all_on_startup(state: AppState) {
         sessions.len()
     );
 
+    match state.session_manager().restore_auto_disabled_webhooks().await {
+        Ok(0) => {}
+        Ok(n) => tracing::warn!(
+            "[startup] re-enabled {n} webhook(s) that an older release auto-disabled after repeated failures"
+        ),
+        Err(e) => tracing::warn!("[startup] restore_auto_disabled_webhooks failed: {}", e),
+    }
+
     for session in sessions {
+        load_session_webhooks(&state, &session.id).await;
+
         if is_cloud_session(&session) {
             tracing::debug!("[startup] skip session {} (whatsapp_cloud)", session.id);
             continue;
@@ -1352,22 +1491,6 @@ pub async fn reconnect_all_on_startup(state: AppState) {
 
         let runtime = state.get_or_create_session(&session.id, &storage_path);
         runtime.set_status(SessionStatus::Connecting);
-
-        match state.session_manager().get_webhooks(&session.id).await {
-            Ok(rows) => {
-                if rows.is_empty() {
-                    tracing::debug!("[startup] no webhooks for session {}", session.id);
-                } else {
-                    for (webhook_id, config) in rows {
-                        state.register_webhook(&session.id, &webhook_id, config);
-                    }
-                    tracing::info!("[startup] reloaded webhooks for session {}", session.id);
-                }
-            }
-            Err(e) => {
-                tracing::warn!("[startup] get_webhooks failed for {}: {}", session.id, e);
-            }
-        }
 
         let state_clone = state.clone();
         let sid = session.id.clone();
@@ -2021,6 +2144,12 @@ async fn handle_event(
                 .await;
         }
         Event::LoggedOut(logged_out) => {
+            let new_chats = crate::handlers::new_chats::snapshot_on_logout(
+                state,
+                session_id,
+                &format!("{:?}", logged_out.reason),
+            )
+            .await;
             let is_lock = matches!(
                 logged_out.reason,
                 wacore::types::events::ConnectFailureReason::AccountLocked
@@ -2058,6 +2187,7 @@ async fn handle_event(
                         "reason": format!("{:?}", logged_out.reason),
                         "cooldown_secs": cooldown_secs,
                         "cooldown_until": cooldown_until,
+                        "new_chats": new_chats,
                     },
                 });
                 if let Ok(payload_str) = serde_json::to_string(&payload) {
@@ -2083,27 +2213,11 @@ async fn handle_event(
             }
 
             tracing::warn!(
-                "Session {}: Logged out: {:?} — purging after repeated flaps",
+                "Session {}: Logged out: {:?} — repeated, so the stored login is no longer valid; unlinking (session and its data are kept)",
                 session_id,
                 logged_out.reason
             );
-            let storage_path = state
-                .session_manager()
-                .get_storage_path(session_id)
-                .await
-                .ok()
-                .flatten();
-            state.remove_session(session_id);
-            if let Some(path) = storage_path {
-                let _ = tokio::fs::remove_dir_all(&path).await;
-            }
-            if let Err(e) = state.session_manager().delete_session(session_id).await {
-                tracing::warn!(
-                    "Session {}: failed to purge after logout: {}",
-                    session_id,
-                    e
-                );
-            }
+            unlink_session(state, session_id).await;
         }
         Event::IncomingCall(call) => {
             let call_id = call.action.call_id().to_string();

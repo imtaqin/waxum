@@ -19,11 +19,13 @@
 //! - [`scheduled`] — parked scheduled sends awaiting dispatch.
 //! - [`blast`] — bulk-send jobs and their recipient rows.
 //! - [`messages`] — message history + full-text search.
+//! - [`new_chats`] — new-outgoing-chat counter, limit and incidents.
 //! - [`sqlite_raw`] — hand-rolled safe wrapper over `libsqlite3-sys`.
 
 pub mod blast;
 pub mod contacts;
 pub mod messages;
+pub mod new_chats;
 pub mod scheduled;
 pub mod schema;
 pub mod session;

@@ -58,6 +58,13 @@ pub enum ApiError {
     #[error("Rate limited")]
     RateLimited,
 
+    #[error("New-chat limit reached: {max_new_chats} new chats per {window_hours} h. Existing chats are not affected. Retry in {retry_after_secs} s.")]
+    NewChatLimit {
+        max_new_chats: i64,
+        window_hours: i64,
+        retry_after_secs: i64,
+    },
+
     #[error("Temporary ban: {0}")]
     TemporaryBan(String),
 
@@ -110,6 +117,7 @@ impl IntoResponse for ApiError {
             ApiError::WebhookNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             ApiError::TokenNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             ApiError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
+            ApiError::NewChatLimit { .. } => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             ApiError::TemporaryBan(_) => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             ApiError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
@@ -126,7 +134,18 @@ impl IntoResponse for ApiError {
             }
         }));
 
-        (status, body).into_response()
+        let mut response = (status, body).into_response();
+        if let ApiError::NewChatLimit {
+            retry_after_secs, ..
+        } = &self
+        {
+            if let Ok(value) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+                response
+                    .headers_mut()
+                    .insert(axum::http::header::RETRY_AFTER, value);
+            }
+        }
+        response
     }
 }
 
