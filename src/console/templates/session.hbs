@@ -1,19 +1,19 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/" aria-label="Waxum home">
-      <img src="/assets/logo.png" alt="" class="brand-mark" width="36" height="36">
-      <span class="brand-word">Waxum</span>
+      <img src="/assets/logo.png" alt="" class="brand-mark" width="32" height="32">
+      <span>Waxum</span>
       <span class="brand-chip">Console</span>
     </a>
     <span class="spacer"></span>
-    <span class="tag">v{{version}}</span>
-    <a class="tag" href="/" title="Back to overview">
-      <svg class="icon sm" style="transform:rotate(180deg)"><use href="#i-arrow"/></svg>
-      Overview
+    <span class="version">v{{version}}</span>
+    <a class="topbar-link" href="/swagger-ui" target="_blank" rel="noopener">
+      <svg class="icon sm"><use href="#i-book"/></svg>
+      API docs
     </a>
     <form method="post" action="/logout" style="margin:0">
-      <button type="submit" class="logout-btn">
-        <svg class="icon sm" style="vertical-align:-2px;margin-right:6px"><use href="#i-power"/></svg>
+      <button type="submit" class="btn sm ghost">
+        <svg class="icon sm"><use href="#i-power"/></svg>
         Sign out
       </button>
     </form>
@@ -21,210 +21,576 @@
 </header>
 
 <main class="page">
-  <section class="session-head">
+  <div class="crumbs"><a href="/">Sessions</a> / {{session_id}}</div>
+
+  <section class="session-head {{#if cloud}}cloud{{else}}web{{/if}}">
     <div>
-      <div class="hero-eyebrow">SESSION</div>
-      <h1 class="session-id mono">{{session_id}}</h1>
+      <h1 class="session-id">{{session_id}}</h1>
       <div class="session-meta">
-        <span class="status-pill {{status_class}}"><span class="status-dot"></span>{{status_label}}</span>
-        {{#if phone}}<span class="phone mono">{{phone}}</span>{{/if}}
-        {{#if cloud}}<span class="provider-badge cloud">Cloud API</span>{{else}}<span class="provider-badge">Web</span>{{/if}}
+        {{#if cloud}}
+        <span class="channel cloud"><svg class="icon sm"><use href="#i-cloud"/></svg>Cloud API</span>
+        {{else}}
+        <span class="channel web"><svg class="icon sm"><use href="#i-link"/></svg>WhatsApp Web</span>
+        {{/if}}
+        <span id="head-status" class="status {{status_class}}">{{status_label}}</span>
+        <span id="head-phone" class="cell-num">{{#if phone}}{{phone}}{{/if}}</span>
       </div>
+      <div class="hint session-channel-note">
+        {{#if cloud}}
+        A number on Meta's official Cloud API. It needs no QR and has no
+        socket to drop. Templates, Flows, catalogs and analytics are
+        available; groups, calls, contacts and presence are not.
+        {{else}}
+        A linked WhatsApp Web device. Everything the WhatsApp app can do is
+        available, including groups and calls. Cloud API features
+        (templates, Flows, analytics) are not.
+        {{/if}}
+      </div>
+    </div>
+    <div class="btn-row" id="head-actions">
+      {{#unless cloud}}
+      <button class="btn primary" id="act-connect" onclick="consoleAction('connect')" hidden>Connect</button>
+      <button class="btn" id="act-disconnect" onclick="consoleAction('disconnect')" hidden>Disconnect</button>
+      <button class="btn" id="act-logout" onclick="confirmLogout()" hidden>Log out</button>
+      {{/unless}}
+      <button class="btn danger" onclick="confirmDelete()">
+        <svg class="icon sm"><use href="#i-trash"/></svg>
+        Delete
+      </button>
     </div>
   </section>
 
-  {{#if cloud}}
-  <section class="panel cloud-panel">
-    <header class="panel-head">
-      <span class="panel-title">Cloud API</span>
-      <span class="panel-serial">META WHATSAPP CLOUD API</span>
-    </header>
-    <div class="cloud-grid">
-      <div class="field"><label>WABA ID</label><span class="val">{{#if cloud.waba_id}}{{cloud.waba_id}}{{else}}—{{/if}}</span></div>
-      <div class="field"><label>Phone number ID</label><span class="val">{{#if cloud.phone_number_id}}{{cloud.phone_number_id}}{{else}}—{{/if}}</span></div>
-      <div class="field"><label>Business ID</label><span class="val">{{#if cloud.business_id}}{{cloud.business_id}}{{else}}— <span class="form-hint">(not set)</span>{{/if}}</span></div>
-      <div class="field"><label>App ID</label><span class="val">{{#if cloud.app_id}}{{cloud.app_id}}{{else}}— <span class="form-hint">(not set)</span>{{/if}}</span></div>
-    </div>
-    <div class="cloud-urls">
-      <div class="field">
-        <label>Webhook callback URL</label>
-        <div class="copy-row"><code id="cloud-webhook-url" class="val"></code><button type="button" class="btn" data-copy="cloud-webhook-url">Copy</button></div>
-        <div class="form-hint">Paste into your Meta app → WhatsApp → Configuration → Callback URL, with the verify token you set for this session, then subscribe to the <b>messages</b> field.</div>
-      </div>
-      <div class="field">
-        <label>Flow endpoint URL</label>
-        <div class="copy-row"><code id="cloud-flow-url" class="val"></code><button type="button" class="btn" data-copy="cloud-flow-url">Copy</button></div>
-        <div class="form-hint">Use as a Flow's <b>endpoint_uri</b> after configuring the endpoint under <b>Cloud · Flows</b> below.</div>
-      </div>
-    </div>
-  </section>
-  {{/if}}
-
-  <section id="pair-panel" class="pair-panel panel" hidden>
-    <header class="panel-head">
-      <span class="panel-title">Pair session</span>
-    </header>
-    <div class="pair-body">
-      <div class="pair-left">
-        <div class="pair-eyebrow">SCAN QR</div>
-        <div id="pair-qr" class="pair-qr">
-          <div class="empty" style="padding:24px">Waiting for QR from WhatsApp…</div>
+  <section class="cards">
+    {{#if cloud}}
+    <article class="panel cloud-panel wide">
+      <header class="panel-head">
+        <span class="panel-title">Cloud API connection</span>
+        <span class="panel-note">Meta WhatsApp Cloud API</span>
+      </header>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:20px">
+        <div class="kv">
+          <div class="field"><label>WABA ID</label><span class="val">{{#if cloud.waba_id}}{{cloud.waba_id}}{{else}}—{{/if}}</span></div>
+          <div class="field"><label>Phone number ID</label><span class="val">{{#if cloud.phone_number_id}}{{cloud.phone_number_id}}{{else}}—{{/if}}</span></div>
+          <div class="field"><label>Business ID</label><span class="val">{{#if cloud.business_id}}{{cloud.business_id}}{{else}}<span class="muted">not set</span>{{/if}}</span></div>
+          <div class="field"><label>App ID</label><span class="val">{{#if cloud.app_id}}{{cloud.app_id}}{{else}}<span class="muted">not set</span>{{/if}}</span></div>
         </div>
-        <div class="pair-caption">
-          Open WhatsApp on your phone → <b>Linked devices</b> → <b>Link a device</b>, then point the camera at this code. Refreshes every 20 s.
-        </div>
-      </div>
-      <div class="pair-divider">or</div>
-      <div class="pair-right">
-        <div class="pair-eyebrow">PAIR BY CODE</div>
         <div class="field">
-          <label for="pair-phone">Phone number (international format)</label>
-          <input id="pair-phone" type="text" placeholder="628123456789" autocomplete="off">
+          <label>Webhook callback URL</label>
+          <div class="copy-row"><code id="cloud-webhook-url"></code><button type="button" class="btn sm" data-copy="cloud-webhook-url">Copy</button></div>
+          <div class="hint">Paste into your Meta app under WhatsApp → Configuration → Callback URL, with the verify token you set for this session, then subscribe to the <b>messages</b> field.</div>
         </div>
-        <button id="pair-request" type="button" class="btn primary">
-          <svg class="icon sm"><use href="#i-arrow"/></svg>
-          Request pair code
-        </button>
-        <div id="pair-code" class="pair-code" hidden></div>
-        <div id="pair-code-hint" class="pair-caption" hidden>
-          Enter this code on your phone: <b>Linked devices → Link with phone number instead</b>.
-        </div>
-        <div id="pair-error" class="err" hidden></div>
-        <div class="pair-caption">
-          No camera handy? Waxum issues an 8-character code instead — enter
-          the same phone number tied to this WhatsApp account, then type the
-          code under <b>Linked devices → Link with phone number instead</b>.
+        <div class="field">
+          <label>Flow endpoint URL</label>
+          <div class="copy-row"><code id="cloud-flow-url"></code><button type="button" class="btn sm" data-copy="cloud-flow-url">Copy</button></div>
+          <div class="hint">Use as a Flow's <b>endpoint_uri</b> after configuring the endpoint under <b>Cloud · Flows</b> in the API explorer.</div>
         </div>
       </div>
-    </div>
+    </article>
+    {{else}}
+    <article class="panel wide" id="connection-panel">
+      <header class="panel-head">
+        <span class="panel-title">Connection</span>
+        <span class="panel-note" id="connection-note"></span>
+      </header>
+
+      <div id="linked-view" class="panel-body" hidden>
+        <div class="kv">
+          <div class="field"><label>Number</label><span class="val" id="lv-phone">—</span></div>
+          <div class="field"><label>Name</label><span class="val" id="lv-name">—</span></div>
+          <div class="field"><label>Last data from WhatsApp</label><span class="val" id="lv-last">—</span></div>
+          <div class="field"><label>Messages forwarded</label><span class="val" id="lv-forwarded">—</span></div>
+        </div>
+      </div>
+
+      <div id="pair-panel" class="pair-panel pair-body" hidden>
+        <div id="pair-qr" class="pair-qr"><div class="hint">Waiting for a QR from WhatsApp…</div></div>
+        <div class="pair-side">
+          <div>
+            <div class="panel-title">Link this session to a phone</div>
+            <ol class="steps">
+              <li>Open WhatsApp on the phone.</li>
+              <li>Go to <b>Linked devices</b> and tap <b>Link a device</b>.</li>
+              <li>Point the camera at this code. It refreshes on its own.</li>
+            </ol>
+          </div>
+          <div class="hint" id="pair-dormant-note" hidden>
+            This session is not linked right now. Its webhooks, settings and
+            stored messages are kept; linking again continues where it left off.
+          </div>
+          <details>
+            <summary class="hint" style="cursor:pointer">No camera? Link with the phone number instead</summary>
+            <div class="inline-form" style="margin-top:12px">
+              <div class="field">
+                <label for="pair-phone">Phone number, international format</label>
+                <input id="pair-phone" type="text" placeholder="628123456789" autocomplete="off">
+              </div>
+              <button id="pair-request" type="button" class="btn">Get code</button>
+            </div>
+            <div id="pair-code" class="pair-code" style="margin-top:12px" hidden></div>
+            <div id="pair-code-hint" class="hint" hidden></div>
+            <div id="pair-error" class="err" style="margin-top:8px" hidden></div>
+          </details>
+        </div>
+      </div>
+    </article>
+    {{/if}}
+
+    <article class="panel{{#if cloud}} wide{{/if}}">
+      <header class="panel-head">
+        <span class="panel-title">Webhooks</span>
+        <span class="panel-note">where this session's events are delivered</span>
+      </header>
+      <div id="webhook-list" class="rows"><div class="empty">Loading…</div></div>
+      <form class="panel-foot" id="webhook-form">
+        <div class="inline-form">
+          <div class="field" style="flex:3 1 240px">
+            <label for="wh-url">Add a webhook URL</label>
+            <input id="wh-url" type="url" placeholder="https://example.com/hooks/whatsapp" required>
+          </div>
+          <div class="field">
+            <label for="wh-events">Events</label>
+            <select id="wh-events">
+              <option value="all">All events</option>
+              <option value="message">Messages only</option>
+            </select>
+          </div>
+          <button type="submit" class="btn">Add</button>
+        </div>
+        <div id="webhook-error" class="err" style="margin-top:8px" hidden></div>
+      </form>
+    </article>
+
+    {{#unless cloud}}
+    <article class="panel">
+      <header class="panel-head">
+        <span class="panel-title">New chats</span>
+        <span class="panel-note">conversations started with numbers this session never talked to</span>
+      </header>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:16px">
+        <div class="counters">
+          <div class="counter"><div class="counter-num" id="nc-3">—</div><div class="counter-label">last 3 h</div></div>
+          <div class="counter"><div class="counter-num" id="nc-6">—</div><div class="counter-label">last 6 h</div></div>
+          <div class="counter"><div class="counter-num" id="nc-12">—</div><div class="counter-label">last 12 h</div></div>
+          <div class="counter"><div class="counter-num" id="nc-24">—</div><div class="counter-label">last 24 h</div></div>
+        </div>
+        <div class="hint">
+          WhatsApp restricts accounts that start too many new chats. Set a
+          ceiling and waxum refuses sends to new numbers past it, while
+          existing chats keep working. Only chats started through waxum are counted.
+        </div>
+        <form class="inline-form" id="nc-form">
+          <div class="field">
+            <label for="nc-max">Max new chats</label>
+            <input id="nc-max" type="number" min="1" placeholder="no limit">
+          </div>
+          <div class="field">
+            <label for="nc-window">per hours</label>
+            <input id="nc-window" type="number" min="1" max="720" value="24">
+          </div>
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn ghost" id="nc-clear" hidden>Remove limit</button>
+        </form>
+        <div id="nc-state" class="hint"></div>
+        <div id="nc-incidents"></div>
+      </div>
+    </article>
+    {{/unless}}
   </section>
 
-  <div class="playground">
-    <section class="pg-body">
+  <section>
+    <div style="margin-bottom:12px">
+      <h2 class="panel-title" style="font-size:var(--font-size-lg)">API explorer</h2>
+      <div class="hint">
+        Every endpoint for this session, callable from here.
+        {{#if cloud}}Endpoints that need a linked WhatsApp Web device are listed at the bottom, greyed out.{{else}}Endpoints that need Meta's Cloud API are listed at the bottom, greyed out.{{/if}}
+      </div>
+    </div>
+    <div class="pg-body">
       <div class="pg-sidebar panel">
-        <header class="panel-head">
-          <span class="panel-title">Endpoints</span>
-          <span class="mono" style="font-size:var(--font-size-xs);color:var(--color-text-secondary)" id="pg-endpoint-count">—</span>
-        </header>
+        <div class="pg-search">
+          <input id="pg-filter" type="text" placeholder="Filter endpoints…" autocomplete="off">
+          <div class="hint" id="pg-endpoint-count" style="margin-top:6px"></div>
+        </div>
         <div id="pg-sidebar-tree" class="pg-sidebar-tree"></div>
       </div>
 
       <div class="pg-workbench panel">
         <header class="panel-head">
           <span class="panel-title" id="pg-current-label">Pick an endpoint</span>
-          <span class="mono" style="font-size:var(--font-size-xs);color:var(--color-text-secondary)" id="pg-current-method">—</span>
+          <span class="spacer"></span>
+          <span class="mono muted" id="pg-current-method"></span>
         </header>
         <div class="pg-form" id="pg-form">
-          <div class="empty">Pick an endpoint from the left to load its form here.</div>
+          <div class="empty">Pick an endpoint on the left to load its form.</div>
         </div>
       </div>
 
       <div class="pg-result panel">
         <header class="panel-head">
           <span class="panel-title">Response</span>
-          <span class="mono" style="font-size:var(--font-size-xs);color:var(--color-text-secondary)" id="pg-result-status">—</span>
+          <span class="spacer"></span>
+          <span class="mono" id="pg-result-status"></span>
         </header>
-        <pre id="pg-result-body" class="pg-result-body"><span style="color:var(--color-text-secondary)">No request sent yet.</span></pre>
+        <pre id="pg-result-body" class="pg-result-body"><span class="muted">No request sent yet.</span></pre>
       </div>
-    </section>
-  </div>
+    </div>
+  </section>
 </main>
 
 <script>window.__SID__ = {{{sid_json}}}; window.__PROVIDER__ = {{{provider_json}}};</script>
 <script src="/assets/playground.js"></script>
 <script>
 (function () {
-  const sidebarEl = document.getElementById('pg-sidebar-tree');
-  const countEl = document.getElementById('pg-endpoint-count');
-  const formEl = document.getElementById('pg-form');
-  const curLabelEl = document.getElementById('pg-current-label');
-  const curMethodEl = document.getElementById('pg-current-method');
-  const resStatusEl = document.getElementById('pg-result-status');
-  const resBodyEl = document.getElementById('pg-result-body');
-
   const sid = window.__SID__;
   const provider = window.__PROVIDER__ || 'web';
-  const groups = window.__GROUP_META__ || {};
-  const endpoints = (window.__ENDPOINTS__ || []).filter(e => {
-    const only = e.only || (groups[e.group] && groups[e.group].only);
-    return !only || only === provider;
-  });
-
-  const origin = window.location.origin;
   const enc = encodeURIComponent(sid);
-  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  setText('cloud-webhook-url', origin + '/api/v1/sessions/' + enc + '/cloud/webhook');
-  setText('cloud-flow-url', origin + '/api/v1/sessions/' + enc + '/cloud/flow-endpoint/exchange');
-  document.querySelectorAll('[data-copy]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const text = document.getElementById(btn.dataset.copy).textContent;
-      try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
-      catch (_) { btn.textContent = 'Select & copy'; }
-      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-    });
+  const api = '/api/v1/sessions/' + enc;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
+
+  async function call(method, path, body) {
+    const opts = { method, credentials: 'same-origin', headers: {} };
+    if (body !== undefined) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(path, opts);
+    let json = null;
+    try { json = await res.json(); } catch (_) {}
+    return { ok: res.ok, status: res.status, json };
+  }
+  const errorOf = (r) => (r.json && ((r.json.error && r.json.error.message) || r.json.message)) || ('Request failed (' + r.status + ')');
+
+  function ago(unixSeconds) {
+    if (!unixSeconds) return '—';
+    const s = Math.max(0, Math.floor(Date.now() / 1000 - unixSeconds));
+    if (s < 60) return s + ' s ago';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+    return Math.floor(s / 86400) + ' d ago';
+  }
+  function duration(seconds) {
+    if (seconds < 90) return seconds + ' s';
+    if (seconds < 5400) return Math.round(seconds / 60) + ' min';
+    return (seconds / 3600).toFixed(1) + ' h';
+  }
+
+  /* ---- header actions ---- */
+  window.consoleAction = async function (op) {
+    const res = await fetch('/sessions/' + enc + '/' + op, { method: 'POST', credentials: 'same-origin' });
+    if (op === 'delete' && res.ok) { location.href = '/'; return; }
+    refreshStatus();
+    if (provider !== 'cloud') refreshQr();
+  };
+  window.confirmLogout = function () {
+    if (confirm('Log "' + sid + '" out of WhatsApp?\n\nThe phone will no longer list this device. The session, its webhooks, settings and stored messages are kept: connect and scan again to continue.')) {
+      consoleAction('logout');
+    }
+  };
+  window.confirmDelete = function () {
+    if (confirm('Delete "' + sid + '" for good?\n\nThis removes the session, its webhooks, settings and stored login. It cannot be undone.' + (provider === 'cloud' ? '' : '\n\nTo only unlink the phone and keep everything else, use Log out instead.'))) {
+      consoleAction('delete');
+    }
+  };
+
+  /* ---- status ---- */
+  const STATUS = {
+    logged_in: ['connected', 'Connected'],
+    connected: ['connecting', 'Logging in'],
+    connecting: ['connecting', 'Connecting'],
+    waiting_for_qr: ['pairing', 'Waiting for QR scan'],
+    waiting_for_pair_code: ['pairing', 'Waiting for pair code'],
+    disconnected: ['idle', 'Disconnected'],
+  };
+
+  let qrTimer = null;
+
+  async function refreshStatus() {
+    const r = await call('GET', api + '/status');
+    if (!r.ok || !r.json) return;
+    const s = r.json;
+    const d = s.diagnostics || {};
+    renderWebhooks(d.webhooks || []);
+
+    if (provider === 'cloud') {
+      const st = $('head-status');
+      st.className = 'status connected';
+      st.textContent = 'Ready';
+      return;
+    }
+
+    const [cls, label] = STATUS[s.status] || ['idle', s.status];
+    const st = $('head-status');
+    st.className = 'status ' + cls;
+    st.textContent = s.paused ? 'Paused' : label;
+    setText('head-phone', s.phone_number || '');
+
+    const linked = s.is_logged_in === true && s.status === 'logged_in';
+    const busy = s.status === 'connecting' || s.status === 'connected';
+    const pairing = s.status === 'waiting_for_qr' || s.status === 'waiting_for_pair_code';
+    show('act-connect', s.status === 'disconnected');
+    show('act-disconnect', linked || busy || pairing);
+    show('act-logout', linked);
+
+    show('linked-view', linked);
+    show('pair-panel', !linked);
+    show('pair-dormant-note', s.status === 'disconnected');
+    setText('connection-note', linked ? 'linked and online' : pairing ? 'scan to link' : busy ? 'connecting to WhatsApp' : 'not connected');
+    if (linked) {
+      setText('lv-phone', s.phone_number || '—');
+      setText('lv-name', s.push_name || '—');
+      setText('lv-last', ago(d.last_data_received_at));
+      setText('lv-forwarded', String(d.messages_forwarded == null ? '—' : d.messages_forwarded));
+    } else if (s.status === 'disconnected') {
+      $('pair-qr').innerHTML = '<div class="hint">Not connected. Press <b>Connect</b> to get a QR.</div>';
+    }
+
+    const nc = d.new_chats || {};
+    setText('nc-3', nc.last_3h == null ? '—' : nc.last_3h);
+    setText('nc-6', nc.last_6h == null ? '—' : nc.last_6h);
+    setText('nc-12', nc.last_12h == null ? '—' : nc.last_12h);
+    setText('nc-24', nc.last_24h == null ? '—' : nc.last_24h);
+  }
+
+  async function refreshQr() {
+    try {
+      const res = await fetch('/qr-svg/' + enc + '?t=' + Date.now(), { credentials: 'same-origin' });
+      if (res.status === 204 || !res.ok) return;
+      const svg = await res.text();
+      if (svg && svg.startsWith('<')) $('pair-qr').innerHTML = svg;
+    } catch (_) {}
+  }
+
+  /* ---- webhooks ---- */
+  function renderWebhooks(hooks) {
+    const el = $('webhook-list');
+    if (!hooks.length) {
+      el.innerHTML = '<div class="empty">No webhooks. Events for this session are not delivered anywhere yet.</div>';
+      return;
+    }
+    el.innerHTML = hooks.map(w => {
+      let chip;
+      let detail = '';
+      if (!w.enabled) {
+        chip = '<span class="chip">Disabled</span>';
+      } else if (w.circuit_open) {
+        chip = '<span class="chip bad">Suspended</span>';
+        detail = 'Deliveries failed repeatedly. Next attempt in ' + duration(w.retry_in_seconds || 0) + '; it resumes on its own once the receiver answers.';
+      } else if (w.consecutive_failures > 0) {
+        chip = '<span class="chip warn">' + w.consecutive_failures + ' failed in a row</span>';
+      } else {
+        chip = '<span class="chip ok">Delivering</span>';
+      }
+      if (w.last_error) detail += (detail ? ' ' : '') + 'Last error: ' + w.last_error + '.';
+      if (w.skipped_while_suspended) detail += ' ' + w.skipped_while_suspended + ' event(s) skipped while suspended.';
+      return '<div class="row"><div class="row-main">' +
+        '<div class="row-url">' + esc(w.url) + '</div>' +
+        '<div class="btn-row">' + chip + (w.receives_messages ? '' : '<span class="chip">no message events</span>') + '</div>' +
+        (detail ? '<div class="hint">' + esc(detail) + '</div>' : '') +
+        '</div><div class="btn-row">' +
+        (!w.enabled ? '<button class="btn sm" data-wh-enable="' + esc(w.id) + '">Enable</button>' : '') +
+        '<button class="btn sm ghost" data-wh-remove="' + esc(w.id) + '">Remove</button>' +
+        '</div></div>';
+    }).join('');
+    el.querySelectorAll('[data-wh-remove]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Remove this webhook?')) return;
+      await call('DELETE', api + '/webhooks/' + encodeURIComponent(b.dataset.whRemove));
+      refreshStatus();
+    }));
+    el.querySelectorAll('[data-wh-enable]').forEach(b => b.addEventListener('click', async () => {
+      await call('POST', api + '/webhooks/' + encodeURIComponent(b.dataset.whEnable) + '/enable');
+      refreshStatus();
+    }));
+  }
+
+  $('webhook-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const errEl = $('webhook-error');
+    errEl.hidden = true;
+    const r = await call('POST', api + '/webhooks', { url: $('wh-url').value.trim(), events: [$('wh-events').value] });
+    if (!r.ok) { errEl.textContent = errorOf(r); errEl.hidden = false; return; }
+    $('wh-url').value = '';
+    refreshStatus();
   });
-  const groupKeys = Array.from(new Set(endpoints.map(e => e.group)));
-  const expandedGroups = new Set([groupKeys[0]]);
-  let activeEndpoint = null;
 
-  countEl.textContent = endpoints.length + ' total';
-
-  function renderSidebar() {
-    sidebarEl.innerHTML = '';
-    groupKeys.forEach(g => {
-      const meta = groups[g] || { title: g };
-      const items = endpoints.filter(e => e.group === g);
-
-      const details = document.createElement('details');
-      details.className = 'pg-group';
-      details.open = expandedGroups.has(g);
-      details.addEventListener('toggle', () => {
-        if (details.open) expandedGroups.add(g); else expandedGroups.delete(g);
-      });
-
-      const summary = document.createElement('summary');
-      summary.className = 'pg-group-head';
-      summary.innerHTML =
-        '<svg class="icon sm"><use href="#' + (meta.icon || 'i-dot') + '"/></svg>' +
-        '<span class="pg-group-title">' + meta.title + '</span>' +
-        '<span class="pg-group-count">' + items.length + '</span>';
-      details.appendChild(summary);
-
-      const list = document.createElement('div');
-      list.className = 'pg-group-items';
-      items.forEach(ep => {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'pg-endpoint' + (ep.danger ? ' danger' : '') +
-          (activeEndpoint && activeEndpoint.key === ep.key && activeEndpoint.group === ep.group ? ' active' : '');
-        row.innerHTML =
-          '<span class="method m-' + ep.method.toLowerCase() + '">' + ep.method + '</span>' +
-          '<span class="label">' + ep.label + '</span>' +
-          '<span class="path mono">' + ep.path.replace('/api/v1/sessions/{sid}', '') + '</span>';
-        row.addEventListener('click', () => { activeEndpoint = ep; renderSidebar(); renderForm(); });
-        list.appendChild(row);
-      });
-      details.appendChild(list);
-      sidebarEl.appendChild(details);
+  /* ---- new-chat limit ---- */
+  function renderLimit(body) {
+    const limit = body.limit;
+    $('nc-max').value = limit ? limit.max_new_chats : '';
+    $('nc-window').value = limit ? limit.window_hours : 24;
+    show('nc-clear', !!limit);
+    let state = limit
+      ? 'Limit: ' + limit.max_new_chats + ' new chats per ' + limit.window_hours + ' h.'
+      : 'No limit set. Nothing is refused.';
+    if (body.retry_after_seconds) state += ' Reached: the next new chat is allowed in ' + duration(body.retry_after_seconds) + '.';
+    setText('nc-state', state);
+    const incidents = body.incidents || [];
+    $('nc-incidents').innerHTML = incidents.length
+      ? '<div class="label" style="margin-bottom:6px">When WhatsApp logged this session out</div>' +
+        incidents.slice(0, 5).map(i =>
+          '<div class="hint">' + esc(new Date(i.occurred_at * 1000).toLocaleString()) + ' · ' + esc(i.reason) +
+          ' · new chats: ' + i.new_chats.last_3h + ' / ' + i.new_chats.last_6h + ' / ' + i.new_chats.last_12h + ' / ' + i.new_chats.last_24h +
+          ' (3 / 6 / 12 / 24 h)</div>').join('')
+      : '';
+  }
+  async function refreshLimit() {
+    const r = await call('GET', api + '/settings/new-chat-limit');
+    if (r.ok && r.json) renderLimit(r.json);
+  }
+  if ($('nc-form')) {
+    $('nc-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const max = Number($('nc-max').value);
+      if (!max) { setText('nc-state', 'Enter how many new chats to allow, or use Remove limit.'); return; }
+      const r = await call('PUT', api + '/settings/new-chat-limit', { max_new_chats: max, window_hours: Number($('nc-window').value) || 24 });
+      if (r.ok) renderLimit(r.json); else setText('nc-state', errorOf(r));
+    });
+    $('nc-clear').addEventListener('click', async () => {
+      const r = await call('DELETE', api + '/settings/new-chat-limit');
+      if (r.ok) renderLimit(r.json);
     });
   }
 
+  /* ---- cloud URLs ---- */
+  setText('cloud-webhook-url', location.origin + api + '/cloud/webhook');
+  setText('cloud-flow-url', location.origin + api + '/cloud/flow-endpoint/exchange');
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = $(btn.dataset.copy).textContent;
+      try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
+      catch (_) { btn.textContent = 'Select and copy'; }
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
+
+  /* ---- pair by code ---- */
+  if ($('pair-request')) {
+    $('pair-request').addEventListener('click', async () => {
+      const errEl = $('pair-error');
+      errEl.hidden = true; show('pair-code', false); show('pair-code-hint', false);
+      const phone = $('pair-phone').value.trim();
+      if (!phone) { errEl.textContent = 'Enter the phone number first.'; errEl.hidden = false; return; }
+      $('pair-request').disabled = true;
+      try {
+        const r = await call('POST', api + '/pair', { phone_number: phone, show_push_notification: true });
+        if (!r.ok) { errEl.textContent = errorOf(r); errEl.hidden = false; return; }
+        const code = ((r.json && r.json.code) || '').trim().toUpperCase();
+        if (!code) {
+          errEl.textContent = 'Still connecting to WhatsApp. Try again in a few seconds.';
+          errEl.hidden = false;
+          return;
+        }
+        $('pair-code').textContent = code.length === 8 ? code.slice(0, 4) + '-' + code.slice(4) : code;
+        show('pair-code', true);
+        $('pair-code-hint').innerHTML = 'On the phone: <b>Linked devices → Link with phone number instead</b>, then type this code.';
+        show('pair-code-hint', true);
+      } finally {
+        $('pair-request').disabled = false;
+      }
+    });
+  }
+
+  /* ---- API explorer ---- */
+  const groups = window.__GROUP_META__ || {};
+  const onlyOf = (e) => e.only || (groups[e.group] && groups[e.group].only);
+  const endpoints = (window.__ENDPOINTS__ || []).map(e => {
+    const only = onlyOf(e);
+    return Object.assign({}, e, { unavailable: !!only && only !== provider });
+  });
+  const usable = endpoints.filter(e => !e.unavailable);
+  const unusable = endpoints.filter(e => e.unavailable);
+  const otherChannel = provider === 'cloud' ? 'a linked WhatsApp Web session' : 'a Cloud API session';
+
+  const sidebarEl = $('pg-sidebar-tree');
+  const formEl = $('pg-form');
+  const resStatusEl = $('pg-result-status');
+  const resBodyEl = $('pg-result-body');
+  const expanded = new Set();
+  let activeEndpoint = null;
+  let filter = '';
+
+  setText('pg-endpoint-count', usable.length + ' available on this session, ' + unusable.length + ' not');
+
+  function matches(ep) {
+    if (!filter) return true;
+    const hay = (ep.label + ' ' + ep.path + ' ' + ep.method + ' ' + ((groups[ep.group] || {}).title || '')).toLowerCase();
+    return hay.includes(filter);
+  }
+
+  function groupNode(g, items, unavailable) {
+    const meta = groups[g] || { title: g };
+    const details = document.createElement('details');
+    details.className = 'pg-group' + (unavailable ? ' unavailable' : '');
+    details.open = !!filter || expanded.has(g);
+    details.addEventListener('toggle', () => { if (details.open) expanded.add(g); else expanded.delete(g); });
+    const summary = document.createElement('summary');
+    summary.className = 'pg-group-head';
+    summary.innerHTML =
+      '<svg class="icon sm"><use href="#' + (meta.icon || 'i-dot') + '"/></svg>' +
+      '<span class="pg-group-title">' + esc(meta.title) + '</span>' +
+      '<span class="pg-group-count">' + items.length + '</span>';
+    details.appendChild(summary);
+    const list = document.createElement('div');
+    list.className = 'pg-group-items';
+    items.forEach(ep => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'pg-endpoint' + (activeEndpoint === ep ? ' active' : '');
+      row.innerHTML =
+        '<span class="method m-' + ep.method.toLowerCase() + '">' + ep.method + '</span>' +
+        '<span class="label">' + esc(ep.label) + '</span>' +
+        '<span class="path mono">' + esc(ep.path.replace('/api/v1/sessions/{sid}', '') || '/') + '</span>';
+      row.addEventListener('click', () => { activeEndpoint = ep; renderSidebar(); renderForm(); });
+      list.appendChild(row);
+    });
+    details.appendChild(list);
+    return details;
+  }
+
+  function renderSidebar() {
+    sidebarEl.innerHTML = '';
+    const draw = (list, unavailable) => {
+      const keys = Array.from(new Set(list.map(e => e.group)));
+      keys.forEach(g => {
+        const items = list.filter(e => e.group === g && matches(e));
+        if (items.length) sidebarEl.appendChild(groupNode(g, items, unavailable));
+      });
+    };
+    draw(usable, false);
+    if (unusable.some(matches)) {
+      const div = document.createElement('div');
+      div.className = 'pg-divider';
+      div.textContent = 'Not available on this channel — needs ' + otherChannel;
+      sidebarEl.appendChild(div);
+      draw(unusable, true);
+    }
+    if (!sidebarEl.children.length) sidebarEl.innerHTML = '<div class="empty">No endpoint matches.</div>';
+  }
+
+  $('pg-filter').addEventListener('input', (ev) => { filter = ev.target.value.trim().toLowerCase(); renderSidebar(); });
+
   function renderForm() {
     if (!activeEndpoint) return;
-    curLabelEl.textContent = activeEndpoint.label;
-    curMethodEl.textContent = activeEndpoint.method + '  ' + activeEndpoint.path.replace('{sid}', sid);
+    setText('pg-current-label', activeEndpoint.label);
+    setText('pg-current-method', activeEndpoint.method + ' ' + activeEndpoint.path.replace('{sid}', sid));
     formEl.innerHTML = '';
+
+    if (activeEndpoint.unavailable) {
+      formEl.innerHTML = '<div class="pg-notice"><span class="chip warn" style="align-self:flex-start">Not available here</span>' +
+        '<div>This endpoint needs ' + otherChannel + '. On this session waxum answers with an error, so the form is not shown.</div></div>';
+      return;
+    }
 
     const wrap = document.createElement('div');
     wrap.className = 'pg-fields';
-
     activeEndpoint.fields.forEach(f => {
       const g = document.createElement('div');
       g.className = 'field';
       const l = document.createElement('label');
       l.textContent = f.label + (f.required ? ' *' : '');
       g.appendChild(l);
-
       let input;
       if (f.type === 'textarea' || f.type === 'json') {
         input = document.createElement('textarea');
@@ -236,18 +602,9 @@
           o.value = opt; o.textContent = opt;
           input.appendChild(o);
         });
-      } else if (f.type === 'file') {
-        input = document.createElement('input');
-        input.type = 'file';
-      } else if (f.type === 'checkbox') {
-        input = document.createElement('input');
-        input.type = 'checkbox';
-      } else if (f.type === 'number') {
-        input = document.createElement('input');
-        input.type = 'number';
       } else {
         input = document.createElement('input');
-        input.type = 'text';
+        input.type = f.type === 'file' ? 'file' : f.type === 'checkbox' ? 'checkbox' : f.type === 'number' ? 'number' : 'text';
       }
       input.name = f.name;
       input.dataset.type = f.type;
@@ -259,14 +616,15 @@
       g.appendChild(input);
       wrap.appendChild(g);
     });
+    if (!activeEndpoint.fields.length) wrap.innerHTML = '<div class="hint">This endpoint takes no parameters.</div>';
     formEl.appendChild(wrap);
 
     const bar = document.createElement('div');
     bar.className = 'pg-actions';
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn primary' + (activeEndpoint.danger ? ' danger' : '');
-    btn.innerHTML = '<svg class="icon sm"><use href="#i-arrow"/></svg>Send request';
+    btn.className = 'btn ' + (activeEndpoint.danger ? 'danger' : 'primary');
+    btn.textContent = 'Send request';
     btn.addEventListener('click', () => submit());
     bar.appendChild(btn);
     formEl.appendChild(bar);
@@ -291,87 +649,56 @@
     return values;
   }
 
-  function buildPath(values) {
-    let p = activeEndpoint.path.replace('{sid}', encodeURIComponent(sid));
-    activeEndpoint.fields.forEach(f => {
-      if (f.in_path) {
-        p = p.replace('{' + f.name + '}', encodeURIComponent(values[f.name] || ''));
-      }
-    });
-    return p;
-  }
+  const filled = (v) => v !== undefined && v !== null && v !== '';
 
-  function stripPathFields(values) {
-    const out = {};
-    activeEndpoint.fields.forEach(f => {
-      if (!f.in_path && !f.in_query && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
-        out[f.name] = values[f.name];
-      }
-    });
-    return out;
-  }
-
-  function missingRequiredFields(values) {
-    return activeEndpoint.fields
-      .filter(f => f.required && (values[f.name] === undefined || values[f.name] === null || values[f.name] === ''))
-      .map(f => f.label);
-  }
-
-  function appendQuery(path, body) {
+  function appendQuery(path, params) {
     const qs = new URLSearchParams();
-    Object.keys(body).forEach(k => {
-      const v = body[k];
+    Object.keys(params).forEach(k => {
+      const v = params[k];
       qs.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
     });
     const query = qs.toString();
     return query ? path + (path.includes('?') ? '&' : '?') + query : path;
   }
 
+  function fail(message) {
+    resStatusEl.textContent = 'Error';
+    resStatusEl.style.color = 'var(--color-error)';
+    resBodyEl.textContent = message;
+  }
+
   async function submit() {
     resStatusEl.textContent = 'Sending…';
+    resStatusEl.style.color = '';
     resBodyEl.textContent = '';
     let values;
-    try { values = collectValues(); }
-    catch (e) {
-      resStatusEl.textContent = 'ERROR';
-      resBodyEl.textContent = e.message;
-      return;
-    }
+    try { values = collectValues(); } catch (e) { fail(e.message); return; }
 
-    const missing = missingRequiredFields(values);
-    if (missing.length) {
-      resStatusEl.textContent = 'ERROR';
-      resStatusEl.style.color = 'var(--color-error)';
-      resBodyEl.textContent = 'Missing required field(s): ' + missing.join(', ');
-      return;
-    }
+    const ep = activeEndpoint;
+    const missing = ep.fields.filter(f => f.required && !filled(values[f.name])).map(f => f.label);
+    if (missing.length) { fail('Missing required field(s): ' + missing.join(', ')); return; }
 
-    let path = buildPath(values);
-    const body = stripPathFields(values);
-    const method = activeEndpoint.method;
-    const queryOnly = {};
-    activeEndpoint.fields.forEach(f => {
-      if (f.in_query && values[f.name] !== undefined && values[f.name] !== null && values[f.name] !== '') {
-        queryOnly[f.name] = values[f.name];
-      }
+    let path = ep.path.replace('{sid}', enc);
+    const body = {};
+    const query = {};
+    ep.fields.forEach(f => {
+      if (f.in_path) path = path.replace('{' + f.name + '}', encodeURIComponent(values[f.name] || ''));
+      else if (!filled(values[f.name])) return;
+      else if (f.in_query) query[f.name] = values[f.name];
+      else body[f.name] = values[f.name];
     });
-    path = appendQuery(path, queryOnly);
+    path = appendQuery(path, query);
 
-    const opts = {
-      method,
-      credentials: 'same-origin',
-      headers: {},
-    };
-    const hasFile = activeEndpoint.fields.some(f => f.type === 'file');
-    if (method === 'GET') {
+    const opts = { method: ep.method, credentials: 'same-origin', headers: {} };
+    if (ep.method === 'GET') {
       path = appendQuery(path, body);
-    } else if (hasFile) {
+    } else if (ep.fields.some(f => f.type === 'file')) {
       const form = new FormData();
       Object.keys(body).forEach(k => form.append(k, body[k]));
       opts.body = form;
-    } else if (activeEndpoint.raw_body) {
+    } else if (ep.raw_body) {
       opts.headers['content-type'] = 'application/json';
-      opts.body = JSON.stringify(body[activeEndpoint.raw_body]);
+      opts.body = JSON.stringify(body[ep.raw_body]);
     } else if (Object.keys(body).length) {
       opts.headers['content-type'] = 'application/json';
       opts.body = JSON.stringify(body);
@@ -384,149 +711,45 @@
       let pretty = text;
       try { parsed = JSON.parse(text); pretty = JSON.stringify(parsed, null, 2); } catch (e) { /* not JSON */ }
       resStatusEl.textContent = res.status + ' ' + res.statusText;
-      resStatusEl.style.color = res.ok ? 'var(--color-text-accent)' : 'var(--color-error)';
+      resStatusEl.style.color = res.ok ? 'var(--color-success)' : 'var(--color-error)';
       resBodyEl.textContent = pretty;
       renderRecordingPlayer(parsed);
+      refreshStatus();
     } catch (e) {
-      resStatusEl.textContent = 'NETWORK';
-      resStatusEl.style.color = 'var(--color-error)';
-      resBodyEl.textContent = String(e);
+      fail(String(e));
     }
   }
 
   function renderRecordingPlayer(body) {
-    let host = document.getElementById('pg-recording');
+    let host = $('pg-recording');
     if (host) host.remove();
     if (!body || typeof body.recording_url !== 'string' || !body.recording_url) return;
-
     host = document.createElement('div');
     host.id = 'pg-recording';
     host.className = 'pg-recording';
     host.innerHTML =
-      '<div class="pg-recording-head">' +
-      '<span class="panel-serial mono">PEER AUDIO</span>' +
-      '<button type="button" class="btn" id="pg-recording-reload">' +
-      '<svg class="icon sm"><use href="#i-refresh"/></svg> Load / reload' +
-      '</button>' +
-      '</div>' +
-      '<div class="pg-recording-hint">Ready after the peer hangs up. Click <b>Load / reload</b> once the call ends; the WAV lives at <code>' + body.recording_url + '</code>.</div>' +
-      '<audio id="pg-recording-audio" controls preload="none" src="' + body.recording_url + '" style="width:100%;margin-top:12px"></audio>';
-
-    const parent = document.getElementById('pg-result-body').parentElement;
-    parent.appendChild(host);
-
-    document.getElementById('pg-recording-reload').addEventListener('click', () => {
-      const audio = document.getElementById('pg-recording-audio');
+      '<div class="pg-recording-head"><span class="label">Peer audio</span>' +
+      '<button type="button" class="btn sm" id="pg-recording-reload">Load / reload</button></div>' +
+      '<div class="pg-recording-hint">Ready after the peer hangs up. The WAV lives at <code>' + esc(body.recording_url) + '</code>.</div>' +
+      '<audio id="pg-recording-audio" controls preload="none" src="' + esc(body.recording_url) + '" style="width:100%;margin-top:12px"></audio>';
+    resBodyEl.parentElement.appendChild(host);
+    $('pg-recording-reload').addEventListener('click', () => {
+      const audio = $('pg-recording-audio');
       audio.src = body.recording_url + '?t=' + Date.now();
       audio.load();
       audio.play().catch(() => {});
     });
   }
 
+  if (usable.length) expanded.add(usable[0].group);
   renderSidebar();
 
-  const pairPanel   = document.getElementById('pair-panel');
-  const pairQr      = document.getElementById('pair-qr');
-  const pairPhone   = document.getElementById('pair-phone');
-  const pairRequest = document.getElementById('pair-request');
-  const pairCode    = document.getElementById('pair-code');
-  const pairHint    = document.getElementById('pair-code-hint');
-  const pairError   = document.getElementById('pair-error');
-
-  let qrTimer = null;
-
-  async function refreshStatus() {
-    try {
-      const res = await fetch('/api/v1/sessions/' + encodeURIComponent(sid) + '/status', {
-        credentials: 'same-origin',
-      });
-      if (!res.ok) return;
-      const body = await res.json();
-      const paired = body.is_logged_in === true && body.status === 'logged_in';
-      pairPanel.hidden = paired;
-      if (paired && qrTimer) { clearInterval(qrTimer); qrTimer = null; }
-    } catch (_) {}
-  }
-
-  async function refreshQr() {
-    try {
-      const res = await fetch('/qr-svg/' + encodeURIComponent(sid) + '?t=' + Date.now(), {
-        credentials: 'same-origin',
-      });
-      if (res.status === 204) {
-        pairQr.innerHTML = '<div class="empty" style="padding:24px">No QR yet — session is not requesting one right now. Click <b>Connect</b> under Info &amp; Pair, or fill in the phone below.</div>';
-        return;
-      }
-      if (!res.ok) return;
-      const svg = await res.text();
-      if (svg && svg.startsWith('<')) {
-        pairQr.innerHTML = svg;
-      }
-    } catch (_) {}
-  }
-
-  pairRequest.addEventListener('click', async () => {
-    pairError.hidden = true;
-    pairCode.hidden = true;
-    pairHint.hidden = true;
-    const phone = pairPhone.value.trim();
-    if (!phone) {
-      pairError.textContent = 'Enter a phone number first.';
-      pairError.hidden = false;
-      return;
-    }
-    pairRequest.disabled = true;
-    try {
-      const res = await fetch('/api/v1/sessions/' + encodeURIComponent(sid) + '/pair', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ phone_number: phone, show_push_notification: true }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        pairError.textContent = body.error?.message || ('Pair request failed (' + res.status + ')');
-        pairError.hidden = false;
-        return;
-      }
-      const code = (body.code || '').trim().toUpperCase();
-      if (!code) {
-        pairError.innerHTML = 'Waxum is still connecting to WhatsApp for this session — the pair code has not been issued yet. Click <b>Request pair code</b> again in about 5 s; on retry the client is already up so the code lands instantly.';
-        pairError.hidden = false;
-        return;
-      }
-      const pretty = code.length === 8 ? code.slice(0, 4) + '-' + code.slice(4) : code;
-      const validity = Number(body.timeout_seconds) || 180;
-      pairCode.textContent = pretty;
-      pairCode.hidden = false;
-      pairHint.hidden = false;
-      pairHint.innerHTML = 'Enter this code on your phone: <b>Linked devices → Link with phone number instead</b>. Valid for <span id="pair-remain">' + validity + '</span> s.';
-      const start = Date.now();
-      if (window.__pairCountdown__) clearInterval(window.__pairCountdown__);
-      window.__pairCountdown__ = setInterval(() => {
-        const remain = Math.max(0, validity - Math.floor((Date.now() - start) / 1000));
-        const el = document.getElementById('pair-remain');
-        if (el) el.textContent = remain;
-        if (remain === 0) {
-          clearInterval(window.__pairCountdown__);
-          window.__pairCountdown__ = null;
-          pairCode.style.opacity = '0.4';
-        }
-      }, 1000);
-    } catch (e) {
-      pairError.textContent = String(e);
-      pairError.hidden = false;
-    } finally {
-      pairRequest.disabled = false;
-    }
-  });
-
-  if (provider === 'cloud') {
-    pairPanel.hidden = true;
-  } else {
-    refreshStatus();
+  refreshStatus();
+  if (provider !== 'cloud') {
     refreshQr();
-    qrTimer = setInterval(() => { refreshQr(); refreshStatus(); }, 20000);
+    refreshLimit();
+    qrTimer = setInterval(refreshQr, 15000);
   }
+  setInterval(refreshStatus, 5000);
 })();
 </script>

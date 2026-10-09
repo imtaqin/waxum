@@ -614,7 +614,8 @@ struct AppStateInner {
 pub struct ConsoleEvent {
     pub session_id: String,
     pub event_type: String,
-    pub payload_preview: String,
+    /// Human-readable one-liner for the console's activity feed.
+    pub summary: String,
     pub at_epoch_ms: i64,
 }
 
@@ -851,7 +852,6 @@ impl AppState {
 
     pub fn push_event(&self, session_id: &str, event: &str, payload: &str) {
         const PREVIEW_MAX: usize = 160;
-        let preview: String = payload.chars().take(PREVIEW_MAX).collect();
         let now = chrono::Utc::now().timestamp_millis();
         let mut ring = self.inner.event_ring.lock();
         if ring.len() >= 200 {
@@ -860,7 +860,7 @@ impl AppState {
         ring.push_back(ConsoleEvent {
             session_id: session_id.to_string(),
             event_type: event.to_string(),
-            payload_preview: preview,
+            summary: crate::console::handlers::summarize_event(event, payload),
             at_epoch_ms: now,
         });
         tracing::info!(

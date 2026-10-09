@@ -116,10 +116,16 @@ struct EventRow {
 #[derive(Serialize)]
 struct SessionRow {
     id: String,
+    /// Display name, when it says more than the id.
+    name: Option<String>,
     phone: Option<String>,
     status_class: String,
     status_label: String,
     is_cloud: bool,
+    webhooks: usize,
+    webhooks_suspended: usize,
+    can_connect: bool,
+    can_disconnect: bool,
 }
 
 #[derive(Serialize)]
@@ -139,27 +145,84 @@ struct OverviewData {
     has_events: bool,
 }
 
+/// CSS class and label for a session's state.
+///
 /// A `whatsapp_cloud` session has no socket: once its credentials are
-/// stored it is reachable, so it always shows as connected, labelled with
-/// its provider instead of a socket state.
+/// stored it is reachable, so it is always "Ready". For a linked-device
+/// session the pairing states get their own label: a session showing a
+/// QR used to read "OFFLINE", which sent people looking for a fault.
 fn session_status(state: &AppState, s: &SessionInfo) -> (&'static str, &'static str) {
     if crate::handlers::sessions::is_cloud_session(s) {
-        return ("connected", "CLOUD API");
+        return ("connected", "Ready");
     }
-    let runtime_status = state
+    status_row(runtime_status(state, s))
+}
+
+fn runtime_status(state: &AppState, s: &SessionInfo) -> SessionStatus {
+    state
         .get_session(&s.id)
         .map(|r| r.effective_status())
-        .unwrap_or(s.status);
-    status_row(runtime_status)
+        .unwrap_or(s.status)
 }
 
 fn status_row(s: SessionStatus) -> (&'static str, &'static str) {
     match s {
-        SessionStatus::Connected | SessionStatus::LoggedIn => ("connected", "CONNECTED"),
-        SessionStatus::Connecting => ("connecting", "CONNECTING"),
-        SessionStatus::Disconnected => ("disconnected", "OFFLINE"),
-        _ => ("disconnected", "OFFLINE"),
+        SessionStatus::LoggedIn => ("connected", "Connected"),
+        SessionStatus::Connected => ("connecting", "Logging in"),
+        SessionStatus::Connecting => ("connecting", "Connecting"),
+        SessionStatus::WaitingForQr => ("pairing", "Waiting for QR scan"),
+        SessionStatus::WaitingForPairCode => ("pairing", "Waiting for pair code"),
+        SessionStatus::Disconnected => ("idle", "Disconnected"),
     }
+}
+
+/// One line describing an event for the activity feed. The raw payload is
+/// JSON meant for webhooks; dumping it into the page was unreadable and,
+/// for `qr_code`, put the pairing secret on screen.
+pub fn summarize_event(event: &str, payload: &str) -> String {
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(payload) else {
+        return String::new();
+    };
+    let data = parsed.get("data").unwrap_or(&parsed);
+    let text = |key: &str| data.get(key).and_then(|v| v.as_str()).unwrap_or("");
+    let line = match event {
+        "message" => {
+            let who = [text("push_name"), text("from_phone"), text("chat")]
+                .into_iter()
+                .find(|s| !s.is_empty())
+                .unwrap_or("");
+            let body = [text("text"), text("caption")]
+                .into_iter()
+                .find(|s| !s.is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("[{}]", text("message_type")));
+            let direction = if data.get("is_from_me").and_then(|v| v.as_bool()) == Some(true) {
+                "to"
+            } else {
+                "from"
+            };
+            format!("{direction} {who}: {body}")
+        }
+        "qr_code" => "new QR ready to scan".to_string(),
+        "pair_code" => "pair code issued".to_string(),
+        "webhook_suspended" => format!(
+            "{} — retry in {} min ({})",
+            text("url"),
+            data.get("retry_in_seconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                / 60,
+            text("last_error")
+        ),
+        "webhook_resumed" => text("url").to_string(),
+        "pairing_code_error" | "pair_error" => text("error").to_string(),
+        "disconnected" | "logged_out" | "connect_failure" | "account_locked" => {
+            text("reason").to_string()
+        }
+        "receipt" => text("type").to_string(),
+        _ => String::new(),
+    };
+    line.chars().take(140).collect()
 }
 
 async fn build_overview_data(state: &AppState) -> OverviewData {
@@ -176,15 +239,27 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
         let (cls, label) = session_status(state, s);
         match cls {
             "connected" => connected += 1,
-            "connecting" => pairing += 1,
+            "connecting" | "pairing" => pairing += 1,
             _ => offline += 1,
         }
+        let is_cloud = crate::handlers::sessions::is_cloud_session(s);
+        let hooks = state.get_webhooks(&s.id);
+        let webhooks_suspended = hooks
+            .iter()
+            .filter(|(_, w)| w.enabled && state.webhook_circuit_snapshot(&w.url).open)
+            .count();
+        let status = runtime_status(state, s);
         rows.push(SessionRow {
             id: s.id.clone(),
+            name: s.name.clone().filter(|n| !n.is_empty() && *n != s.id),
             phone: s.phone_number.clone(),
             status_class: cls.to_string(),
             status_label: label.to_string(),
-            is_cloud: crate::handlers::sessions::is_cloud_session(s),
+            is_cloud,
+            webhooks: hooks.len(),
+            webhooks_suspended,
+            can_connect: !is_cloud && status == SessionStatus::Disconnected,
+            can_disconnect: !is_cloud && status != SessionStatus::Disconnected,
         });
     }
 
@@ -206,12 +281,13 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
         .map(|e| {
             let dt = chrono::DateTime::from_timestamp_millis(e.at_epoch_ms)
                 .unwrap_or_else(chrono::Utc::now);
-            let level = if e.event_type.contains("error") || e.event_type.contains("fail") {
-                "err"
-            } else if e.event_type.contains("disconnect")
-                || e.event_type.contains("qr")
-                || e.event_type.contains("logout")
+            let level = if e.event_type.contains("error")
+                || e.event_type.contains("fail")
+                || e.event_type.contains("suspended")
+                || e.event_type.contains("locked")
             {
+                "err"
+            } else if e.event_type.contains("disconnect") || e.event_type.contains("logged_out") {
                 "warn"
             } else {
                 ""
@@ -220,7 +296,7 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
                 time: dt.format("%H:%M:%S").to_string(),
                 kind: e.event_type.clone(),
                 level: level.to_string(),
-                msg: e.payload_preview.clone(),
+                msg: e.summary.clone(),
                 session: e.session_id.clone(),
             }
         })
@@ -321,78 +397,6 @@ pub async fn logout(headers: HeaderMap) -> Response {
     r.headers_mut()
         .insert(header::SET_COOKIE, HeaderValue::from_str(&cookie).unwrap());
     r
-}
-
-#[derive(Serialize)]
-struct DrawerData {
-    session_id: String,
-    status_class: String,
-    status_label: String,
-    phone: Option<String>,
-    jid: Option<String>,
-    storage_path: String,
-    qr_svg: Option<String>,
-    is_connected: bool,
-    is_cloud: bool,
-}
-
-pub async fn drawer(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Path(sid): Path<String>,
-) -> Response {
-    if let Err(r) = require_auth(&headers) {
-        return *r;
-    }
-
-    let info = match state.session_manager().get_session(&sid).await {
-        Ok(Some(info)) => info,
-        _ => {
-            let mut r = Response::new(Body::from("<div class='empty'>Session not found.</div>"));
-            *r.status_mut() = StatusCode::NOT_FOUND;
-            return r;
-        }
-    };
-
-    let runtime = state.get_session(&sid);
-    let status = runtime
-        .as_ref()
-        .map(|r| r.effective_status())
-        .unwrap_or(info.status);
-    let is_cloud = crate::handlers::sessions::is_cloud_session(&info);
-    let (cls, label) = session_status(&state, &info);
-    let is_connected =
-        is_cloud || matches!(status, SessionStatus::Connected | SessionStatus::LoggedIn);
-
-    let qr_svg = if !is_connected {
-        runtime
-            .as_ref()
-            .and_then(|r| r.get_qr_codes().first().cloned())
-            .and_then(|code| render_qr(&code).ok())
-    } else {
-        None
-    };
-
-    let storage_path = state
-        .session_manager()
-        .get_storage_path(&sid)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-
-    let data = DrawerData {
-        session_id: sid.clone(),
-        status_class: cls.to_string(),
-        status_label: label.to_string(),
-        phone: info.phone_number.clone(),
-        jid: None,
-        storage_path,
-        qr_svg,
-        is_connected,
-        is_cloud,
-    };
-    html(render_partial("drawer", &data))
 }
 
 #[derive(Serialize)]
@@ -659,4 +663,37 @@ pub async fn logo() -> Response {
         HeaderValue::from_static("public, max-age=86400"),
     );
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::summarize_event;
+
+    #[test]
+    fn a_qr_event_is_summarised_without_the_pairing_code() {
+        let payload = r#"{"session_id":"s","event":"qr_code","data":{"code":"2@SECRETSECRET,abc==","timeout_seconds":59}}"#;
+        let line = summarize_event("qr_code", payload);
+        assert_eq!(line, "new QR ready to scan");
+        assert!(!line.contains("SECRET"));
+    }
+
+    #[test]
+    fn messages_read_as_who_and_what() {
+        let inbound =
+            r#"{"event":"message","data":{"push_name":"Budi","text":"halo","is_from_me":false}}"#;
+        assert_eq!(summarize_event("message", inbound), "from Budi: halo");
+        let media = r#"{"event":"message","data":{"from_phone":"628111","message_type":"image","is_from_me":false}}"#;
+        assert_eq!(summarize_event("message", media), "from 628111: [image]");
+        let outbound = r#"{"event":"message","data":{"chat":"628222@s.whatsapp.net","caption":"cek","is_from_me":true}}"#;
+        assert_eq!(
+            summarize_event("message", outbound),
+            "to 628222@s.whatsapp.net: cek"
+        );
+    }
+
+    #[test]
+    fn unknown_events_and_bad_payloads_give_an_empty_line() {
+        assert_eq!(summarize_event("presence", "{}"), "");
+        assert_eq!(summarize_event("message", "not json"), "");
+    }
 }

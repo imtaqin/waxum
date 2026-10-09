@@ -111,6 +111,11 @@ async fn cloud_session_page_shows_the_cloud_panel_not_qr_pairing() {
     assert_eq!(status, StatusCode::OK);
     let html = String::from_utf8(bytes).unwrap();
     assert!(html.contains("panel cloud-panel"), "Cloud panel missing");
+    assert!(html.contains("channel cloud"));
+    assert!(
+        !html.contains(r#"id="act-logout""#) && !html.contains(r#"id="nc-form""#),
+        "QR logout and the new-chat limit do not apply to the Cloud API"
+    );
     assert!(html.contains("106540352242922"));
     assert!(html.contains(r#"window.__PROVIDER__ = "cloud""#));
     assert!(!html.contains("fake-cloud-access-token"));
@@ -118,8 +123,9 @@ async fn cloud_session_page_shows_the_cloud_panel_not_qr_pairing() {
 
     let (_, _, overview) = call_bytes(&full_app(h), console_req(Method::GET, "/", None)).await;
     let overview = String::from_utf8(overview).unwrap();
-    assert!(overview.contains("provider-badge cloud"));
-    assert!(overview.contains("CLOUD API"));
+    assert!(overview.contains("channel cloud"));
+    assert!(overview.contains("Cloud API"));
+    assert!(overview.contains(r#"<span class="status connected">Ready</span>"#));
 }
 
 #[tokio::test]
@@ -143,6 +149,15 @@ async fn web_session_page_keeps_qr_pairing_and_web_provider() {
     assert!(html.contains(r#"window.__PROVIDER__ = "web""#));
     assert!(html.contains("pair-panel"));
     assert!(!html.contains("panel cloud-panel"));
+    assert!(html.contains("channel web"));
+    assert!(
+        html.contains(r#"id="act-logout""#),
+        "a linked-device session can be logged out"
+    );
+    assert!(
+        html.contains(r#"id="nc-form""#),
+        "the new-chat limit is a linked-device feature"
+    );
 }
 
 #[tokio::test]
