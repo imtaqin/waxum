@@ -197,41 +197,32 @@
     {{/unless}}
   </section>
 
-  <section>
-    <div style="margin-bottom:12px">
-      <h2 class="panel-title" style="font-size:var(--font-size-lg)">API explorer</h2>
-      <div class="hint">
-        Every endpoint for this session, callable from here.
-        {{#if cloud}}Endpoints that need a linked WhatsApp Web device are listed at the bottom, greyed out.{{else}}Endpoints that need Meta's Cloud API are listed at the bottom, greyed out.{{/if}}
+  <section class="explorer">
+    <aside class="ex-nav">
+      <div class="ex-nav-head">
+        <input id="pg-filter" type="text" placeholder="Search endpoints" autocomplete="off" spellcheck="false">
       </div>
-    </div>
-    <div class="pg-body">
-      <div class="pg-sidebar panel">
-        <div class="pg-search">
-          <input id="pg-filter" type="text" placeholder="Filter endpoints…" autocomplete="off">
-          <div class="hint" id="pg-endpoint-count" style="margin-top:6px"></div>
-        </div>
-        <div id="pg-sidebar-tree" class="pg-sidebar-tree"></div>
-      </div>
+      <nav id="pg-sidebar-tree" class="ex-list"></nav>
+    </aside>
 
-      <div class="pg-workbench panel">
-        <header class="panel-head">
-          <span class="panel-title" id="pg-current-label">Pick an endpoint</span>
-          <span class="spacer"></span>
-          <span class="mono muted" id="pg-current-method"></span>
-        </header>
-        <div class="pg-form" id="pg-form">
-          <div class="empty">Pick an endpoint on the left to load its form.</div>
-        </div>
+    <div class="ex-main">
+      <div class="ex-bar">
+        <span class="ex-method" id="pg-method"></span>
+        <code class="ex-url" id="pg-url">Select an endpoint</code>
+        <button type="button" class="btn sm" id="pg-curl" hidden>Copy curl</button>
+        <button type="button" class="btn sm primary" id="pg-send" hidden>Send</button>
       </div>
-
-      <div class="pg-result panel">
-        <header class="panel-head">
-          <span class="panel-title">Response</span>
-          <span class="spacer"></span>
-          <span class="mono" id="pg-result-status"></span>
-        </header>
-        <pre id="pg-result-body" class="pg-result-body"><span class="muted">No request sent yet.</span></pre>
+      <div class="ex-panes">
+        <div class="ex-pane">
+          <div class="ex-pane-title" id="pg-current-label">Request</div>
+          <div id="pg-form" class="ex-form">
+            <p class="muted">Choose an endpoint on the left. Its parameters appear here.</p>
+          </div>
+        </div>
+        <div class="ex-pane">
+          <div class="ex-pane-title">Response <span id="pg-result-status" class="ex-status"></span></div>
+          <pre id="pg-result-body" class="ex-response"></pre>
+        </div>
       </div>
     </div>
   </section>
@@ -511,7 +502,7 @@
   let activeEndpoint = null;
   let filter = '';
 
-  setText('pg-endpoint-count', usable.length + ' available on this session, ' + unusable.length + ' not');
+  const shortPath = (ep) => ep.path.replace('/api/v1/sessions/{sid}', '') || '/';
 
   function matches(ep) {
     if (!filter) return true;
@@ -519,82 +510,97 @@
     return hay.includes(filter);
   }
 
-  function groupNode(g, items, unavailable) {
+  function groupNode(g, items) {
     const meta = groups[g] || { title: g };
     const details = document.createElement('details');
-    details.className = 'pg-group' + (unavailable ? ' unavailable' : '');
+    details.className = 'ex-group';
     details.open = !!filter || expanded.has(g);
     details.addEventListener('toggle', () => { if (details.open) expanded.add(g); else expanded.delete(g); });
     const summary = document.createElement('summary');
-    summary.className = 'pg-group-head';
-    summary.innerHTML =
-      '<svg class="icon sm"><use href="#' + (meta.icon || 'i-dot') + '"/></svg>' +
-      '<span class="pg-group-title">' + esc(meta.title) + '</span>' +
-      '<span class="pg-group-count">' + items.length + '</span>';
+    summary.innerHTML = '<span>' + esc(meta.title) + '</span><span class="ex-count">' + items.length + '</span>';
     details.appendChild(summary);
-    const list = document.createElement('div');
-    list.className = 'pg-group-items';
     items.forEach(ep => {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'pg-endpoint' + (activeEndpoint === ep ? ' active' : '');
+      row.className = 'ex-item' + (activeEndpoint === ep ? ' active' : '');
+      row.title = ep.method + ' ' + shortPath(ep);
       row.innerHTML =
-        '<span class="method m-' + ep.method.toLowerCase() + '">' + ep.method + '</span>' +
-        '<span class="label">' + esc(ep.label) + '</span>' +
-        '<span class="path mono">' + esc(ep.path.replace('/api/v1/sessions/{sid}', '') || '/') + '</span>';
-      row.addEventListener('click', () => { activeEndpoint = ep; renderSidebar(); renderForm(); });
-      list.appendChild(row);
+        '<span class="ex-verb v-' + ep.method.toLowerCase() + '">' + (ep.method === 'DELETE' ? 'DEL' : ep.method) + '</span>' +
+        '<span class="ex-name">' + esc(ep.label) + '</span>';
+      row.addEventListener('click', () => {
+        activeEndpoint = ep;
+        history.replaceState(null, '', '#' + ep.group + '/' + ep.key);
+        renderSidebar();
+        renderForm();
+      });
+      details.appendChild(row);
     });
-    details.appendChild(list);
     return details;
   }
 
   function renderSidebar() {
     sidebarEl.innerHTML = '';
-    const draw = (list, unavailable) => {
-      const keys = Array.from(new Set(list.map(e => e.group)));
-      keys.forEach(g => {
+    const draw = (list) => {
+      Array.from(new Set(list.map(e => e.group))).forEach(g => {
         const items = list.filter(e => e.group === g && matches(e));
-        if (items.length) sidebarEl.appendChild(groupNode(g, items, unavailable));
+        if (items.length) sidebarEl.appendChild(groupNode(g, items));
       });
     };
-    draw(usable, false);
+    draw(usable);
     if (unusable.some(matches)) {
-      const div = document.createElement('div');
-      div.className = 'pg-divider';
-      div.textContent = 'Not available on this channel — needs ' + otherChannel;
-      sidebarEl.appendChild(div);
-      draw(unusable, true);
+      const section = document.createElement('div');
+      section.className = 'ex-unavailable';
+      const head = document.createElement('div');
+      head.className = 'ex-section';
+      head.textContent = 'Needs ' + otherChannel;
+      section.appendChild(head);
+      const keep = sidebarEl;
+      Array.from(new Set(unusable.map(e => e.group))).forEach(g => {
+        const items = unusable.filter(e => e.group === g && matches(e));
+        if (items.length) section.appendChild(groupNode(g, items));
+      });
+      keep.appendChild(section);
     }
-    if (!sidebarEl.children.length) sidebarEl.innerHTML = '<div class="empty">No endpoint matches.</div>';
+    if (!sidebarEl.children.length) sidebarEl.innerHTML = '<p class="muted" style="padding:12px">No endpoint matches.</p>';
   }
 
   $('pg-filter').addEventListener('input', (ev) => { filter = ev.target.value.trim().toLowerCase(); renderSidebar(); });
 
   function renderForm() {
-    if (!activeEndpoint) return;
-    setText('pg-current-label', activeEndpoint.label);
-    setText('pg-current-method', activeEndpoint.method + ' ' + activeEndpoint.path.replace('{sid}', sid));
+    const ep = activeEndpoint;
+    if (!ep) return;
+    const verb = $('pg-method');
+    verb.textContent = ep.method;
+    verb.className = 'ex-method v-' + ep.method.toLowerCase();
+    setText('pg-url', ep.path.replace('{sid}', sid));
+    setText('pg-current-label', ep.label);
+    show('pg-send', !ep.unavailable);
+    show('pg-curl', !ep.unavailable);
     formEl.innerHTML = '';
+    resStatusEl.textContent = '';
+    resBodyEl.textContent = '';
 
-    if (activeEndpoint.unavailable) {
-      formEl.innerHTML = '<div class="pg-notice"><span class="chip warn" style="align-self:flex-start">Not available here</span>' +
-        '<div>This endpoint needs ' + otherChannel + '. On this session waxum answers with an error, so the form is not shown.</div></div>';
+    if (ep.unavailable) {
+      formEl.innerHTML = '<p>This endpoint needs ' + otherChannel + '. It is not available on this session.</p>';
       return;
     }
-
-    const wrap = document.createElement('div');
-    wrap.className = 'pg-fields';
-    activeEndpoint.fields.forEach(f => {
-      const g = document.createElement('div');
-      g.className = 'field';
-      const l = document.createElement('label');
-      l.textContent = f.label + (f.required ? ' *' : '');
-      g.appendChild(l);
+    if (!ep.fields.length) {
+      formEl.innerHTML = '<p class="muted">No parameters.</p>';
+      return;
+    }
+    ep.fields.forEach(f => {
+      const row = document.createElement('label');
+      row.className = 'ex-field';
+      const name = document.createElement('span');
+      name.className = 'ex-field-name';
+      name.innerHTML = '<code>' + esc(f.name) + '</code>' + (f.required ? '<em>required</em>' : '') +
+        (f.label && f.label !== f.name ? '<small>' + esc(f.label) + '</small>' : '');
+      row.appendChild(name);
       let input;
       if (f.type === 'textarea' || f.type === 'json') {
         input = document.createElement('textarea');
-        input.rows = f.type === 'json' ? 4 : 3;
+        input.rows = f.type === 'json' ? 4 : 2;
+        input.spellcheck = false;
       } else if (f.type === 'select') {
         input = document.createElement('select');
         (f.options || []).forEach(opt => {
@@ -613,21 +619,9 @@
         if (f.type === 'checkbox') input.checked = !!f.default;
         else input.value = String(f.default);
       }
-      g.appendChild(input);
-      wrap.appendChild(g);
+      row.appendChild(input);
+      formEl.appendChild(row);
     });
-    if (!activeEndpoint.fields.length) wrap.innerHTML = '<div class="hint">This endpoint takes no parameters.</div>';
-    formEl.appendChild(wrap);
-
-    const bar = document.createElement('div');
-    bar.className = 'pg-actions';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn ' + (activeEndpoint.danger ? 'danger' : 'primary');
-    btn.textContent = 'Send request';
-    btn.addEventListener('click', () => submit());
-    bar.appendChild(btn);
-    formEl.appendChild(bar);
   }
 
   function collectValues() {
@@ -640,7 +634,7 @@
       else if (t === 'json') {
         if (el.value.trim()) {
           try { values[el.name] = JSON.parse(el.value); }
-          catch (e) { throw new Error('Field "' + el.name + '" is not valid JSON: ' + e.message); }
+          catch (e) { throw new Error('"' + el.name + '" is not valid JSON: ' + e.message); }
         }
       }
       else if (t === 'textarea') values[el.name] = el.value;
@@ -662,21 +656,17 @@
   }
 
   function fail(message) {
-    resStatusEl.textContent = 'Error';
-    resStatusEl.style.color = 'var(--color-error)';
+    resStatusEl.textContent = 'not sent';
+    resStatusEl.className = 'ex-status bad';
     resBodyEl.textContent = message;
   }
 
-  async function submit() {
-    resStatusEl.textContent = 'Sending…';
-    resStatusEl.style.color = '';
-    resBodyEl.textContent = '';
-    let values;
-    try { values = collectValues(); } catch (e) { fail(e.message); return; }
-
+  /* Turns the form into what goes on the wire. Throws on invalid input. */
+  function buildRequest() {
     const ep = activeEndpoint;
-    const missing = ep.fields.filter(f => f.required && !filled(values[f.name])).map(f => f.label);
-    if (missing.length) { fail('Missing required field(s): ' + missing.join(', ')); return; }
+    const values = collectValues();
+    const missing = ep.fields.filter(f => f.required && !filled(values[f.name])).map(f => f.name);
+    if (missing.length) throw new Error('Required: ' + missing.join(', '));
 
     let path = ep.path.replace('{sid}', enc);
     const body = {};
@@ -689,29 +679,39 @@
     });
     path = appendQuery(path, query);
 
-    const opts = { method: ep.method, credentials: 'same-origin', headers: {} };
-    if (ep.method === 'GET') {
-      path = appendQuery(path, body);
-    } else if (ep.fields.some(f => f.type === 'file')) {
-      const form = new FormData();
-      Object.keys(body).forEach(k => form.append(k, body[k]));
-      opts.body = form;
-    } else if (ep.raw_body) {
-      opts.headers['content-type'] = 'application/json';
-      opts.body = JSON.stringify(body[ep.raw_body]);
-    } else if (Object.keys(body).length) {
-      opts.headers['content-type'] = 'application/json';
-      opts.body = JSON.stringify(body);
+    const req = { method: ep.method, path, json: undefined, form: undefined };
+    if (ep.method === 'GET') req.path = appendQuery(path, body);
+    else if (ep.fields.some(f => f.type === 'file')) {
+      req.form = new FormData();
+      Object.keys(body).forEach(k => req.form.append(k, body[k]));
     }
+    else if (ep.raw_body) req.json = body[ep.raw_body];
+    else if (Object.keys(body).length) req.json = body;
+    return req;
+  }
 
+  async function submit() {
+    let req;
+    try { req = buildRequest(); } catch (e) { fail(e.message); return; }
+    const opts = { method: req.method, credentials: 'same-origin', headers: {} };
+    if (req.form) opts.body = req.form;
+    else if (req.json !== undefined) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(req.json);
+    }
+    resStatusEl.textContent = 'sending';
+    resStatusEl.className = 'ex-status';
+    resBodyEl.textContent = '';
+    const started = performance.now();
     try {
-      const res = await fetch(path, opts);
+      const res = await fetch(req.path, opts);
       const text = await res.text();
+      const ms = Math.round(performance.now() - started);
       let parsed = null;
       let pretty = text;
       try { parsed = JSON.parse(text); pretty = JSON.stringify(parsed, null, 2); } catch (e) { /* not JSON */ }
-      resStatusEl.textContent = res.status + ' ' + res.statusText;
-      resStatusEl.style.color = res.ok ? 'var(--color-success)' : 'var(--color-error)';
+      resStatusEl.textContent = res.status + ' ' + res.statusText + ' · ' + ms + ' ms';
+      resStatusEl.className = 'ex-status ' + (res.ok ? 'ok' : 'bad');
       resBodyEl.textContent = pretty;
       renderRecordingPlayer(parsed);
       refreshStatus();
@@ -720,18 +720,30 @@
     }
   }
 
+  $('pg-send').addEventListener('click', submit);
+  $('pg-curl').addEventListener('click', async () => {
+    let req;
+    try { req = buildRequest(); } catch (e) { fail(e.message); return; }
+    const quote = (v) => "'" + String(v).replace(/'/g, "'\\''") + "'";
+    let cmd = 'curl -X ' + req.method + ' ' + quote(location.origin + req.path) + ' \\\n  -H ' + quote('Authorization: Bearer $WAXUM_TOKEN');
+    if (req.form) cmd += ' \\\n  -F ' + quote('file=@/path/to/file');
+    else if (req.json !== undefined) cmd += ' \\\n  -H ' + quote('Content-Type: application/json') + ' \\\n  -d ' + quote(JSON.stringify(req.json));
+    try { await navigator.clipboard.writeText(cmd); $('pg-curl').textContent = 'Copied'; }
+    catch (_) { resBodyEl.textContent = cmd; }
+    setTimeout(() => { $('pg-curl').textContent = 'Copy curl'; }, 1500);
+  });
+
   function renderRecordingPlayer(body) {
     let host = $('pg-recording');
     if (host) host.remove();
     if (!body || typeof body.recording_url !== 'string' || !body.recording_url) return;
     host = document.createElement('div');
     host.id = 'pg-recording';
-    host.className = 'pg-recording';
+    host.className = 'ex-recording';
     host.innerHTML =
-      '<div class="pg-recording-head"><span class="label">Peer audio</span>' +
-      '<button type="button" class="btn sm" id="pg-recording-reload">Load / reload</button></div>' +
-      '<div class="pg-recording-hint">Ready after the peer hangs up. The WAV lives at <code>' + esc(body.recording_url) + '</code>.</div>' +
-      '<audio id="pg-recording-audio" controls preload="none" src="' + esc(body.recording_url) + '" style="width:100%;margin-top:12px"></audio>';
+      '<div>Peer audio, ready after the call ends: <code>' + esc(body.recording_url) + '</code> ' +
+      '<button type="button" class="btn sm" id="pg-recording-reload">Reload</button></div>' +
+      '<audio id="pg-recording-audio" controls preload="none" src="' + esc(body.recording_url) + '"></audio>';
     resBodyEl.parentElement.appendChild(host);
     $('pg-recording-reload').addEventListener('click', () => {
       const audio = $('pg-recording-audio');
@@ -741,8 +753,11 @@
     });
   }
 
-  if (usable.length) expanded.add(usable[0].group);
+  const linked = endpoints.find(e => '#' + e.group + '/' + e.key === location.hash);
+  if (linked) { activeEndpoint = linked; expanded.add(linked.group); }
+  else if (usable.length) expanded.add(usable[0].group);
   renderSidebar();
+  renderForm();
 
   refreshStatus();
   if (provider !== 'cloud') {
