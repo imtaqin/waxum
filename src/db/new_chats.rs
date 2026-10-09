@@ -280,6 +280,16 @@ pub async fn record(pool: &DbPool, session_id: &str, jid: &str, now: i64) -> any
     .await
 }
 
+/// Un-records a chat whose first send did not go out.
+pub async fn forget(pool: &DbPool, session_id: &str, jid: &str) -> anyhow::Result<()> {
+    exec(
+        pool,
+        "DELETE FROM new_chats WHERE session_id = ? AND chat_jid = ?",
+        vec![P::Text(session_id.to_string()), P::Text(jid.to_string())],
+    )
+    .await
+}
+
 /// When the session started each new chat since `since`, oldest first.
 pub async fn started_since(
     pool: &DbPool,

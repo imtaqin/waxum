@@ -29,7 +29,12 @@ use crate::state::AppState;
 /// Build the fully-wired axum router used by [`crate::main`].
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .nest("/api/v1", api_routes())
+        .nest(
+            "/api/v1",
+            api_routes().layer(axum::middleware::from_fn(
+                handlers::new_chats::rollback_failed_sends,
+            )),
+        )
         .route("/health", get(health_check))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))

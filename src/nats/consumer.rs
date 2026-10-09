@@ -105,7 +105,12 @@ async fn process_outbound_command(
     let client =
         get_client(state, session_id).map_err(|e| anyhow::anyhow!("Session error: {}", e))?;
 
-    let result = dispatch_command(state, session_id, &client, command).await;
+    let (result, pending) =
+        crate::handlers::new_chats::scope(dispatch_command(state, session_id, &client, command))
+            .await;
+    if result.is_err() {
+        crate::handlers::new_chats::forget(pending).await;
+    }
 
     match result {
         Ok(message_id) => Ok(SendResult {
@@ -113,6 +118,13 @@ async fn process_outbound_command(
             success: true,
             message_id: Some(message_id),
             error: None,
+            timestamp: chrono::Utc::now().timestamp(),
+        }),
+        Err(e) if e.to_string().starts_with("New-chat limit reached") => Ok(SendResult {
+            request_id,
+            success: false,
+            message_id: None,
+            error: Some(e.to_string()),
             timestamp: chrono::Utc::now().timestamp(),
         }),
         Err(e) => Err(e),
@@ -409,9 +421,6 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
-            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 reaction_message: MessageField::some(waproto::whatsapp::message::ReactionMessage {
                     key: Some(waproto::whatsapp::MessageKey {
@@ -651,9 +660,6 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
-            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let revoke_type = match original_sender {
                 Some(sender) => {
                     let sender_jid = parse_jid(&sender)?;
@@ -677,9 +683,6 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
-            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let edit_msg = waproto::whatsapp::Message {
                 extended_text_message: MessageField::some(
                     waproto::whatsapp::message::ExtendedTextMessage {

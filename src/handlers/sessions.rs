@@ -1034,6 +1034,7 @@ pub(crate) async fn unlink_session(state: &AppState, session_id: &str) {
         runtime.clear_reconnecting();
         runtime.clear_pair_state();
         runtime.set_pair_code(None);
+        runtime.clear_logout_history();
     }
 
     if let Ok(Some(storage_path)) = state.session_manager().get_storage_path(session_id).await {
@@ -1056,6 +1057,29 @@ pub(crate) async fn unlink_session(state: &AppState, session_id: &str) {
         .session_manager()
         .update_session_status(session_id, SessionStatus::Disconnected, false)
         .await;
+}
+
+/// Stops a client for good before its store is reset.
+///
+/// `reset_device` must not run under a live client: its next key or
+/// app-state save would write the old identity back into the fresh store.
+/// `Client::logout` only disconnects as its last step, so when it is cut
+/// short by the timeout the socket and run loop are still up. Disconnect
+/// is idempotent, so this is called whether or not logout finished.
+async fn stop_client(session_id: &str, client: &std::sync::Arc<whatsapp_rust::Client>) {
+    client
+        .enable_auto_reconnect
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.disconnect())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            session_id = %session_id,
+            "the old client did not disconnect within {}s; resetting its store anyway",
+            REBUILD_DISCONNECT_TIMEOUT.as_secs()
+        );
+    }
 }
 
 /// How long [`logout_session`] waits for WhatsApp to acknowledge the
@@ -1111,6 +1135,7 @@ pub async fn logout_session(
                 LOGOUT_TIMEOUT.as_secs()
             );
         }
+        stop_client(&session_id, &client).await;
     }
     unlink_session(&state, &session_id).await;
 

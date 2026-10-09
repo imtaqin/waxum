@@ -1041,7 +1041,6 @@ pub async fn edit_message(
 ) -> Result<Json<MessageResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(&state, &session_id, &to_jid, &request.to).await?;
 
     let new_content = waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -1102,7 +1101,6 @@ pub async fn send_reaction(
 
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(&state, &session_id, &to_jid, &request.to).await?;
 
     let key = waproto::whatsapp::MessageKey {
         remote_jid: Some(request.to.clone()),
@@ -2543,7 +2541,6 @@ pub async fn execute_poll_update(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let enc_payload = request.enc_payload.map(|p| {
         base64::engine::general_purpose::STANDARD
@@ -2643,7 +2640,6 @@ pub async fn execute_buttons_response(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         buttons_response_message: MessageField::some(
@@ -2733,7 +2729,6 @@ pub async fn execute_list_response(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         list_response_message: MessageField::some(
@@ -2828,7 +2823,6 @@ pub async fn execute_interactive_response(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let native_flow =
         waproto::whatsapp::message::interactive_response_message::NativeFlowResponseMessage {
@@ -3010,7 +3004,6 @@ pub async fn execute_template_button_reply(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         template_button_reply_message: MessageField::some(
@@ -3810,7 +3803,6 @@ pub async fn revoke_message(
 ) -> Result<Json<SuccessResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(&state, &session_id, &to_jid, &request.to).await?;
 
     let revoke_type = match request.original_sender {
         Some(sender) => {

@@ -6,11 +6,21 @@
 //! either direction. Groups, newsletters and broadcasts never count, and
 //! neither does answering someone who wrote first.
 //!
-//! [`admit`] runs on every send. For a known chat it is one indexed
+//! [`admit`] runs on every send that can start a conversation (not on
+//! edits, reactions, revokes or replies to an interactive message, which
+//! act inside an existing chat). For a known chat it is one indexed
 //! lookup. For a new one it enforces the session's limit, if any, and
-//! records the chat. It only ever refuses on the limit itself: if the
-//! bookkeeping fails the send goes ahead, because a counter must not be
-//! the reason a message is lost.
+//! records the chat. Check and record happen under a per-session lock, so
+//! a bulk send to many new numbers at once cannot slip past the limit.
+//! It only ever refuses on the limit itself: if the bookkeeping fails the
+//! send goes ahead, because a counter must not be the reason a message is
+//! lost.
+//!
+//! A chat is recorded before the message is sent, so a send that then
+//! fails (bad media URL, WhatsApp error) would be counted for a chat that
+//! never started. [`scope`] and [`forget`] undo that: the HTTP layer
+//! ([`rollback_failed_sends`]) and the NATS consumer run each send inside
+//! a scope and forget the chats it recorded when the send did not succeed.
 //!
 //! waxum sees only what is sent through it. Chats started from the phone
 //! or WhatsApp Web on the same account are not counted, so the figure
@@ -29,6 +39,49 @@ use crate::error::ApiError;
 use crate::state::AppState;
 
 const HOUR: i64 = 3600;
+
+type Recorded = (crate::db::session::DbPool, String, String);
+
+tokio::task_local! {
+    static RECORDED: std::cell::RefCell<Vec<Recorded>>;
+}
+
+static SESSION_LOCKS: once_cell::sync::Lazy<
+    dashmap::DashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>,
+> = once_cell::sync::Lazy::new(dashmap::DashMap::new);
+
+/// Runs one send and returns the new chats [`admit`] recorded during it.
+pub async fn scope<F: std::future::Future>(send: F) -> (F::Output, Vec<Recorded>) {
+    RECORDED
+        .scope(std::cell::RefCell::new(Vec::new()), async move {
+            let out = send.await;
+            let recorded = RECORDED.with(|r| r.take());
+            (out, recorded)
+        })
+        .await
+}
+
+/// Un-records chats whose send did not succeed.
+pub async fn forget(recorded: Vec<Recorded>) {
+    for (pool, session_id, jid) in recorded {
+        if let Err(e) = store::forget(&pool, &session_id, &jid).await {
+            tracing::warn!(session_id = %session_id, "could not un-record a new chat: {e}");
+        }
+    }
+}
+
+/// Middleware over the API routes: a send that did not answer 2xx does
+/// not leave a new chat behind.
+pub async fn rollback_failed_sends(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let (response, recorded) = scope(next.run(request)).await;
+    if !recorded.is_empty() && !response.status().is_success() {
+        forget(recorded).await;
+    }
+    response
+}
 const MAX_WINDOW_HOURS: i64 = 24 * 30;
 
 /// New chats the session started in each rolling window.
@@ -92,6 +145,12 @@ pub async fn admit(
         }
     }
 
+    let lock = SESSION_LOCKS
+        .entry(session_id.to_string())
+        .or_default()
+        .clone();
+    let _serialised = lock.lock().await;
+
     let pool = state.session_manager().pool();
     match store::chat_known(pool, session_id, &jids).await {
         Ok(true) => return Ok(()),
@@ -117,8 +176,14 @@ pub async fn admit(
         }
     }
 
-    if let Err(e) = store::record(pool, session_id, &to, now).await {
-        tracing::warn!(session_id = %session_id, "could not record a new chat: {e}");
+    match store::record(pool, session_id, &to, now).await {
+        Ok(()) => {
+            let _ = RECORDED.try_with(|r| {
+                r.borrow_mut()
+                    .push((pool.clone(), session_id.to_string(), to))
+            });
+        }
+        Err(e) => tracing::warn!(session_id = %session_id, "could not record a new chat: {e}"),
     }
     Ok(())
 }

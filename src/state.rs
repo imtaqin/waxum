@@ -399,6 +399,12 @@ impl SessionState {
     /// caller — the LoggedOut event handler — uses the return value to
     /// decide whether to wipe the storage row or just mark the session
     /// disconnected and let the user retry.
+    /// Forgets earlier logouts, once the session has been unlinked for
+    /// them: a later logout after re-linking starts counting from zero.
+    pub fn clear_logout_history(&self) {
+        self.logout_history.write().clear();
+    }
+
     pub fn record_logout_and_should_purge(&self) -> bool {
         const WINDOW_SECS: i64 = 600;
         const THRESHOLD: usize = 3;
@@ -637,6 +643,10 @@ pub struct CircuitState {
     pub last_error: Option<String>,
     /// Events not attempted because the circuit was open.
     pub skipped: u64,
+    /// When the probe delivery after a cooldown was let through. While
+    /// set, no other event is attempted, so a receiver that is still down
+    /// gets one request per cooldown and not a burst.
+    pub probe_started: Option<std::time::Instant>,
 }
 
 impl Default for CircuitState {
@@ -648,6 +658,7 @@ impl Default for CircuitState {
             trips: 0,
             last_error: None,
             skipped: 0,
+            probe_started: None,
         }
     }
 }
@@ -897,17 +908,31 @@ impl AppState {
         &self.inner.call_audio_channels
     }
 
-    /// Should we still attempt this webhook URL right now?
+    /// Should we attempt this webhook URL right now?
+    ///
+    /// `true` while the circuit is closed. While it is open, `false` until
+    /// the cooldown ends; then exactly one caller gets `true` and its
+    /// delivery is the probe. Everyone else keeps getting `false` until
+    /// that probe reports back (or [`PROBE_TIMEOUT`] passes, in case the
+    /// delivery task died without reporting).
     pub fn webhook_circuit_allows(&self, url: &str) -> bool {
+        const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
         let now = std::time::Instant::now();
-        let map = &self.inner.webhook_circuits;
-        let entry = map.get(url);
-        match entry.as_deref() {
-            Some(c) => match c.opened_until {
-                Some(until) => now >= until,
-                None => true,
-            },
-            None => true,
+        let Some(mut c) = self.inner.webhook_circuits.get_mut(url) else {
+            return true;
+        };
+        let Some(until) = c.opened_until else {
+            return true;
+        };
+        if now < until {
+            return false;
+        }
+        match c.probe_started {
+            Some(started) if now.duration_since(started) < PROBE_TIMEOUT => false,
+            _ => {
+                c.probe_started = Some(now);
+                true
+            }
         }
     }
 
@@ -948,6 +973,7 @@ impl AppState {
             c.opened_until = None;
             c.trips = 0;
             c.last_error = None;
+            c.probe_started = None;
             c.last_event = std::time::Instant::now();
             return was_suspended;
         }
@@ -957,16 +983,18 @@ impl AppState {
     /// Records a delivery that failed every retry.
     ///
     /// The circuit opens after 25 consecutive failures and skips the URL
-    /// for a cooldown ([`webhook_cooldown`]). When the cooldown ends the
-    /// next event is delivered as a probe: success closes the circuit, a
-    /// failure re-opens it with a longer cooldown.
+    /// for a cooldown ([`webhook_cooldown`]). When the cooldown ends, one
+    /// event is delivered as a probe ([`Self::webhook_circuit_allows`]):
+    /// success closes the circuit, a failure re-opens it with a longer
+    /// cooldown.
     ///
     /// A webhook is never switched off or removed here. Up to 0.13.6 the
     /// 100th failure disabled it for good and dropped it from memory, and
     /// because failures were counted per in-flight request, one burst of
     /// events hitting a receiver that was briefly down did that within
-    /// seconds (#143). Failures that land while the circuit is already
-    /// open are stragglers from that same burst and no longer escalate.
+    /// seconds (#143). A failure that lands while the circuit is open and
+    /// no probe is out is a straggler from before it opened (retries take
+    /// minutes), and changes nothing.
     pub fn webhook_record_failure(&self, url: &str, error: &str) -> WebhookFailureAction {
         const OPEN_THRESHOLD: u32 = 25;
         let now = std::time::Instant::now();
@@ -974,24 +1002,22 @@ impl AppState {
         let mut entry = map.entry(url.to_string()).or_default();
         entry.last_event = now;
         entry.last_error = Some(error.chars().take(200).collect());
-        match entry.opened_until {
-            Some(until) if now < until => WebhookFailureAction::Noop,
-            Some(_) => {
-                entry.trips = entry.trips.saturating_add(1);
-                let cooldown = webhook_cooldown(entry.trips);
-                entry.opened_until = Some(now + cooldown);
-                WebhookFailureAction::Suspended(cooldown)
+        if entry.opened_until.is_some() {
+            if entry.probe_started.take().is_none() {
+                return WebhookFailureAction::Noop;
             }
-            None => {
-                entry.failures = entry.failures.saturating_add(1);
-                if entry.failures < OPEN_THRESHOLD {
-                    return WebhookFailureAction::Noop;
-                }
-                let cooldown = webhook_cooldown(entry.trips);
-                entry.opened_until = Some(now + cooldown);
-                WebhookFailureAction::Suspended(cooldown)
-            }
+            entry.trips = entry.trips.saturating_add(1);
+            let cooldown = webhook_cooldown(entry.trips);
+            entry.opened_until = Some(now + cooldown);
+            return WebhookFailureAction::Suspended(cooldown);
         }
+        entry.failures = entry.failures.saturating_add(1);
+        if entry.failures < OPEN_THRESHOLD {
+            return WebhookFailureAction::Noop;
+        }
+        let cooldown = webhook_cooldown(entry.trips);
+        entry.opened_until = Some(now + cooldown);
+        WebhookFailureAction::Suspended(cooldown)
     }
 
     fn webhook_note_skipped(&self, url: &str) {
@@ -1062,11 +1088,14 @@ impl AppState {
         let now = std::time::Instant::now();
         let mut reset: Vec<String> = Vec::new();
         for mut entry in self.inner.webhook_circuits.iter_mut() {
-            let opened = entry.value().opened_until.map(|u| now < u).unwrap_or(false);
-            if opened {
+            if entry.value().opened_until.is_some() {
                 let e = entry.value_mut();
                 e.failures = 0;
                 e.opened_until = None;
+                e.trips = 0;
+                e.last_error = None;
+                e.skipped = 0;
+                e.probe_started = None;
                 e.last_event = now;
                 reset.push(entry.key().clone());
             }
@@ -1210,18 +1239,6 @@ impl AppState {
 
             if !self.webhook_circuit_allows(&config.url) {
                 self.webhook_note_skipped(&config.url);
-                self.webhook_dlq_push(WebhookDlqEntry {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    session_id: session_id.to_string(),
-                    webhook_url: config.url.clone(),
-                    event: event.to_string(),
-                    payload: payload.to_string(),
-                    secret: config.secret.clone(),
-                    last_error: "not attempted: webhook suspended after repeated failures"
-                        .to_string(),
-                    attempts: 0,
-                    failed_at: chrono::Utc::now().timestamp(),
-                });
                 continue;
             }
 

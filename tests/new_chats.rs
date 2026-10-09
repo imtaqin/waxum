@@ -181,3 +181,61 @@ async fn only_new_direct_chats_count_and_only_they_are_refused() {
     let (_, body) = call(&h.app, req_get(LIMIT_PATH, Some(TEST_TOKEN))).await;
     assert_eq!(body["new_chats"]["last_24h"], 3, "counting continues");
 }
+
+/// A bulk send to many new numbers at once must not slip past the limit:
+/// check and record are serialised per session.
+#[tokio::test]
+async fn concurrent_first_contacts_cannot_exceed_the_limit() {
+    let h = Harness::new().await;
+    session(&h).await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::PUT,
+            LIMIT_PATH,
+            Some(TEST_TOKEN),
+            json!({"max_new_chats": 5}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let mut sends = Vec::new();
+    for n in 0..40 {
+        let state = h.state.clone();
+        sends.push(tokio::spawn(async move {
+            let number = format!("6285{n:08}@s.whatsapp.net");
+            admit(&state, "nc-1", &jid(&number), &number).await.is_ok()
+        }));
+    }
+    let mut admitted = 0;
+    for send in sends {
+        if send.await.unwrap() {
+            admitted += 1;
+        }
+    }
+    assert_eq!(admitted, 5);
+}
+
+/// A send that fails after `admit` must not leave a counted chat behind.
+#[tokio::test]
+async fn a_failed_send_is_not_counted() {
+    use waxum::handlers::new_chats::{forget, scope};
+
+    let h = Harness::new().await;
+    session(&h).await;
+    let number = "628999999999@s.whatsapp.net";
+
+    let (outcome, recorded) = scope(admit(&h.state, "nc-1", &jid(number), number)).await;
+    outcome.expect("admitted");
+    assert_eq!(recorded.len(), 1);
+    let (_, body) = call(&h.app, req_get(LIMIT_PATH, Some(TEST_TOKEN))).await;
+    assert_eq!(body["new_chats"]["last_24h"], 1);
+
+    forget(recorded).await;
+    let (_, body) = call(&h.app, req_get(LIMIT_PATH, Some(TEST_TOKEN))).await;
+    assert_eq!(body["new_chats"]["last_24h"], 0, "rolled back: {body}");
+
+    let (_, recorded) = scope(admit(&h.state, "nc-1", &jid(number), number)).await;
+    assert_eq!(recorded.len(), 1, "and it counts as new again next time");
+}
