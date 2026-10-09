@@ -122,6 +122,7 @@ use state::AppState;
         handlers::sessions::connect_and_wait,
         handlers::sessions::pair_session,
         handlers::sessions::disconnect_session,
+        handlers::sessions::logout_session,
         handlers::sessions::export_session,
         handlers::sessions::import_session,
         handlers::sessions::get_device_info,
@@ -357,6 +358,9 @@ use state::AppState;
         handlers::labels::set_quick_reply,
         handlers::labels::delete_quick_reply,
         handlers::labels::set_link_previews,
+        handlers::new_chats::get_new_chat_limit,
+        handlers::new_chats::set_new_chat_limit,
+        handlers::new_chats::clear_new_chat_limit,
 
         handlers::bots::list_bots,
         handlers::bots::get_capping,

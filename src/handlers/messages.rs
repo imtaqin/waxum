@@ -90,6 +90,7 @@ pub async fn execute_text(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let mut mentioned: Vec<String> = Vec::new();
     if let Some(mentions) = request.mentions {
@@ -254,6 +255,7 @@ pub async fn execute_image(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.image).await?;
 
@@ -384,6 +386,7 @@ pub async fn execute_video(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.video).await?;
 
@@ -514,6 +517,7 @@ pub async fn execute_audio(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.audio).await?;
 
@@ -630,6 +634,7 @@ pub async fn execute_document(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.document).await?;
 
@@ -761,6 +766,7 @@ pub async fn execute_sticker(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, _mimetype) = get_media_data(&request.sticker).await?;
 
@@ -875,6 +881,7 @@ pub async fn execute_location(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
@@ -979,6 +986,7 @@ pub async fn execute_contact(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let vcard = build_vcard(&request.contact);
 
@@ -1162,6 +1170,7 @@ pub async fn execute_poll(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
         .options
@@ -1280,6 +1289,7 @@ pub async fn execute_buttons(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
         .buttons
@@ -1420,6 +1430,7 @@ pub async fn execute_list(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let sections_json: Vec<serde_json::Value> = request
         .sections
@@ -1547,6 +1558,7 @@ pub async fn execute_interactive(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let buttons: Vec<
         waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton,
@@ -1687,6 +1699,7 @@ pub async fn execute_cta_url(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let merchant_url = request
         .merchant_url
@@ -1839,6 +1852,7 @@ pub async fn execute_quick_reply(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     if request.buttons.is_empty() {
         return Err(ApiError::Internal(
@@ -1956,6 +1970,7 @@ pub async fn execute_newsletter_admin_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         newsletter_admin_invite_message: MessageField::some(
@@ -2037,6 +2052,7 @@ pub async fn execute_newsletter_follower_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         newsletter_follower_invite_message_v2: MessageField::some(
@@ -2117,6 +2133,7 @@ pub async fn execute_order(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let status = request.status.as_deref().and_then(|s| match s {
         "inquiry" => Some(waproto::whatsapp::message::order_message::OrderStatus::INQUIRY),
@@ -2208,6 +2225,7 @@ pub async fn execute_invoice(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
         "image" => Some(waproto::whatsapp::message::invoice_message::AttachmentType::IMAGE),
@@ -2293,6 +2311,7 @@ pub async fn execute_payment_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         payment_invite_message: MessageField::some(
@@ -2438,6 +2457,7 @@ pub async fn execute_forward_message(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -2901,6 +2921,7 @@ pub async fn execute_highly_structured(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         highly_structured_message: MessageField::some(
@@ -3070,6 +3091,7 @@ pub async fn execute_comment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let target_jid = request
         .target_chat_jid
@@ -3143,6 +3165,7 @@ pub async fn execute_scheduled_call(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let call_type = match request.call_type.to_lowercase().as_str() {
         "video" => waproto::whatsapp::message::scheduled_call_creation_message::CallType::VIDEO,
@@ -3227,6 +3250,7 @@ pub async fn execute_scheduled_call_edit(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
         "cancel" => waproto::whatsapp::message::scheduled_call_edit_message::EditType::CANCEL,
@@ -3316,6 +3340,7 @@ pub async fn execute_payment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -3413,6 +3438,7 @@ pub async fn execute_request_payment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -3505,6 +3531,7 @@ pub async fn execute_cancel_payment_request(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         cancel_payment_request_message: MessageField::some(
@@ -3588,6 +3615,7 @@ pub async fn execute_decline_payment_request(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         decline_payment_request_message: MessageField::some(
@@ -3671,6 +3699,7 @@ pub async fn execute_newsletter_forward(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
+    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
 
     let content_type = match request.content_type.as_deref() {
         Some("update_card") => Some(

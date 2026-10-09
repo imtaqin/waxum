@@ -647,41 +647,35 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Persist the "disabled after N consecutive failures" decision. Sets
-    /// `enabled=false` plus optional `disabled_at` / `disabled_reason`
-    /// columns (added in 0.6.12) so the operator sees WHY a target got
-    /// muted, not just that it stopped receiving events.
-    pub async fn disable_webhook_by_url(&self, url: &str, reason: &str) -> anyhow::Result<u64> {
+    /// Re-enables webhooks that releases up to 0.13.6 switched off on their
+    /// own after 100 failed deliveries (#143). Rows a caller disabled keep
+    /// their state: only the auto-disable wrote this `disabled_reason`.
+    pub async fn restore_auto_disabled_webhooks(&self) -> anyhow::Result<u64> {
         match &self.pool {
             DbPool::Postgres(pool) => {
                 let client = pool.get().await?;
                 let n = client
                     .execute(
-                        "UPDATE webhooks SET enabled=false, disabled_at=NOW(), disabled_reason=$2 WHERE url=$1 AND enabled=true",
-                        &[&url, &reason],
+                        "UPDATE webhooks SET enabled=true, disabled_at=NULL, disabled_reason=NULL WHERE enabled=false AND disabled_reason LIKE '100 consecutive failures%'",
+                        &[],
                     )
                     .await?;
                 Ok(n)
             }
             DbPool::MySQL(pool) => {
                 let mut conn = pool.get_conn().await?;
-                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                conn.exec_drop(
-                    "UPDATE webhooks SET enabled=0, disabled_at=?, disabled_reason=? WHERE url=? AND enabled=1",
-                    (now, reason, url),
+                conn.query_drop(
+                    "UPDATE webhooks SET enabled=1, disabled_at=NULL, disabled_reason=NULL WHERE enabled=0 AND disabled_reason LIKE '100 consecutive failures%'",
                 )
                 .await?;
                 Ok(conn.affected_rows())
             }
             DbPool::SQLite(pool) => {
-                let url_s = url.to_string();
-                let reason_s = reason.to_string();
-                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
                 let n = sqlite_blocking(pool, move |conn| {
                     sqlite_raw::execute(
                         conn,
-                        "UPDATE webhooks SET enabled=0, disabled_at=?, disabled_reason=? WHERE url=? AND enabled=1",
-                        &[SQ::Text(now), SQ::Text(reason_s), SQ::Text(url_s)],
+                        "UPDATE webhooks SET enabled=1, disabled_at=NULL, disabled_reason=NULL WHERE enabled=0 AND disabled_reason LIKE '100 consecutive failures%'",
+                        &[],
                     )
                 })
                 .await?;

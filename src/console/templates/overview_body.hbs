@@ -1,113 +1,121 @@
-<section class="hero">
-  <div class="bubble">
-    <div class="hero-eyebrow">FLEET STATUS</div>
-    <div class="hero-num">{{connected}}<span class="of"> / {{total}}</span></div>
-    <div class="hero-caption">sessions on the line</div>
-    <div class="hero-subline">
-      {{#if pairing_count}}<span>{{pairing_count}} pairing</span><span class="sep">·</span>{{/if}}
-      {{#if disconnected_count}}<span class="warn">{{disconnected_count}} offline</span>{{else}}<span>0 offline</span>{{/if}}
-      <span class="sep">·</span>
-      <span>{{event_rate}} events / min</span>
-    </div>
+<section class="stats">
+  <div class="stat">
+    <div class="stat-label">Connected</div>
+    <div class="stat-num">{{connected}}<span class="of"> / {{total}}</span></div>
+    <div class="stat-foot">sessions able to send and receive</div>
   </div>
-  <div class="kpi-stack">
-    <div class="kpi">
-      <div class="kpi-label">Active webhooks</div>
-      <div class="kpi-num">{{webhook_count}}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Circuits open</div>
-      <div class="kpi-num {{#if circuits_open}}sakura{{/if}}">{{circuits_open}}</div>
-    </div>
+  <div class="stat {{#if pairing_count}}warn{{/if}}">
+    <div class="stat-label">Waiting to be linked</div>
+    <div class="stat-num">{{pairing_count}}</div>
+    <div class="stat-foot">showing a QR or connecting</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Disconnected</div>
+    <div class="stat-num">{{disconnected_count}}</div>
+    <div class="stat-foot">kept with their data, can be connected again</div>
+  </div>
+  <div class="stat {{#if circuits_open}}alert{{/if}}">
+    <div class="stat-label">Webhooks</div>
+    <div class="stat-num">{{webhook_count}}</div>
+    <div class="stat-foot">{{#if circuits_open}}{{circuits_open}} suspended after failed deliveries{{else}}all delivering{{/if}}</div>
   </div>
 </section>
 
-<section class="panels">
+<section class="overview-grid">
   <article class="panel">
     <header class="panel-head">
       <span class="panel-title">Sessions</span>
-      {{#if has_sessions}}<span class="panel-serial">{{sessions_count}} total</span>{{/if}}
-    </header>
-    <div class="panel-body">
-      {{#if has_sessions}}
-      <table class="sessions-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Provider</th>
-            <th>Phone</th>
-            <th>Status</th>
-            <th style="text-align:right;padding-right:24px">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-        {{#each sessions}}
-          <tr onclick="location.href='/s/'+encodeURIComponent('{{id}}')">
-            <td class="id">{{id}}</td>
-            <td>{{#if is_cloud}}<span class="provider-badge cloud">Cloud API</span>{{else}}<span class="provider-badge">Web</span>{{/if}}</td>
-            <td class="phone">{{#if phone}}{{phone}}{{else}}<span style="color:var(--color-border)">—</span>{{/if}}</td>
-            <td>
-              <span class="status-pill {{status_class}}">
-                <span class="status-dot"></span>
-                {{status_label}}
-              </span>
-            </td>
-            <td style="text-align:right;padding-right:24px">
-              <button class="btn" onclick="event.stopPropagation();location.href='/s/'+encodeURIComponent('{{id}}')">
-                <svg class="icon sm"><use href="#i-arrow"/></svg>
-                Open
-              </button>
-            </td>
-          </tr>
-        {{/each}}
-        </tbody>
-      </table>
-      {{else}}
-      <div class="empty">
-        No sessions yet. Create one to start pairing, or attach a Meta
-        WhatsApp Cloud API number.
-        <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <button class="btn primary" onclick="createSession()">
-            <svg class="icon sm"><use href="#i-plus"/></svg>
-            New session
-          </button>
-          <button class="btn" onclick="openCloudForm()">
-            <svg class="icon sm"><use href="#i-plus"/></svg>
-            New Cloud API session
-          </button>
-        </div>
-      </div>
-      {{/if}}
-    </div>
-    {{#if has_sessions}}
-    <div style="padding:14px 20px;border-top:1px solid var(--color-border);display:flex;justify-content:flex-end;align-items:center;gap:10px">
-      <button class="btn" onclick="openCloudForm()">
-        <svg class="icon sm"><use href="#i-plus"/></svg>
-        New Cloud API session
-      </button>
-      <button class="btn primary" onclick="createSession()">
+      {{#if has_sessions}}<span class="panel-note">{{sessions_count}}</span>{{/if}}
+      <span class="spacer"></span>
+      <button class="btn primary" onclick="openNewSession()">
         <svg class="icon sm"><use href="#i-plus"/></svg>
         New session
       </button>
+    </header>
+    {{#if has_sessions}}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Session</th>
+          <th>Channel</th>
+          <th class="hide-sm">Number</th>
+          <th>Status</th>
+          <th class="hide-sm">Webhooks</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each sessions}}
+        <tr class="clickable" onclick="location.href='/s/'+encodeURIComponent('{{id}}')">
+          <td>
+            <div class="cell-id">{{id}}</div>
+            {{#if name}}<div class="cell-sub">{{name}}</div>{{/if}}
+          </td>
+          <td>
+            {{#if is_cloud}}
+            <span class="channel cloud"><svg class="icon sm"><use href="#i-cloud"/></svg>Cloud API</span>
+            {{else}}
+            <span class="channel web"><svg class="icon sm"><use href="#i-link"/></svg>WhatsApp Web</span>
+            {{/if}}
+          </td>
+          <td class="cell-num hide-sm">{{#if phone}}{{phone}}{{else}}<span class="muted">—</span>{{/if}}</td>
+          <td><span class="status {{status_class}}">{{status_label}}</span></td>
+          <td class="hide-sm">
+            {{#if webhooks_suspended}}
+            <span class="chip bad">{{webhooks_suspended}} of {{webhooks}} suspended</span>
+            {{else}}{{#if webhooks}}
+            <span class="chip ok">{{webhooks}} delivering</span>
+            {{else}}
+            <span class="chip">none</span>
+            {{/if}}{{/if}}
+          </td>
+          <td>
+            <span class="btn-row" style="justify-content:flex-end">
+              {{#if can_connect}}
+              <button class="btn sm" onclick="event.stopPropagation();sessionAction('{{id}}','connect')">Connect</button>
+              {{/if}}
+              {{#if can_disconnect}}
+              <button class="btn sm" onclick="event.stopPropagation();sessionAction('{{id}}','disconnect')">Disconnect</button>
+              {{/if}}
+              <a class="btn sm" href="/s/{{id}}" onclick="event.stopPropagation()">Open</a>
+            </span>
+          </td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <div class="empty">
+      No sessions yet. A session is one WhatsApp number: either a linked
+      WhatsApp Web device, or a number on Meta's Cloud API.
+      <div style="margin-top:16px">
+        <button class="btn primary" onclick="openNewSession()">
+          <svg class="icon sm"><use href="#i-plus"/></svg>
+          New session
+        </button>
+      </div>
     </div>
     {{/if}}
   </article>
 
   <article class="panel">
     <header class="panel-head">
-      <span class="panel-title">Live events</span>
+      <span class="panel-title">Activity</span>
+      <span class="panel-note">{{event_rate}} in the last minute</span>
     </header>
-    <div class="events">
+    <div class="activity">
       {{#if has_events}}
         {{#each events}}
-        <div class="event">
-          <span class="t">{{time}}</span>
-          <span class="kind {{level}}">{{kind}}</span>
-          <span class="msg">{{msg}} <span class="sid">· {{session}}</span></span>
+        <div class="activity-row">
+          <span class="activity-time">{{time}}</span>
+          <div class="activity-main">
+            <div><span class="activity-kind {{level}}">{{kind}}</span> <span class="activity-sid">{{session}}</span></div>
+            {{#if msg}}<div class="activity-msg">{{msg}}</div>{{/if}}
+          </div>
         </div>
         {{/each}}
       {{else}}
-      <div class="empty">No events yet. Activity will appear here as sessions come online.</div>
+      <div class="empty">Nothing yet. Events show up here as sessions connect and messages arrive.</div>
       {{/if}}
     </div>
   </article>

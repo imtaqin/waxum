@@ -1,19 +1,19 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/" aria-label="Waxum home">
-      <img src="/assets/logo.png" alt="" class="brand-mark" width="36" height="36">
-      <span class="brand-word">Waxum</span>
+      <img src="/assets/logo.png" alt="" class="brand-mark" width="32" height="32">
+      <span>Waxum</span>
       <span class="brand-chip">Console</span>
     </a>
     <span class="spacer"></span>
-    <span class="tag">v{{version}}</span>
-    <a class="tag" href="/swagger-ui" target="_blank" rel="noopener">
+    <span class="version">v{{version}}</span>
+    <a class="topbar-link" href="/swagger-ui" target="_blank" rel="noopener">
       <svg class="icon sm"><use href="#i-book"/></svg>
       API docs
     </a>
     <form method="post" action="/logout" style="margin:0">
-      <button type="submit" class="logout-btn">
-        <svg class="icon sm" style="vertical-align:-2px;margin-right:6px"><use href="#i-power"/></svg>
+      <button type="submit" class="btn sm ghost">
+        <svg class="icon sm"><use href="#i-power"/></svg>
         Sign out
       </button>
     </form>
@@ -28,10 +28,9 @@
 <aside id="drawer" class="drawer" aria-hidden="true"></aside>
 
 <script>
-  async function openDrawer(sid) {
-    const res = await fetch('/drawer/' + encodeURIComponent(sid), { credentials: 'same-origin' });
-    if (!res.ok) return;
-    const html = await res.text();
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function showDrawer(html) {
     const d = document.getElementById('drawer');
     d.innerHTML = html;
     d.classList.add('open');
@@ -52,7 +51,7 @@
       if (res.status === 401) { window.location.href = '/login'; return; }
       if (!res.ok) return;
       document.getElementById('page-root').innerHTML = await res.text();
-    } catch (e) { /* network blip — try again on next tick */ }
+    } catch (e) { /* network blip: try again on the next tick */ }
   }
   setInterval(refreshOverview, 3000);
 
@@ -61,85 +60,104 @@
       method: 'POST',
       credentials: 'same-origin',
     });
-    if (res.ok) { closeDrawer(); refreshOverview(); }
+    if (res.ok) refreshOverview();
   }
 
   const CLOUD_FIELDS = [
-    { name: 'id', label: 'Session ID', required: true, placeholder: 'acme-cloud' },
     { name: 'waba_id', label: 'WhatsApp Business Account ID', required: true, placeholder: '102290129340398' },
     { name: 'phone_number_id', label: 'Phone number ID', required: true, placeholder: '106540352242922' },
     { name: 'access_token', label: 'Access token (system user)', required: true, secret: true, placeholder: 'EAAG…' },
-    { name: 'app_secret', label: 'App secret', required: true, secret: true, hint: 'Verifies X-Hub-Signature-256 on Meta webhooks.' },
+    { name: 'app_secret', label: 'App secret', required: true, secret: true, hint: 'Verifies the signature on webhooks Meta sends.' },
     { name: 'webhook_verify_token', label: 'Webhook verify token', required: true, hint: 'Any string you choose; paste the same value into Meta.' },
     { name: 'business_id', label: 'Business ID (optional)', placeholder: '102290129340399', hint: 'Needed for owned/client WABAs, credit lines, system users.' },
     { name: 'app_id', label: 'App ID (optional)', hint: 'Needed for the business profile photo upload.' },
   ];
 
-  function openCloudForm() {
-    const esc = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const fields = CLOUD_FIELDS.map(f => `
-      <div class="field">
-        <label for="cf-${f.name}">${esc(f.label)}</label>
-        <input class="form-input" id="cf-${f.name}" name="${f.name}" type="${f.secret ? 'password' : 'text'}"
-               autocomplete="off" placeholder="${esc(f.placeholder)}" ${f.required ? 'required' : ''}>
-        ${f.hint ? `<div class="form-hint">${esc(f.hint)}</div>` : ''}
-      </div>`).join('');
-    const d = document.getElementById('drawer');
-    d.innerHTML = `
+  let newSessionChannel = 'web';
+
+  function openNewSession() {
+    newSessionChannel = 'web';
+    showDrawer(`
       <header class="drawer-head">
-        <div>
-          <div class="drawer-title">New Cloud API session</div>
-          <div class="panel-serial" style="margin-top:4px">META WHATSAPP CLOUD API</div>
-        </div>
-        <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">
-          <svg class="icon lg"><use href="#i-x"/></svg>
-        </button>
+        <div class="drawer-title">New session</div>
+        <button class="btn ghost sm" onclick="closeDrawer()" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
       </header>
-      <form class="drawer-body" id="cloud-form" onsubmit="submitCloudForm(event)">
-        <div class="form-hint">
-          Attach a number from your Meta app. The access token and app secret
-          are stored on the server and never shown again.
+      <form class="drawer-body" id="new-session-form" onsubmit="submitNewSession(event)">
+        <div class="field">
+          <span class="label">Channel</span>
+          <div class="choice-grid">
+            <button type="button" class="choice web selected" id="choice-web" onclick="pickChannel('web')">
+              <span class="channel web"><svg class="icon sm"><use href="#i-link"/></svg>WhatsApp Web</span>
+              <span class="choice-title">Link a phone</span>
+              <span class="hint">Scan a QR with the WhatsApp app. Works with any number, including groups, calls and contacts.</span>
+            </button>
+            <button type="button" class="choice cloud" id="choice-cloud" onclick="pickChannel('cloud')">
+              <span class="channel cloud"><svg class="icon sm"><use href="#i-cloud"/></svg>Cloud API</span>
+              <span class="choice-title">Meta's official API</span>
+              <span class="hint">A number registered in a Meta app. Templates, Flows and catalogs; no groups or calls.</span>
+            </button>
+          </div>
         </div>
-        ${fields}
-        <div id="cloud-form-error" class="err" hidden></div>
-        <div class="actions">
-          <button type="submit" class="btn primary" id="cloud-form-submit">
-            <svg class="icon sm"><use href="#i-plus"/></svg>
-            Create session
-          </button>
+        <div class="field">
+          <label for="ns-id">Session ID</label>
+          <input id="ns-id" name="id" type="text" autocomplete="off" required pattern="[A-Za-z0-9_-]+" placeholder="marketing-jakarta">
+          <div class="hint">Letters, digits, dashes and underscores. This is the id in every API path.</div>
+        </div>
+        <div id="ns-cloud-fields" hidden>${CLOUD_FIELDS.map(f => `
+          <div class="field" style="margin-bottom:12px">
+            <label for="cf-${f.name}">${esc(f.label)}</label>
+            <input id="cf-${f.name}" name="${f.name}" type="${f.secret ? 'password' : 'text'}" autocomplete="off" placeholder="${esc(f.placeholder)}">
+            ${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}
+          </div>`).join('')}
+          <div class="hint">The access token and app secret are stored on the server and never shown again.</div>
+        </div>
+        <div id="ns-error" class="err" hidden></div>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="ns-submit">Create session</button>
           <button type="button" class="btn" onclick="closeDrawer()">Cancel</button>
         </div>
-      </form>`;
-    d.classList.add('open');
-    d.setAttribute('aria-hidden', 'false');
-    document.getElementById('drawer-scrim').classList.add('open');
-    document.getElementById('cf-id').focus();
+      </form>`);
+    document.getElementById('ns-id').focus();
   }
 
-  async function submitCloudForm(ev) {
+  function pickChannel(channel) {
+    newSessionChannel = channel;
+    document.getElementById('choice-web').classList.toggle('selected', channel === 'web');
+    document.getElementById('choice-cloud').classList.toggle('selected', channel === 'cloud');
+    document.getElementById('ns-cloud-fields').hidden = channel !== 'cloud';
+    CLOUD_FIELDS.forEach(f => {
+      document.getElementById('cf-' + f.name).required = channel === 'cloud' && !!f.required;
+    });
+  }
+
+  async function submitNewSession(ev) {
     ev.preventDefault();
     const form = ev.target;
-    const errEl = document.getElementById('cloud-form-error');
-    const btn = document.getElementById('cloud-form-submit');
+    const errEl = document.getElementById('ns-error');
+    const btn = document.getElementById('ns-submit');
     errEl.hidden = true;
-    const body = {};
-    CLOUD_FIELDS.forEach(f => {
-      const v = form.elements[f.name].value.trim();
-      if (v) body[f.name] = v;
-    });
+    const id = form.elements.id.value.trim();
+    const body = { id };
+    let url = '/sessions';
+    if (newSessionChannel === 'cloud') {
+      url = '/sessions/cloud';
+      CLOUD_FIELDS.forEach(f => {
+        const v = form.elements[f.name].value.trim();
+        if (v) body[f.name] = v;
+      });
+    } else {
+      body.name = id;
+    }
     btn.disabled = true;
     try {
-      const res = await fetch('/sessions/cloud', {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        location.href = '/s/' + encodeURIComponent(body.id);
-        return;
-      }
-      let msg = 'Could not create session (' + res.status + ')';
+      if (res.ok) { location.href = '/s/' + encodeURIComponent(id); return; }
+      let msg = 'Could not create the session (' + res.status + ')';
       try { const j = await res.json(); msg = (j.error && j.error.message) || j.message || msg; } catch (_) {}
       errEl.textContent = msg;
       errEl.hidden = false;
@@ -149,18 +167,5 @@
     } finally {
       btn.disabled = false;
     }
-  }
-
-  async function createSession() {
-    const id = prompt('New session id (letters, digits, dashes):');
-    if (!id) return;
-    const res = await fetch('/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ id, name: id }),
-    });
-    if (res.ok) refreshOverview();
-    else alert('Could not create session (' + res.status + ')');
   }
 </script>

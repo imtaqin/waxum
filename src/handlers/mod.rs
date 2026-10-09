@@ -46,6 +46,7 @@ pub mod media;
 pub mod messages;
 pub mod mex;
 pub mod nats_handler;
+pub mod new_chats;
 pub mod newsletter;
 pub mod operations;
 pub mod presence;

@@ -234,7 +234,7 @@ async fn status_diagnostics_report_each_webhooks_delivery_health() {
     }
     for _ in 0..30 {
         h.state
-            .webhook_record_failure("https://example.com/replies");
+            .webhook_record_failure("https://example.com/replies", "HTTP 503");
     }
 
     let (status, body) = call(
@@ -255,11 +255,145 @@ async fn status_diagnostics_report_each_webhooks_delivery_health() {
     assert_eq!(replies["receives_messages"], true);
     assert_eq!(replies["enabled"], true);
     assert_eq!(replies["circuit_open"], true);
-    assert_eq!(replies["consecutive_failures"], 30);
+    assert_eq!(replies["consecutive_failures"], 25);
+    assert_eq!(replies["last_error"], "HTTP 503");
+    assert!(replies["retry_in_seconds"].as_u64().unwrap() > 0);
     let audit = hooks
         .iter()
         .find(|w| w["url"] == "https://example.com/audit")
         .unwrap();
     assert_eq!(audit["receives_messages"], false);
     assert_eq!(audit["circuit_open"], false);
+}
+
+/// #143: a burst of failed deliveries used to disable the webhook for good
+/// and drop it from memory after the 100th. However many fail, it must
+/// stay registered, enabled and listed, merely suspended.
+#[tokio::test]
+async fn a_failing_webhook_is_suspended_never_removed() {
+    let h = Harness::new().await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(TEST_TOKEN),
+            json!({"id": "wh-keep"}),
+        ),
+    )
+    .await;
+    assert!(status.is_success());
+    let url = "https://example.com/flaky";
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/wh-keep/webhooks",
+            Some(TEST_TOKEN),
+            json!({"url": url, "events": ["message"]}),
+        ),
+    )
+    .await;
+    assert!(status.is_success());
+
+    for _ in 0..500 {
+        h.state.webhook_record_failure(url, "connection refused");
+    }
+
+    let (status, body) = call(
+        &h.app,
+        req_get("/api/v1/sessions/wh-keep/webhooks", Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["count"], 1, "{body}");
+    assert_eq!(body["webhooks"][0]["enabled"], true);
+
+    let stored = h
+        .state
+        .session_manager()
+        .get_webhooks("wh-keep")
+        .await
+        .unwrap();
+    assert_eq!(stored.len(), 1);
+    assert!(stored[0].1.enabled, "the database row must stay enabled");
+
+    assert!(!h.state.webhook_circuit_allows(url), "suspended for now");
+    assert!(
+        h.state.webhook_record_success(url),
+        "a delivered probe reports the recovery"
+    );
+    assert!(h.state.webhook_circuit_allows(url));
+    assert_eq!(h.state.webhook_circuit_snapshot(url).failures, 0);
+}
+
+/// Logging a session out keeps the session and everything attached to it;
+/// it used to be the same as deleting it.
+#[tokio::test]
+async fn logout_keeps_the_session_and_its_webhooks() {
+    let h = Harness::new().await;
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions",
+            Some(TEST_TOKEN),
+            json!({"id": "dormant-1"}),
+        ),
+    )
+    .await;
+    assert!(status.is_success());
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/dormant-1/webhooks",
+            Some(TEST_TOKEN),
+            json!({"url": "https://example.com/hook", "events": ["message"]}),
+        ),
+    )
+    .await;
+    assert!(status.is_success());
+
+    let (status, body) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/dormant-1/logout",
+            Some(TEST_TOKEN),
+            json!({}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = call(
+        &h.app,
+        req_get("/api/v1/sessions/dormant-1/status", Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "the session must still exist");
+    assert_eq!(body["is_logged_in"], false);
+
+    let (_, body) = call(
+        &h.app,
+        req_get("/api/v1/sessions/dormant-1/webhooks", Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(body["count"], 1, "{body}");
+
+    let (status, _) = call(
+        &h.app,
+        req_json(
+            Method::POST,
+            "/api/v1/sessions/dormant-1/connect",
+            Some(TEST_TOKEN),
+            json!({}),
+        ),
+    )
+    .await;
+    assert!(
+        status.is_success() || status == StatusCode::CONFLICT,
+        "a dormant session can be connected again (409 means it is already showing a QR): {status}"
+    );
 }

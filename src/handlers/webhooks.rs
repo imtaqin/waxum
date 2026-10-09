@@ -170,6 +170,7 @@ pub async fn reenable_webhook(
     if !flipped {
         return Err(ApiError::WebhookNotFound(webhook_id));
     }
+    state.set_webhook_enabled(&session_id, &webhook_id, true);
 
     tracing::info!(
         "Session {}: Webhook {} manually re-enabled",

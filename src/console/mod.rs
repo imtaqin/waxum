@@ -40,7 +40,6 @@ const TPL_LAYOUT: &str = include_str!("templates/layout.hbs");
 const TPL_OVERVIEW: &str = include_str!("templates/overview.hbs");
 const TPL_OVERVIEW_BODY: &str = include_str!("templates/overview_body.hbs");
 const TPL_LOGIN: &str = include_str!("templates/login.hbs");
-const TPL_DRAWER: &str = include_str!("templates/drawer.hbs");
 const TPL_SESSION: &str = include_str!("templates/session.hbs");
 
 /// Global Handlebars registry. Compiled once at process start. Templates
@@ -55,7 +54,6 @@ pub static HBS: Lazy<Handlebars<'static>> = Lazy::new(|| {
     h.register_template_string("overview_body", TPL_OVERVIEW_BODY)
         .unwrap();
     h.register_template_string("login", TPL_LOGIN).unwrap();
-    h.register_template_string("drawer", TPL_DRAWER).unwrap();
     h.register_template_string("session", TPL_SESSION).unwrap();
     h
 });
@@ -106,7 +104,6 @@ pub fn console_router() -> Router<AppState> {
             get(handlers::login_page).post(handlers::login_submit),
         )
         .route("/logout", post(handlers::logout))
-        .route("/drawer/{sid}", get(handlers::drawer))
         .route("/s/{sid}", get(handlers::session_page))
         .route("/qr-svg/{sid}", get(handlers::qr_svg))
         .route("/sessions", post(handlers::create_session_proxy))

@@ -105,7 +105,12 @@ async fn process_outbound_command(
     let client =
         get_client(state, session_id).map_err(|e| anyhow::anyhow!("Session error: {}", e))?;
 
-    let result = dispatch_command(&client, command).await;
+    let (result, pending) =
+        crate::handlers::new_chats::scope(dispatch_command(state, session_id, &client, command))
+            .await;
+    if result.is_err() {
+        crate::handlers::new_chats::forget(pending).await;
+    }
 
     match result {
         Ok(message_id) => Ok(SendResult {
@@ -115,11 +120,20 @@ async fn process_outbound_command(
             error: None,
             timestamp: chrono::Utc::now().timestamp(),
         }),
+        Err(e) if e.to_string().starts_with("New-chat limit reached") => Ok(SendResult {
+            request_id,
+            success: false,
+            message_id: None,
+            error: Some(e.to_string()),
+            timestamp: chrono::Utc::now().timestamp(),
+        }),
         Err(e) => Err(e),
     }
 }
 
 async fn dispatch_command(
+    state: &AppState,
+    session_id: &str,
     client: &std::sync::Arc<whatsapp_rust::Client>,
     command: OutboundCommand,
 ) -> anyhow::Result<String> {
@@ -131,6 +145,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let preview = if link_preview == Some(true) {
                 crate::link_preview::for_text(&text).await
             } else {
@@ -158,6 +175,9 @@ async fn dispatch_command(
             to, image, caption, ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (data, mimetype) = get_media_data(&image).await?;
             let upload = client
                 .upload(
@@ -192,6 +212,9 @@ async fn dispatch_command(
             to, video, caption, ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (data, mimetype) = get_media_data(&video).await?;
             let upload = client
                 .upload(
@@ -224,6 +247,9 @@ async fn dispatch_command(
 
         OutboundCommand::Audio { to, audio, ptt, .. } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (data, mimetype) = get_media_data(&audio).await?;
             let upload = client
                 .upload(
@@ -262,6 +288,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (data, mimetype) = get_media_data(&document).await?;
             let upload = client
                 .upload(
@@ -295,6 +324,9 @@ async fn dispatch_command(
 
         OutboundCommand::Sticker { to, sticker, .. } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (data, mimetype) = get_media_data(&sticker).await?;
             let upload = client
                 .upload(
@@ -333,6 +365,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let message = waproto::whatsapp::Message {
                 location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
                     degrees_latitude: Some(latitude),
@@ -352,6 +387,9 @@ async fn dispatch_command(
 
         OutboundCommand::Contact { to, contact, .. } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let vcard = format!(
                 "BEGIN:VCARD\nVERSION:3.0\nFN:{}\n{}END:VCARD",
                 contact.display_name,
@@ -413,6 +451,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let opts: Vec<waproto::whatsapp::message::poll_creation_message::Option> = options
                 .into_iter()
                 .map(
@@ -449,6 +490,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let btns: Vec<waproto::whatsapp::message::buttons_message::Button> = buttons
                 .into_iter()
                 .map(|b| waproto::whatsapp::message::buttons_message::Button {
@@ -498,6 +542,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let sections_json: Vec<serde_json::Value> = sections
                 .iter()
                 .map(|s| {
@@ -565,6 +612,9 @@ async fn dispatch_command(
             ..
         } => {
             let to_jid = parse_jid(&to)?;
+            crate::handlers::new_chats::admit(state, session_id, &to_jid, &to)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let btns: Vec<waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton> = buttons
                 .into_iter()
                 .map(|b| waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
