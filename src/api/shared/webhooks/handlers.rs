@@ -4,12 +4,12 @@ use axum::{
 };
 use uuid::Uuid;
 
+use crate::api::common::SuccessResponse;
 use crate::api::shared::webhooks::models::{
     RegisterWebhookRequest, WebhookConfig, WebhookConfigWithId, WebhookDlqListResponse,
     WebhookListResponse,
 };
 use crate::error::ApiError;
-use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 
 #[utoipa::path(

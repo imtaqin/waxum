@@ -32,9 +32,9 @@ use crate::api::shared::search::models::{
     ChatMessagesQuery, MessageFleetSearchQuery, MessageHit, MessageMedia, MessageSearchQuery,
     MessageSearchResponse, SessionMessagesQuery, SessionMessagesResponse,
 };
+use crate::api::web::media::models::MediaType;
 use crate::db::messages::{self, MediaPointer, MessageRow, NewMessage};
 use crate::error::ApiError;
-use crate::models::media::MediaType;
 use crate::state::AppState;
 
 /// Whether history ingestion is active. Read once from

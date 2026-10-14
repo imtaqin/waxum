@@ -1,5 +1,5 @@
 //! Contract tests for the business handlers
-//! (`src/handlers/business.rs`, five routes under
+//! (`src/api/web/business/handlers.rs`, five routes under
 //! `/api/v1/sessions/{session_id}/business`).
 //!
 //! `tests/presence.rs` is the worked example for this kind of module; read

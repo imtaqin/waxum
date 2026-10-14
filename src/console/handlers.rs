@@ -527,7 +527,7 @@ pub async fn create_session_proxy(
 pub struct CreateCloudReq {
     id: String,
     #[serde(flatten)]
-    credentials: crate::models::cloud::ConnectCloudRequest,
+    credentials: crate::api::cloud::connection::models::ConnectCloudRequest,
 }
 
 pub async fn create_cloud_session_proxy(
@@ -557,8 +557,12 @@ pub async fn create_cloud_session_proxy(
         return e.into_response();
     }
 
-    match crate::handlers::cloud::connect_cloud(State(state), Path(req.id), Json(req.credentials))
-        .await
+    match crate::api::cloud::connection::handlers::connect_cloud(
+        State(state),
+        Path(req.id),
+        Json(req.credentials),
+    )
+    .await
     {
         Ok(Json(resp)) => (StatusCode::CREATED, Json(resp)).into_response(),
         Err(e) => e.into_response(),

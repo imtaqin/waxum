@@ -1,5 +1,5 @@
 //! Contract tests for the blocking handlers
-//! (`src/handlers/blocking.rs`, four routes under
+//! (`src/api/web/blocking/handlers.rs`, four routes under
 //! `/api/v1/sessions/{session_id}/blocking`, plus `is_blocked` which lives
 //! under `.../blocking/check/{jid}`).
 //!

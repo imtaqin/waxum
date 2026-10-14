@@ -24,7 +24,7 @@ body:
       label: Proposed API (if applicable)
       description: >-
         Sketch a request/response, or point at an existing similar
-        endpoint in `src/handlers/` you'd model it after.
+        endpoint in `src/api/` you would model it after.
       placeholder: |
         POST /api/v1/sessions/{session_id}/messages/some-new-type
         { "to": "...", ... }

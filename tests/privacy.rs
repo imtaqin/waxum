@@ -1,5 +1,5 @@
 //! Contract test for the privacy handler
-//! (`GET /sessions/{id}/privacy/settings`, `src/handlers/privacy.rs`).
+//! (`GET /sessions/{id}/privacy/settings`, `src/api/web/privacy/handlers.rs`).
 //!
 //! One route, no body. `tests/presence.rs` is the worked example this
 //! mirrors: auth, unknown session, and DB-only session all resolve through

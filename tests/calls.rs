@@ -1,4 +1,4 @@
-//! Contract tests for the call / TTS handlers (`src/handlers/calls.rs`).
+//! Contract tests for the call / TTS handlers (`src/api/web/calls/handlers.rs`).
 //!
 //! The base pattern is the one documented in `tests/presence.rs`: assert the
 //! HTTP contract up to the `get_client` gate, never the protocol behaviour

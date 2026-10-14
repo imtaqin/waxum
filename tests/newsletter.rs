@@ -1,5 +1,5 @@
 //! Contract tests for the newsletter handlers
-//! (`src/handlers/newsletter.rs`, eleven routes under
+//! (`src/api/web/newsletter/handlers.rs`, eleven routes under
 //! `/api/v1/sessions/{session_id}/newsletters`).
 //!
 //! # How this file is organised

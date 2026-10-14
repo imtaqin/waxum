@@ -609,7 +609,7 @@ struct AppStateInner {
     /// Edge-TTS voice list, fetched once on first `GET /api/v1/voices`
     /// and reused after that — the list is stable per Edge-TTS release,
     /// so there is no point re-querying it on every request.
-    pub voice_cache: RwLock<Option<Vec<crate::models::calls::VoiceEntry>>>,
+    pub voice_cache: RwLock<Option<Vec<crate::api::web::calls::models::VoiceEntry>>>,
 }
 
 /// A structured event captured from `broadcast_to_webhooks` for both the
@@ -888,11 +888,11 @@ impl AppState {
         ring.iter().rev().take(limit).cloned().collect()
     }
 
-    pub fn cached_voices(&self) -> Option<Vec<crate::models::calls::VoiceEntry>> {
+    pub fn cached_voices(&self) -> Option<Vec<crate::api::web::calls::models::VoiceEntry>> {
         self.inner.voice_cache.read().clone()
     }
 
-    pub fn set_cached_voices(&self, voices: Vec<crate::models::calls::VoiceEntry>) {
+    pub fn set_cached_voices(&self, voices: Vec<crate::api::web::calls::models::VoiceEntry>) {
         *self.inner.voice_cache.write() = Some(voices);
     }
 

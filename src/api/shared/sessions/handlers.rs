@@ -9,6 +9,7 @@ use axum::{
 use futures::stream::Stream;
 use uuid::Uuid;
 
+use crate::api::common::SuccessResponse;
 use crate::api::shared::sessions::models::{
     ConnectRequest, CreateSessionRequest, CreateSessionResponse, DeviceInfo, PairCodeRequest,
     PairCodeResponse, QrCodeResponse, SessionInfo, SessionListResponse, SessionStatus,
@@ -17,7 +18,6 @@ use crate::api::shared::sessions::models::{
 use crate::api::shared::webhooks::models::{WebhookConfig, WebhookEvent};
 use crate::device_props::ResolvedDeviceProps;
 use crate::error::ApiError;
-use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 use wacore::proto_helpers::MessageExt;
 

@@ -4,7 +4,7 @@
 //! the Embedded Signup collection that finish attaching waxum to the
 //! client's WABA -- subscribing the app to receive its webhooks, and
 //! listing its phone numbers so the caller can pick which one to attach
-//! to a waxum session via [`crate::handlers::cloud::connect_cloud`].
+//! to a waxum session via [`crate::api::cloud::connection::handlers::connect_cloud`].
 //!
 //! The code-for-token exchange itself
 //! (`GET /{version}/oauth/access_token`) is documented in Meta's OAuth

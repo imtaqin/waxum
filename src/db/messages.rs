@@ -63,7 +63,7 @@ pub struct NewMessage {
     /// Download pointers for media message types, `None` for
     /// text/location/contact/etc. All base64-encoded except
     /// `direct_path`, `media_type`, and `mimetype` — the same shapes
-    /// [`crate::models::media::DownloadMediaRequest`] expects, so a
+    /// [`crate::api::web::media::models::DownloadMediaRequest`] expects, so a
     /// caller can round-trip these fields straight into
     /// `POST /media/download` with no re-encoding.
     pub media: Option<MediaPointer>,
@@ -87,7 +87,7 @@ pub struct MediaPointer {
     pub direct_path: String,
     pub file_length: i64,
     /// One of `image`, `video`, `audio`, `document`, `sticker` —
-    /// matches `crate::models::media::MediaType`'s snake_case wire
+    /// matches `crate::api::web::media::models::MediaType`'s snake_case wire
     /// form.
     pub media_type: String,
     pub mimetype: String,

@@ -310,7 +310,7 @@ impl SessionManager {
     pub async fn connect_cloud(
         &self,
         id: &str,
-        req: &crate::models::cloud::ConnectCloudRequest,
+        req: &crate::api::cloud::connection::models::ConnectCloudRequest,
     ) -> anyhow::Result<()> {
         match &self.pool {
             DbPool::Postgres(pool) => {

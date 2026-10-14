@@ -10,12 +10,12 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::models::media::MediaType;
+use crate::api::web::media::models::MediaType;
 
 /// Download pointer for a media message, shaped to be passed straight
 /// into `POST /sessions/{session_id}/media/download` as-is (same field
 /// names and encodings as
-/// [`crate::models::media::DownloadMediaRequest`]).
+/// [`crate::api::web::media::models::DownloadMediaRequest`]).
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MessageMedia {
     pub direct_path: String,

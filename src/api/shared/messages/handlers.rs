@@ -123,7 +123,7 @@ pub async fn execute_text(
 
     let mut context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
+            crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
             request
                 .reply_to
@@ -276,7 +276,7 @@ pub async fn execute_image(
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
+            crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
             request
                 .reply_to
@@ -413,7 +413,7 @@ pub async fn execute_video(
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
+            crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
             request
                 .reply_to
@@ -673,7 +673,7 @@ pub async fn execute_document(
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
+            crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
             request
                 .reply_to
@@ -1646,7 +1646,7 @@ pub async fn execute_interactive(
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
-            crate::handlers::fake_reply::build_fake_reply_context_info(fake).into()
+            crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
             request
                 .reply_to

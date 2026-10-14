@@ -174,15 +174,22 @@ are really just an OOM. Cap it if you hit that: `cargo build -j 4` /
 
 ## Adding an endpoint
 
-1. Add the handler function under `src/handlers/<domain>.rs`. Use the
-   existing patterns (extract JSON, resolve the client via
+1. Pick the feature folder under `src/api/`: `web/<feature>` for a linked
+   WhatsApp Web device, `cloud/<feature>` for the Cloud API, `shared/<feature>`
+   for anything that works on any session. Add the handler to its
+   `handlers.rs`. Use the existing patterns (extract JSON, resolve the client
+   via
    [`get_live_client`](https://fdciabdul.github.io/waxum/waxum/state/struct.SessionState.html#method.get_live_client),
-   `?`-propagate `ApiError`). Any new request/response type goes in
-   `src/models/<domain>.rs` with `#[derive(..., ToSchema)]`.
-2. Add the axum route in `src/routes/mod.rs`.
+   `?`-propagate `ApiError`). Any new request/response type goes in the same
+   folder's `models.rs` with `#[derive(..., ToSchema)]`. A new feature is a new
+   folder with `mod.rs`, `handlers.rs`, `models.rs` and `routes.rs`, declared in
+   the channel's `mod.rs`.
+2. Add the axum route to the folder's `routes.rs` (`session_routes()` for
+   paths under `/sessions/{session_id}`, `api_routes()` for fleet-wide ones).
+   The channel `mod.rs` merges it; `src/api/router.rs` only mounts channels.
 3. Register the handler on the utoipa `#[openapi(paths(…))]` list *and*
    any new request/response types on `components(schemas(…))`, both in
-   `src/main.rs` — miss the schema half and the handler still shows up
+   `src/api/openapi.rs` — miss the schema half and the handler still shows up
    in Swagger UI, just with an incomplete/missing body schema.
 4. If the endpoint touches an existing session (`{session_id}` in the
    path), it's covered by the per-session token scoping in
