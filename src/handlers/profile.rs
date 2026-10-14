@@ -11,8 +11,8 @@ use axum::{
     Json,
 };
 
+use crate::api::shared::messages::handlers::get_media_data;
 use crate::error::ApiError;
-use crate::handlers::messages::get_media_data;
 use crate::models::common::SuccessResponse;
 use crate::models::profile::UpdateProfileRequest;
 use crate::state::AppState;

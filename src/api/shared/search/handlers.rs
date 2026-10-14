@@ -3,11 +3,11 @@
 //! History is captured best-effort in BOTH directions:
 //!
 //! - [`record_incoming`] is called from the event loop in
-//!   [`crate::handlers::sessions`] for every `Event::Messages` batch
+//!   [`crate::api::shared::sessions::handlers`] for every `Event::Messages` batch
 //!   (also covers messages the account sends from OTHER devices —
 //!   `is_from_me` maps them to direction `out`).
 //! - [`record_outgoing`] is called from every `execute_*` send core in
-//!   [`crate::handlers::messages`] right after the send resolves, so
+//!   [`crate::api::shared::messages::handlers`] right after the send resolves, so
 //!   HTTP, scheduled, and blast sends are all indexed. Content
 //!   (text/caption/type) is re-derived from the outgoing protobuf with
 //!   the same extractor the webhook payload uses.
@@ -28,13 +28,13 @@ use axum::{
 use wacore_binary::jid::Jid;
 use whatsapp_rust_chat_store::{ArrivalCursor, MessageKind};
 
-use crate::db::messages::{self, MediaPointer, MessageRow, NewMessage};
-use crate::error::ApiError;
-use crate::models::media::MediaType;
-use crate::models::search::{
+use crate::api::shared::search::models::{
     ChatMessagesQuery, MessageFleetSearchQuery, MessageHit, MessageMedia, MessageSearchQuery,
     MessageSearchResponse, SessionMessagesQuery, SessionMessagesResponse,
 };
+use crate::db::messages::{self, MediaPointer, MessageRow, NewMessage};
+use crate::error::ApiError;
+use crate::models::media::MediaType;
 use crate::state::AppState;
 
 /// Whether history ingestion is active. Read once from
@@ -63,8 +63,9 @@ pub(crate) async fn record_incoming(
     if !history_enabled() {
         return;
     }
-    let (text, caption, msg_type, _) = crate::handlers::sessions::extract_message_content(msg);
-    let quoted = crate::handlers::sessions::extract_quoted_context(msg);
+    let (text, caption, msg_type, _) =
+        crate::api::shared::sessions::handlers::extract_message_content(msg);
+    let quoted = crate::api::shared::sessions::handlers::extract_quoted_context(msg);
     let row = NewMessage {
         message_id: info.id.to_string(),
         session_id: session_id.to_string(),
@@ -78,7 +79,7 @@ pub(crate) async fn record_incoming(
         msg_type,
         body: text.or(caption),
         msg_timestamp: info.timestamp,
-        media: crate::handlers::sessions::extract_media_pointer(msg),
+        media: crate::api::shared::sessions::handlers::extract_media_pointer(msg),
         quoted_message_id: quoted.as_ref().map(|(id, _)| id.clone()),
         quoted_sender_jid: quoted.and_then(|(_, participant)| participant),
     };
@@ -100,8 +101,9 @@ pub(crate) async fn record_outgoing(
     if !history_enabled() {
         return;
     }
-    let (text, caption, msg_type, _) = crate::handlers::sessions::extract_message_content(message);
-    let quoted = crate::handlers::sessions::extract_quoted_context(message);
+    let (text, caption, msg_type, _) =
+        crate::api::shared::sessions::handlers::extract_message_content(message);
+    let quoted = crate::api::shared::sessions::handlers::extract_quoted_context(message);
     let row = NewMessage {
         message_id: message_id.to_string(),
         session_id: session_id.to_string(),
@@ -111,7 +113,7 @@ pub(crate) async fn record_outgoing(
         msg_type,
         body: text.or(caption),
         msg_timestamp: chrono::Utc::now(),
-        media: crate::handlers::sessions::extract_media_pointer(message),
+        media: crate::api::shared::sessions::handlers::extract_media_pointer(message),
         quoted_message_id: quoted.as_ref().map(|(id, _)| id.clone()),
         quoted_sender_jid: quoted.and_then(|(_, participant)| participant),
     };
@@ -348,7 +350,7 @@ pub async fn list_session_messages(
             media: m
                 .message
                 .as_deref()
-                .and_then(crate::handlers::sessions::extract_media_pointer)
+                .and_then(crate::api::shared::sessions::handlers::extract_media_pointer)
                 .and_then(|p| media_pointer_to_model(&p)),
             quoted_message_id: None,
             quoted_sender_jid: None,

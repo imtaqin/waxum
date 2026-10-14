@@ -16,12 +16,12 @@ use axum::{
 };
 use serde_json::{json, Value};
 
+use crate::api::shared::messages::models::MessageResponse;
 use crate::cloud::client::CloudClient;
 use crate::error::ApiError;
 use crate::models::cloud_commerce::{
     SendCatalogRequest, SendProductListRequest, SendProductRequest, UpdateCommerceSettingsRequest,
 };
-use crate::models::messages::MessageResponse;
 use crate::state::AppState;
 
 const MAX_SECTIONS: usize = 10;

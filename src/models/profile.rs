@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::models::messages::MediaData;
+use crate::api::shared::messages::models::MediaData;
 
 /// Changes to the linked account's own profile. Every field is optional but
 /// at least one must be present; fields left out are not touched.

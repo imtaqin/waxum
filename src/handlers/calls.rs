@@ -11,8 +11,8 @@ use serde::Deserialize;
 use std::sync::Arc;
 use wacore_binary::jid::Jid;
 
+use crate::api::shared::messages::handlers::parse_jid;
 use crate::error::ApiError;
-use crate::handlers::messages::parse_jid;
 use crate::models::calls::{
     AcceptCallRequest, PlayCallRequest, PlayCallResponse, RejectCallRequest, RingCallRequest,
     RingCallResponse, TerminateCallRequest, TranscriptResponse, TtsCallRequest, TtsCallResponse,

@@ -138,7 +138,7 @@ async fn get_session_reconciles_stale_logged_in_status_with_no_live_client() {
     .await;
 
     let runtime = h.state.get_or_create_session("s-stale", "/tmp/s-stale");
-    runtime.set_status(waxum::models::sessions::SessionStatus::LoggedIn);
+    runtime.set_status(waxum::api::shared::sessions::models::SessionStatus::LoggedIn);
 
     let (status, body) = call(
         &h.app,
@@ -383,7 +383,7 @@ async fn status_reports_socket_alive_separately_from_login_state() {
     .await;
 
     let runtime = h.state.get_or_create_session("s-limbo", "/tmp/s-limbo");
-    runtime.set_status(waxum::models::sessions::SessionStatus::LoggedIn);
+    runtime.set_status(waxum::api::shared::sessions::models::SessionStatus::LoggedIn);
 
     let (status, body) = call(
         &h.app,

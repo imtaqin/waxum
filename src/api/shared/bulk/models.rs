@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::models::sessions::SessionStatus;
+use crate::api::shared::sessions::models::SessionStatus;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PurgeQuery {

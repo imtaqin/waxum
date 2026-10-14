@@ -24,13 +24,13 @@ use axum::{
 };
 use std::collections::HashMap;
 
+use crate::api::shared::messages::models::MessageResponse;
 use crate::cloud::{embedded_signup, webhook};
 use crate::error::ApiError;
 use crate::models::cloud::{
     ConnectCloudRequest, ConnectCloudResponse, EmbeddedSignupExchangeRequest,
     EmbeddedSignupExchangeResponse, SendTemplateRequest,
 };
-use crate::models::messages::MessageResponse;
 use crate::state::AppState;
 
 #[utoipa::path(

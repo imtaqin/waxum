@@ -6,9 +6,9 @@ use base64::Engine;
 use wacore_binary::jid::Jid;
 use waproto::buffa::{Enumeration, MessageField};
 
+use crate::api::shared::messages::models::*;
+use crate::api::shared::schedule::models::SendResponse;
 use crate::error::ApiError;
-use crate::models::messages::*;
-use crate::models::schedule::SendResponse;
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -32,7 +32,7 @@ pub async fn send_text(
     Path(session_id): Path<String>,
     Json(request): Json<SendTextRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "text",
@@ -90,7 +90,7 @@ pub async fn execute_text(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let mut mentioned: Vec<String> = Vec::new();
     if let Some(mentions) = request.mentions {
@@ -175,8 +175,14 @@ pub async fn execute_text(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -206,7 +212,7 @@ pub async fn send_image(
     Path(session_id): Path<String>,
     Json(request): Json<SendImageRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "image",
@@ -255,7 +261,7 @@ pub async fn execute_image(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.image).await?;
 
@@ -306,8 +312,14 @@ pub async fn execute_image(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -337,7 +349,7 @@ pub async fn send_video(
     Path(session_id): Path<String>,
     Json(request): Json<SendVideoRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "video",
@@ -386,7 +398,7 @@ pub async fn execute_video(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.video).await?;
 
@@ -437,8 +449,14 @@ pub async fn execute_video(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -468,7 +486,7 @@ pub async fn send_audio(
     Path(session_id): Path<String>,
     Json(request): Json<SendAudioRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "audio",
@@ -517,7 +535,7 @@ pub async fn execute_audio(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.audio).await?;
 
@@ -554,8 +572,14 @@ pub async fn execute_audio(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -585,7 +609,7 @@ pub async fn send_document(
     Path(session_id): Path<String>,
     Json(request): Json<SendDocumentRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "document",
@@ -634,7 +658,7 @@ pub async fn execute_document(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, mimetype) = get_media_data(&request.document).await?;
 
@@ -686,8 +710,14 @@ pub async fn execute_document(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -717,7 +747,7 @@ pub async fn send_sticker(
     Path(session_id): Path<String>,
     Json(request): Json<SendStickerRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "sticker",
@@ -766,7 +796,7 @@ pub async fn execute_sticker(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let (data, _mimetype) = get_media_data(&request.sticker).await?;
 
@@ -802,8 +832,14 @@ pub async fn execute_sticker(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -833,7 +869,7 @@ pub async fn send_location(
     Path(session_id): Path<String>,
     Json(request): Json<SendLocationRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "location",
@@ -881,7 +917,7 @@ pub async fn execute_location(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
@@ -903,8 +939,14 @@ pub async fn execute_location(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -934,7 +976,7 @@ pub async fn send_contact(
     Path(session_id): Path<String>,
     Json(request): Json<SendContactRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "contact",
@@ -986,7 +1028,7 @@ pub async fn execute_contact(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let vcard = build_vcard(&request.contact);
 
@@ -1008,8 +1050,14 @@ pub async fn execute_contact(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1143,7 +1191,7 @@ pub async fn send_poll(
     Path(session_id): Path<String>,
     Json(request): Json<SendPollRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "poll",
@@ -1170,7 +1218,7 @@ pub async fn execute_poll(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
         .options
@@ -1204,8 +1252,14 @@ pub async fn execute_poll(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1235,7 +1289,7 @@ pub async fn send_buttons(
     Path(session_id): Path<String>,
     Json(request): Json<SendButtonsRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "buttons",
@@ -1289,7 +1343,7 @@ pub async fn execute_buttons(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
         .buttons
@@ -1338,8 +1392,14 @@ pub async fn execute_buttons(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1369,7 +1429,7 @@ pub async fn send_list(
     Path(session_id): Path<String>,
     Json(request): Json<SendListRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "list",
@@ -1430,7 +1490,7 @@ pub async fn execute_list(
 
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let sections_json: Vec<serde_json::Value> = request
         .sections
@@ -1500,8 +1560,14 @@ pub async fn execute_list(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1531,7 +1597,7 @@ pub async fn send_interactive(
     Path(session_id): Path<String>,
     Json(request): Json<SendInteractiveRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "interactive",
@@ -1558,7 +1624,7 @@ pub async fn execute_interactive(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let buttons: Vec<
         waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton,
@@ -1641,8 +1707,14 @@ pub async fn execute_interactive(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1672,7 +1744,7 @@ pub async fn send_cta_url(
     Path(session_id): Path<String>,
     Json(request): Json<SendCtaUrlRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "cta-url",
@@ -1699,7 +1771,7 @@ pub async fn execute_cta_url(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let merchant_url = request
         .merchant_url
@@ -1794,8 +1866,14 @@ pub async fn execute_cta_url(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1825,7 +1903,7 @@ pub async fn send_quick_reply(
     Path(session_id): Path<String>,
     Json(request): Json<SendQuickReplyRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "quick-reply",
@@ -1852,7 +1930,7 @@ pub async fn execute_quick_reply(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     if request.buttons.is_empty() {
         return Err(ApiError::Internal(
@@ -1912,8 +1990,14 @@ pub async fn execute_quick_reply(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -1943,7 +2027,7 @@ pub async fn send_newsletter_admin_invite(
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterAdminInviteRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "newsletter-admin-invite",
@@ -1970,7 +2054,7 @@ pub async fn execute_newsletter_admin_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         newsletter_admin_invite_message: MessageField::some(
@@ -1994,8 +2078,14 @@ pub async fn execute_newsletter_admin_invite(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2025,7 +2115,7 @@ pub async fn send_newsletter_follower_invite(
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterFollowerInviteRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "newsletter-follower-invite",
@@ -2052,7 +2142,7 @@ pub async fn execute_newsletter_follower_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         newsletter_follower_invite_message_v2: MessageField::some(
@@ -2075,8 +2165,14 @@ pub async fn execute_newsletter_follower_invite(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2106,7 +2202,7 @@ pub async fn send_order(
     Path(session_id): Path<String>,
     Json(request): Json<SendOrderRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "order",
@@ -2133,7 +2229,7 @@ pub async fn execute_order(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let status = request.status.as_deref().and_then(|s| match s {
         "inquiry" => Some(waproto::whatsapp::message::order_message::OrderStatus::INQUIRY),
@@ -2167,8 +2263,14 @@ pub async fn execute_order(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2198,7 +2300,7 @@ pub async fn send_invoice(
     Path(session_id): Path<String>,
     Json(request): Json<SendInvoiceRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "invoice",
@@ -2225,7 +2327,7 @@ pub async fn execute_invoice(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let attachment_type = request.attachment_type.as_deref().and_then(|t| match t {
         "image" => Some(waproto::whatsapp::message::invoice_message::AttachmentType::IMAGE),
@@ -2253,8 +2355,14 @@ pub async fn execute_invoice(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2284,7 +2392,7 @@ pub async fn send_payment_invite(
     Path(session_id): Path<String>,
     Json(request): Json<SendPaymentInviteRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "payment-invite",
@@ -2311,7 +2419,7 @@ pub async fn execute_payment_invite(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         payment_invite_message: MessageField::some(
@@ -2334,8 +2442,14 @@ pub async fn execute_payment_invite(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2399,8 +2513,14 @@ pub async fn send_pin_message(
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    crate::handlers::search::record_outgoing(&state, &session_id, &chat_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        &state,
+        &session_id,
+        &chat_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(Json(MessageResponse {
         message_id,
@@ -2430,7 +2550,7 @@ pub async fn forward_message(
     Path(session_id): Path<String>,
     Json(request): Json<ForwardMessageRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "forward",
@@ -2457,7 +2577,7 @@ pub async fn execute_forward_message(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -2483,8 +2603,14 @@ pub async fn execute_forward_message(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2514,7 +2640,7 @@ pub async fn send_poll_update(
     Path(session_id): Path<String>,
     Json(request): Json<SendPollUpdateRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "poll-update",
@@ -2582,8 +2708,14 @@ pub async fn execute_poll_update(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2613,7 +2745,7 @@ pub async fn send_buttons_response(
     Path(session_id): Path<String>,
     Json(request): Json<SendButtonsResponseRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "buttons-response",
@@ -2671,8 +2803,14 @@ pub async fn execute_buttons_response(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2702,7 +2840,7 @@ pub async fn send_list_response(
     Path(session_id): Path<String>,
     Json(request): Json<SendListResponseRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "list-response",
@@ -2765,8 +2903,14 @@ pub async fn execute_list_response(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2796,7 +2940,7 @@ pub async fn send_interactive_response(
     Path(session_id): Path<String>,
     Json(request): Json<SendInteractiveResponseRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "interactive-response",
@@ -2863,8 +3007,14 @@ pub async fn execute_interactive_response(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2894,7 +3044,7 @@ pub async fn send_highly_structured(
     Path(session_id): Path<String>,
     Json(request): Json<SendHighlyStructuredRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "highly-structured",
@@ -2921,7 +3071,7 @@ pub async fn execute_highly_structured(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         highly_structured_message: MessageField::some(
@@ -2946,8 +3096,14 @@ pub async fn execute_highly_structured(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -2977,7 +3133,7 @@ pub async fn send_template_button_reply(
     Path(session_id): Path<String>,
     Json(request): Json<SendTemplateButtonReplyRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "template-button-reply",
@@ -3033,8 +3189,14 @@ pub async fn execute_template_button_reply(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3064,7 +3226,7 @@ pub async fn send_comment(
     Path(session_id): Path<String>,
     Json(request): Json<SendCommentRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "comment",
@@ -3091,7 +3253,7 @@ pub async fn execute_comment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let target_jid = request
         .target_chat_jid
@@ -3138,7 +3300,7 @@ pub async fn send_scheduled_call(
     Path(session_id): Path<String>,
     Json(request): Json<SendScheduledCallRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "scheduled-call",
@@ -3165,7 +3327,7 @@ pub async fn execute_scheduled_call(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let call_type = match request.call_type.to_lowercase().as_str() {
         "video" => waproto::whatsapp::message::scheduled_call_creation_message::CallType::VIDEO,
@@ -3192,8 +3354,14 @@ pub async fn execute_scheduled_call(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3223,7 +3391,7 @@ pub async fn send_scheduled_call_edit(
     Path(session_id): Path<String>,
     Json(request): Json<SendScheduledCallEditRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "scheduled-call-edit",
@@ -3250,7 +3418,7 @@ pub async fn execute_scheduled_call_edit(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let edit_type = match request.edit_type.to_lowercase().as_str() {
         "cancel" => waproto::whatsapp::message::scheduled_call_edit_message::EditType::CANCEL,
@@ -3282,8 +3450,14 @@ pub async fn execute_scheduled_call_edit(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3313,7 +3487,7 @@ pub async fn send_payment(
     Path(session_id): Path<String>,
     Json(request): Json<SendPaymentRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "send-payment",
@@ -3340,7 +3514,7 @@ pub async fn execute_payment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -3380,8 +3554,14 @@ pub async fn execute_payment(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3411,7 +3591,7 @@ pub async fn request_payment(
     Path(session_id): Path<String>,
     Json(request): Json<RequestPaymentRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "request-payment",
@@ -3438,7 +3618,7 @@ pub async fn execute_request_payment(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let note_message = request.note.map(|text| waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
@@ -3473,8 +3653,14 @@ pub async fn execute_request_payment(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3504,7 +3690,7 @@ pub async fn cancel_payment_request(
     Path(session_id): Path<String>,
     Json(request): Json<CancelPaymentRequestRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "cancel-payment",
@@ -3531,7 +3717,7 @@ pub async fn execute_cancel_payment_request(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         cancel_payment_request_message: MessageField::some(
@@ -3557,8 +3743,14 @@ pub async fn execute_cancel_payment_request(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3588,7 +3780,7 @@ pub async fn decline_payment_request(
     Path(session_id): Path<String>,
     Json(request): Json<DeclinePaymentRequestRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "decline-payment",
@@ -3615,7 +3807,7 @@ pub async fn execute_decline_payment_request(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let message = waproto::whatsapp::Message {
         decline_payment_request_message: MessageField::some(
@@ -3641,8 +3833,14 @@ pub async fn execute_decline_payment_request(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,
@@ -3672,7 +3870,7 @@ pub async fn send_newsletter_forward(
     Path(session_id): Path<String>,
     Json(request): Json<SendNewsletterForwardRequest>,
 ) -> Result<Json<SendResponse>, ApiError> {
-    if let Some(scheduled) = crate::handlers::schedule::maybe_schedule(
+    if let Some(scheduled) = crate::api::shared::schedule::handlers::maybe_schedule(
         &state,
         &session_id,
         "newsletter-forward",
@@ -3699,7 +3897,7 @@ pub async fn execute_newsletter_forward(
 ) -> Result<MessageResponse, ApiError> {
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
-    crate::handlers::new_chats::admit(state, session_id, &to_jid, &request.to).await?;
+    crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
     let content_type = match request.content_type.as_deref() {
         Some("update_card") => Some(
@@ -3747,8 +3945,14 @@ pub async fn execute_newsletter_forward(
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    crate::handlers::search::record_outgoing(state, session_id, &to_jid, &message, &message_id)
-        .await;
+    crate::api::shared::search::handlers::record_outgoing(
+        state,
+        session_id,
+        &to_jid,
+        &message,
+        &message_id,
+    )
+    .await;
 
     Ok(MessageResponse {
         message_id,

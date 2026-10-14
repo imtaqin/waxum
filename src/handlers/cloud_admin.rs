@@ -28,12 +28,12 @@ use axum::{
 use reqwest::Method;
 use serde_json::{json, Value};
 
+use crate::api::shared::messages::models::MessageResponse;
+use crate::api::shared::sessions::models::SessionInfo;
 use crate::cloud::client::{CloudClient, CloudError};
 use crate::cloud::graph::graph_id;
 use crate::error::ApiError;
 use crate::models::cloud_admin::*;
-use crate::models::messages::MessageResponse;
-use crate::models::sessions::SessionInfo;
 use crate::state::AppState;
 
 struct Ctx {

@@ -1,6 +1,6 @@
+use crate::api::shared::sessions::models::{SessionInfo, SessionStatus};
+use crate::api::shared::webhooks::models::{WebhookConfig, WebhookEvent};
 use crate::db::sqlite_raw::{self, SqliteHandle, Value as SQ};
-use crate::models::sessions::{SessionInfo, SessionStatus};
-use crate::models::webhooks::{WebhookConfig, WebhookEvent};
 use chrono::{DateTime, Utc};
 use deadpool_postgres::Pool as PgPool;
 use mysql_async::prelude::*;

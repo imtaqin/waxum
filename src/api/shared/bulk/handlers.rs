@@ -5,12 +5,12 @@ use axum::{
 use once_cell::sync::Lazy;
 use std::time::Instant;
 
-use crate::error::ApiError;
-use crate::models::bulk::{
+use crate::api::shared::bulk::models::{
     DisconnectAllResponse, FleetStats, PurgeQuery, PurgeResponse, ReconnectAllResponse,
     ReenableCircuitsResponse, SearchHit, SearchQuery, SearchResponse,
 };
-use crate::models::sessions::SessionStatus;
+use crate::api::shared::sessions::models::SessionStatus;
+use crate::error::ApiError;
 use crate::state::AppState;
 
 static UPTIME_ANCHOR: Lazy<Instant> = Lazy::new(Instant::now);
@@ -46,7 +46,7 @@ pub async fn purge_sessions(
 
     let mut targets: Vec<String> = Vec::new();
     for s in &sessions {
-        if crate::handlers::sessions::is_cloud_session(s) && q.filter != "all" {
+        if crate::api::shared::sessions::handlers::is_cloud_session(s) && q.filter != "all" {
             continue;
         }
         let hit = match q.filter.as_str() {
@@ -186,7 +186,7 @@ pub async fn reconnect_all(
 
     let state_clone = state.clone();
     tokio::spawn(async move {
-        crate::handlers::sessions::reconnect_all_on_startup(state_clone).await;
+        crate::api::shared::sessions::handlers::reconnect_all_on_startup(state_clone).await;
     });
 
     Ok(Json(ReconnectAllResponse {
@@ -277,7 +277,7 @@ pub async fn fleet_stats(State(state): State<AppState>) -> Result<Json<FleetStat
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     let (mut connected, mut connecting, mut disconnected, mut logged_out) = (0, 0, 0, 0);
     for s in &sessions {
-        if crate::handlers::sessions::is_cloud_session(s) {
+        if crate::api::shared::sessions::handlers::is_cloud_session(s) {
             connected += 1;
             continue;
         }

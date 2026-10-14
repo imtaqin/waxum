@@ -24,10 +24,8 @@
 //! - [`blocking`], [`privacy`], [`calls`], [`status`], [`mex`], [`info`],
 //!   [`fake_reply`] — smaller domains.
 
-pub mod blast;
 pub mod blocking;
 pub mod bots;
-pub mod bulk;
 pub mod business;
 pub mod calls;
 pub mod chatstate;
@@ -36,26 +34,15 @@ pub mod cloud_admin;
 pub mod cloud_commerce;
 pub mod cloud_flows;
 pub mod contacts;
-pub mod events;
 pub mod fake_reply;
 pub mod groups;
 pub mod groups_management;
-pub mod info;
 pub mod labels;
 pub mod media;
-pub mod messages;
 pub mod mex;
-pub mod nats_handler;
-pub mod new_chats;
 pub mod newsletter;
 pub mod operations;
 pub mod presence;
 pub mod privacy;
 pub mod profile;
-pub mod schedule;
-pub mod search;
-pub mod sessions;
 pub mod status;
-pub mod tags;
-pub mod tokens;
-pub mod webhooks;

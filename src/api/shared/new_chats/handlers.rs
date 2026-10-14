@@ -138,7 +138,7 @@ pub async fn admit(
         return Ok(());
     }
     let mut jids = vec![to.clone()];
-    if let Ok(requested) = crate::handlers::messages::parse_jid(requested) {
+    if let Ok(requested) = crate::api::shared::messages::handlers::parse_jid(requested) {
         let requested = requested.to_string();
         if requested != to {
             jids.push(requested);

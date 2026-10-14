@@ -3,7 +3,7 @@
 //! Every send endpoint accepts an optional `send_at` ISO-8601 UTC
 //! timestamp. When it lies in the future the handler parks the request
 //! body in the `scheduled_messages` table instead of sending, and the
-//! background scheduler (see [`crate::handlers::schedule`]) dispatches
+//! background scheduler (see [`crate::api::shared::schedule::handlers`]) dispatches
 //! it once due. The types below cover the parked-row representation,
 //! the management-endpoint query/response shapes, and the unified send
 //! response that distinguishes an immediate send from a scheduled one.
@@ -152,7 +152,7 @@ pub struct SendResponse {
 
 impl SendResponse {
     /// Wrap the result of an immediate send.
-    pub fn sent(resp: crate::models::messages::MessageResponse) -> Self {
+    pub fn sent(resp: crate::api::shared::messages::models::MessageResponse) -> Self {
         SendResponse {
             status: "sent".to_string(),
             message_id: Some(resp.message_id),

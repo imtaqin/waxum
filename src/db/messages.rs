@@ -2,8 +2,8 @@
 //!
 //! One `messages` row per ingested message, BOTH directions: incoming
 //! rows are captured from the event stream in
-//! [`crate::handlers::sessions`], outgoing rows from the `execute_*`
-//! send core in [`crate::handlers::messages`]. Ingestion is best-effort
+//! [`crate::api::shared::sessions::handlers`], outgoing rows from the `execute_*`
+//! send core in [`crate::api::shared::messages::handlers`]. Ingestion is best-effort
 //! everywhere — a failed insert must never break send or receive, so
 //! callers log and continue.
 //!
@@ -68,7 +68,7 @@ pub struct NewMessage {
     /// `POST /media/download` with no re-encoding.
     pub media: Option<MediaPointer>,
     /// `ContextInfo.stanzaId` when this message is a reply, `None`
-    /// otherwise. See [`crate::handlers::sessions::extract_quoted_context`].
+    /// otherwise. See [`crate::api::shared::sessions::handlers::extract_quoted_context`].
     pub quoted_message_id: Option<String>,
     /// `ContextInfo.participant` — the quoted message's sender — when
     /// this message is a reply and the field was present on the wire.

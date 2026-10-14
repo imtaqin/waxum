@@ -16,7 +16,7 @@
 //! `delay_ms` plus a random `0..=jitter_ms` pause between sends.
 //!
 //! Per recipient the worker replays the stored body through
-//! [`crate::handlers::schedule::dispatch`] — the same dispatch the
+//! [`crate::api::shared::schedule::handlers::dispatch`] — the same dispatch the
 //! scheduler uses — after rewriting `to` to the recipient and forcing
 //! `send_at` to `null` (a blast never round-trips through the
 //! scheduler). Outcomes:
@@ -55,14 +55,14 @@ use axum::{
 use chrono::{DateTime, Utc};
 use rand::Rng;
 
-use crate::db::blast::{self, BlastJobRow};
-use crate::error::ApiError;
-use crate::models::blast::{
+use crate::api::shared::blast::models::{
     BlastFleetQuery, BlastJob, BlastJobListResponse, BlastJobStatus, BlastOptions, BlastRecipient,
     BlastRecipientListResponse, BlastRecipientStatus, BlastRecipientsQuery, BlastSessionQuery,
     CreateBlastRequest, CreateBlastResponse,
 };
-use crate::models::webhooks::WebhookEvent;
+use crate::api::shared::webhooks::models::WebhookEvent;
+use crate::db::blast::{self, BlastJobRow};
+use crate::error::ApiError;
 use crate::state::AppState;
 
 /// Recipients fetched and processed per batch pass.
@@ -95,7 +95,7 @@ pub async fn create_blast(
     if state.get_session(&session_id).is_none() {
         return Err(ApiError::SessionNotFound(session_id));
     }
-    crate::handlers::schedule::validate_body(&request.endpoint, &request.body)
+    crate::api::shared::schedule::handlers::validate_body(&request.endpoint, &request.body)
         .map_err(ApiError::BadRequest)?;
     if request.recipients.is_empty() {
         return Err(ApiError::BadRequest("recipients must not be empty".into()));
@@ -106,7 +106,7 @@ pub async fn create_blast(
     let mut accepted: Vec<String> = Vec::new();
     let mut skipped_dup = 0usize;
     for raw in &request.recipients {
-        match crate::handlers::messages::parse_jid(raw) {
+        match crate::api::shared::messages::handlers::parse_jid(raw) {
             Ok(jid) => {
                 let canonical = jid.to_string();
                 if seen.insert(canonical.clone()) {
@@ -512,8 +512,13 @@ async fn process_job(state: &AppState, job: &BlastJobRow) -> anyhow::Result<()> 
         for recipient in &batch {
             blast::mark_recipient_sending(pool, &job.id, &recipient.recipient).await?;
             let body = build_recipient_body(&job.body, &recipient.recipient)?;
-            match crate::handlers::schedule::dispatch(state, &job.session_id, &job.endpoint, &body)
-                .await
+            match crate::api::shared::schedule::handlers::dispatch(
+                state,
+                &job.session_id,
+                &job.endpoint,
+                &body,
+            )
+            .await
             {
                 Ok(resp) => {
                     blast::mark_recipient_sent(

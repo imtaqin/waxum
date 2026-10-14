@@ -4,8 +4,10 @@ use axum::{
 };
 use std::sync::atomic::Ordering;
 
+use crate::api::shared::messages::models::{
+    SpamReportRequest as ApiSpamReportRequest, SpamReportResponse,
+};
 use crate::error::ApiError;
-use crate::models::messages::{SpamReportRequest as ApiSpamReportRequest, SpamReportResponse};
 use crate::state::AppState;
 
 // --- Spam Report ---

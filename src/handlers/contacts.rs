@@ -341,8 +341,8 @@ pub async fn resolve_lid(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
 ) -> Result<Json<LidPnEntryResponse>, ApiError> {
-    let client = crate::handlers::messages::get_client(&state, &session_id)?;
-    let target = crate::handlers::messages::parse_jid(&jid)?;
+    let client = crate::api::shared::messages::handlers::get_client(&state, &session_id)?;
+    let target = crate::api::shared::messages::handlers::parse_jid(&jid)?;
 
     let entry = AssertSend(async move {
         client
@@ -391,8 +391,8 @@ pub async fn save_contact(
             "at least one of full_name or first_name is required".into(),
         ));
     }
-    let client = crate::handlers::messages::get_client(&state, &session_id)?;
-    let target = crate::handlers::messages::parse_jid(&jid)?;
+    let client = crate::api::shared::messages::handlers::get_client(&state, &session_id)?;
+    let target = crate::api::shared::messages::handlers::parse_jid(&jid)?;
 
     AssertSend(async move {
         client

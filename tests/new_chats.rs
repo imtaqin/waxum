@@ -6,9 +6,9 @@ use axum::http::{Method, StatusCode};
 use common::{call, req_delete, req_get, req_json, Harness, TEST_TOKEN};
 use serde_json::json;
 use wacore_binary::jid::Jid;
+use waxum::api::shared::new_chats::handlers::admit;
 use waxum::db::messages::{self, NewMessage};
 use waxum::error::ApiError;
-use waxum::handlers::new_chats::admit;
 
 const LIMIT_PATH: &str = "/api/v1/sessions/nc-1/settings/new-chat-limit";
 
@@ -220,7 +220,7 @@ async fn concurrent_first_contacts_cannot_exceed_the_limit() {
 /// A send that fails after `admit` must not leave a counted chat behind.
 #[tokio::test]
 async fn a_failed_send_is_not_counted() {
-    use waxum::handlers::new_chats::{forget, scope};
+    use waxum::api::shared::new_chats::handlers::{forget, scope};
 
     let h = Harness::new().await;
     session(&h).await;

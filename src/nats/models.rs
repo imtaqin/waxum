@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::models::messages::{
+use crate::api::shared::messages::models::{
     ButtonItem, ContactCard, ListSection, MediaData, NativeFlowButtonItem,
 };
 

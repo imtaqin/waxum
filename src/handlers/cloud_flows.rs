@@ -35,6 +35,7 @@ use axum::{
 };
 use serde_json::{json, Value};
 
+use crate::api::shared::messages::models::MessageResponse;
 use crate::cloud::client::CloudClient;
 use crate::cloud::{flows_crypto, webhook};
 use crate::db::session::CloudCredentials;
@@ -43,7 +44,6 @@ use crate::models::cloud::{
     ConfigureFlowEndpointRequest, ConfigureFlowEndpointResponse, CreateFlowRequest,
     SendFlowRequest, UpdateFlowMetadataRequest,
 };
-use crate::models::messages::MessageResponse;
 use crate::state::AppState;
 
 /// Meta's status for a request whose `X-Hub-Signature-256` doesn't match.

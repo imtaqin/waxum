@@ -1,6 +1,6 @@
 //! Scheduled send: park a message now, dispatch it later.
 //!
-//! Every send handler in [`crate::handlers::messages`] starts with a
+//! Every send handler in [`crate::api::shared::messages::handlers`] starts with a
 //! [`maybe_schedule`] guard. When the request carries a `send_at` further
 //! in the future than [`SCHEDULE_GRACE`] the guard stores the endpoint
 //! key plus the serialized request body in the `scheduled_messages`
@@ -28,14 +28,14 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 
-use crate::db::scheduled::{self, ScheduledRow};
-use crate::error::ApiError;
-use crate::models::messages::MessageResponse;
-use crate::models::schedule::{
+use crate::api::shared::messages::models::MessageResponse;
+use crate::api::shared::schedule::models::{
     ScheduledFleetQuery, ScheduledListResponse, ScheduledMessage, ScheduledSessionQuery,
     ScheduledStatus, SendResponse,
 };
-use crate::models::webhooks::WebhookEvent;
+use crate::api::shared::webhooks::models::WebhookEvent;
+use crate::db::scheduled::{self, ScheduledRow};
+use crate::error::ApiError;
 use crate::state::AppState;
 
 /// Grace window around "now": a `send_at` at most this far in the
@@ -317,8 +317,8 @@ pub async fn dispatch(
     endpoint: &str,
     body: &str,
 ) -> Result<MessageResponse, String> {
-    use crate::handlers::messages as m;
-    use crate::models::messages as mm;
+    use crate::api::shared::messages::handlers as m;
+    use crate::api::shared::messages::models as mm;
     macro_rules! arm {
         ($ty:ty, $f:expr) => {{
             let request: $ty = serde_json::from_str(body)
@@ -403,7 +403,7 @@ pub async fn dispatch(
 /// The arm list intentionally mirrors [`dispatch`]; keep the two in
 /// sync when adding an endpoint.
 pub fn validate_body(endpoint: &str, body: &serde_json::Value) -> Result<(), String> {
-    use crate::models::messages as mm;
+    use crate::api::shared::messages::models as mm;
 
     fn check<T: serde::de::DeserializeOwned>(
         endpoint: &str,

@@ -16,13 +16,7 @@ use axum::{
     Router,
 };
 
-/// Axum's `Bytes`-based extractors (`Multipart` fields among them) cap
-/// bodies at 2MB by default -- fine for JSON, too small for real media or a
-/// session storage archive. These routes get an explicit, deliberate raise
-/// instead of silently inheriting that default or being left unbounded.
-const MAX_MEDIA_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
-const MAX_SESSION_IMPORT_BYTES: usize = 512 * 1024 * 1024;
-
+use crate::api::MAX_MEDIA_UPLOAD_BYTES;
 use crate::handlers;
 use crate::state::AppState;
 
@@ -32,79 +26,40 @@ pub fn create_router() -> Router<AppState> {
         .nest(
             "/api/v1",
             api_routes().layer(axum::middleware::from_fn(
-                handlers::new_chats::rollback_failed_sends,
+                crate::api::shared::new_chats::handlers::rollback_failed_sends,
             )),
         )
         .route("/health", get(health_check))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
         .route("/metrics", get(crate::metrics::metrics_handler))
-        .route("/api/v1/info", get(handlers::info::get_info))
+        .route(
+            "/api/v1/info",
+            get(crate::api::shared::info::handlers::get_info),
+        )
 }
 
 fn api_routes() -> Router<AppState> {
     Router::new()
-        .route("/stats", get(handlers::bulk::fleet_stats))
-        .route(
-            "/webhooks/reenable-all",
-            post(handlers::bulk::reenable_circuits),
-        )
-        .route("/events/tail", get(handlers::events::events_tail))
         .route("/voices", get(handlers::calls::list_voices))
         .route("/tts/preview", get(handlers::calls::tts_preview))
-        .route("/tags", get(handlers::tags::list_all_tags))
-        .route("/scheduled", get(handlers::schedule::list_all_scheduled))
-        .route("/blasts", get(handlers::blast::list_all_blasts))
-        .route(
-            "/messages/search",
-            get(handlers::search::search_all_messages),
-        )
-        .route(
-            "/tokens",
-            post(handlers::tokens::mint_token).get(handlers::tokens::list_tokens),
-        )
-        .route("/tokens/{id}/revoke", post(handlers::tokens::revoke_token))
         .nest("/sessions", session_routes())
         .nest("/nats", nats_routes())
+        .merge(crate::api::shared::events::routes::api_routes())
+        .merge(crate::api::shared::tokens::routes::api_routes())
+        .merge(crate::api::shared::blast::routes::api_routes())
+        .merge(crate::api::shared::schedule::routes::api_routes())
+        .merge(crate::api::shared::search::routes::api_routes())
+        .merge(crate::api::shared::bulk::routes::api_routes())
+        .merge(crate::api::shared::tags::routes::api_routes())
 }
 
 fn nats_routes() -> Router<AppState> {
-    Router::new()
-        .route("/status", get(handlers::nats_handler::nats_status))
-        .route(
-            "/streams/{stream_name}/purge",
-            post(handlers::nats_handler::nats_purge_stream),
-        )
-        .route(
-            "/streams/{stream_name}/consumers",
-            get(handlers::nats_handler::nats_list_consumers),
-        )
+    Router::new().merge(crate::api::shared::nats::routes::nats_routes())
 }
 
 fn session_routes() -> Router<AppState> {
     Router::new()
-        .route("/", post(handlers::sessions::create_session))
-        .route("/", get(handlers::sessions::list_sessions))
-        .route("/purge", post(handlers::bulk::purge_sessions))
-        .route("/disconnect-all", post(handlers::bulk::disconnect_all))
-        .route("/reconnect-all", post(handlers::bulk::reconnect_all))
-        .route("/search", get(handlers::bulk::search_sessions))
-        .route("/{session_id}", get(handlers::sessions::get_session))
-        .route("/{session_id}", delete(handlers::sessions::delete_session))
-        .route(
-            "/{session_id}/status",
-            get(handlers::sessions::get_session_status),
-        )
-        .route("/{session_id}/qr", get(handlers::sessions::get_qr_code))
-        .route(
-            "/{session_id}/connect",
-            post(handlers::sessions::connect_session),
-        )
-        .route(
-            "/{session_id}/connect/wait",
-            get(handlers::sessions::connect_and_wait),
-        )
-        .route("/{session_id}/pair", post(handlers::sessions::pair_session))
         .route(
             "/{session_id}/cloud/connect",
             post(handlers::cloud::connect_cloud),
@@ -345,195 +300,6 @@ fn session_routes() -> Router<AppState> {
         .route(
             "/{session_id}/cloud/flow-endpoint/exchange",
             post(handlers::cloud_flows::flow_data_exchange),
-        )
-        .route(
-            "/{session_id}/disconnect",
-            post(handlers::sessions::disconnect_session),
-        )
-        .route(
-            "/{session_id}/logout",
-            post(handlers::sessions::logout_session),
-        )
-        .route(
-            "/{session_id}/export",
-            post(handlers::sessions::export_session),
-        )
-        .route(
-            "/{session_id}/import",
-            post(handlers::sessions::import_session)
-                .layer(DefaultBodyLimit::max(MAX_SESSION_IMPORT_BYTES)),
-        )
-        .route(
-            "/{session_id}/device",
-            get(handlers::sessions::get_device_info),
-        )
-        .route(
-            "/{session_id}/messages/text",
-            post(handlers::messages::send_text),
-        )
-        .route(
-            "/{session_id}/messages/image",
-            post(handlers::messages::send_image),
-        )
-        .route(
-            "/{session_id}/messages/video",
-            post(handlers::messages::send_video),
-        )
-        .route(
-            "/{session_id}/messages/audio",
-            post(handlers::messages::send_audio),
-        )
-        .route(
-            "/{session_id}/messages/document",
-            post(handlers::messages::send_document),
-        )
-        .route(
-            "/{session_id}/messages/sticker",
-            post(handlers::messages::send_sticker),
-        )
-        .route(
-            "/{session_id}/messages/location",
-            post(handlers::messages::send_location),
-        )
-        .route(
-            "/{session_id}/messages/contact",
-            post(handlers::messages::send_contact),
-        )
-        .route(
-            "/{session_id}/messages/edit",
-            post(handlers::messages::edit_message),
-        )
-        .route(
-            "/{session_id}/messages/react",
-            post(handlers::messages::send_reaction),
-        )
-        .route(
-            "/{session_id}/messages/revoke",
-            post(handlers::messages::revoke_message),
-        )
-        .route(
-            "/{session_id}/messages/read",
-            post(handlers::messages::mark_as_read),
-        )
-        .route(
-            "/{session_id}/messages/poll",
-            post(handlers::messages::send_poll),
-        )
-        .route(
-            "/{session_id}/messages/buttons",
-            post(handlers::messages::send_buttons),
-        )
-        .route(
-            "/{session_id}/messages/list",
-            post(handlers::messages::send_list),
-        )
-        .route(
-            "/{session_id}/messages/interactive",
-            post(handlers::messages::send_interactive),
-        )
-        .route(
-            "/{session_id}/messages/cta-url",
-            post(handlers::messages::send_cta_url),
-        )
-        .route(
-            "/{session_id}/messages/quick-reply",
-            post(handlers::messages::send_quick_reply),
-        )
-        .route(
-            "/{session_id}/messages/newsletter-admin-invite",
-            post(handlers::messages::send_newsletter_admin_invite),
-        )
-        .route(
-            "/{session_id}/messages/newsletter-follower-invite",
-            post(handlers::messages::send_newsletter_follower_invite),
-        )
-        .route(
-            "/{session_id}/messages/order",
-            post(handlers::messages::send_order),
-        )
-        .route(
-            "/{session_id}/messages/invoice",
-            post(handlers::messages::send_invoice),
-        )
-        .route(
-            "/{session_id}/messages/payment-invite",
-            post(handlers::messages::send_payment_invite),
-        )
-        .route(
-            "/{session_id}/messages/pin",
-            post(handlers::messages::send_pin_message),
-        )
-        .route(
-            "/{session_id}/messages/forward",
-            post(handlers::messages::forward_message),
-        )
-        .route(
-            "/{session_id}/messages/poll-update",
-            post(handlers::messages::send_poll_update),
-        )
-        .route(
-            "/{session_id}/messages/buttons-response",
-            post(handlers::messages::send_buttons_response),
-        )
-        .route(
-            "/{session_id}/messages/list-response",
-            post(handlers::messages::send_list_response),
-        )
-        .route(
-            "/{session_id}/messages/interactive-response",
-            post(handlers::messages::send_interactive_response),
-        )
-        .route(
-            "/{session_id}/messages/highly-structured",
-            post(handlers::messages::send_highly_structured),
-        )
-        .route(
-            "/{session_id}/messages/template-button-reply",
-            post(handlers::messages::send_template_button_reply),
-        )
-        .route(
-            "/{session_id}/messages/comment",
-            post(handlers::messages::send_comment),
-        )
-        .route(
-            "/{session_id}/messages/scheduled-call",
-            post(handlers::messages::send_scheduled_call),
-        )
-        .route(
-            "/{session_id}/messages/scheduled-call-edit",
-            post(handlers::messages::send_scheduled_call_edit),
-        )
-        .route(
-            "/{session_id}/messages/send-payment",
-            post(handlers::messages::send_payment),
-        )
-        .route(
-            "/{session_id}/messages/request-payment",
-            post(handlers::messages::request_payment),
-        )
-        .route(
-            "/{session_id}/messages/cancel-payment",
-            post(handlers::messages::cancel_payment_request),
-        )
-        .route(
-            "/{session_id}/messages/decline-payment",
-            post(handlers::messages::decline_payment_request),
-        )
-        .route(
-            "/{session_id}/messages/search",
-            get(handlers::search::search_session_messages),
-        )
-        .route(
-            "/{session_id}/messages/chat/{chat_jid}",
-            get(handlers::search::list_chat_messages),
-        )
-        .route(
-            "/{session_id}/messages",
-            get(handlers::search::list_session_messages),
-        )
-        .route(
-            "/{session_id}/messages/newsletter-forward",
-            post(handlers::messages::send_newsletter_forward),
         )
         .route(
             "/{session_id}/profile",
@@ -779,12 +545,6 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/settings/link-previews",
             post(handlers::labels::set_link_previews),
         )
-        .route(
-            "/{session_id}/settings/new-chat-limit",
-            get(handlers::new_chats::get_new_chat_limit)
-                .put(handlers::new_chats::set_new_chat_limit)
-                .delete(handlers::new_chats::clear_new_chat_limit),
-        )
         .route("/{session_id}/bots", get(handlers::bots::list_bots))
         .route("/{session_id}/capping", get(handlers::bots::get_capping))
         .route(
@@ -837,66 +597,15 @@ fn session_routes() -> Router<AppState> {
             "/{session_id}/media/download",
             post(handlers::media::download_media),
         )
-        .route(
-            "/{session_id}/webhooks",
-            get(handlers::webhooks::list_webhooks),
-        )
-        .route(
-            "/{session_id}/webhooks",
-            post(handlers::webhooks::register_webhook),
-        )
-        .route(
-            "/{session_id}/webhooks/dlq",
-            get(handlers::webhooks::list_webhook_dlq),
-        )
-        .route(
-            "/{session_id}/webhooks/dlq/{entry_id}/replay",
-            post(handlers::webhooks::replay_webhook_dlq_entry),
-        )
-        .route(
-            "/{session_id}/webhooks/{webhook_id}",
-            delete(handlers::webhooks::unregister_webhook),
-        )
-        .route(
-            "/{session_id}/webhooks/{webhook_id}/enable",
-            post(handlers::webhooks::reenable_webhook),
-        )
-        .route(
-            "/{session_id}/tags",
-            get(handlers::tags::list_session_tags)
-                .put(handlers::tags::replace_session_tags)
-                .post(handlers::tags::add_session_tag),
-        )
-        .route(
-            "/{session_id}/tags/{tag}",
-            delete(handlers::tags::remove_session_tag),
-        )
-        .route(
-            "/{session_id}/scheduled",
-            get(handlers::schedule::list_session_scheduled),
-        )
-        .route(
-            "/{session_id}/scheduled/{id}",
-            delete(handlers::schedule::cancel_scheduled),
-        )
-        .route("/{session_id}/blast", post(handlers::blast::create_blast))
-        .route(
-            "/{session_id}/blasts",
-            get(handlers::blast::list_session_blasts),
-        )
-        .route("/{session_id}/blasts/{id}", get(handlers::blast::get_blast))
-        .route(
-            "/{session_id}/blasts/{id}/recipients",
-            get(handlers::blast::list_blast_recipients),
-        )
-        .route(
-            "/{session_id}/blasts/{id}/cancel",
-            post(handlers::blast::cancel_blast),
-        )
-        .route(
-            "/{session_id}/blasts/{id}/retry",
-            post(handlers::blast::retry_blast),
-        )
+        .merge(crate::api::shared::sessions::routes::session_routes())
+        .merge(crate::api::shared::messages::routes::session_routes())
+        .merge(crate::api::shared::webhooks::routes::session_routes())
+        .merge(crate::api::shared::new_chats::routes::session_routes())
+        .merge(crate::api::shared::blast::routes::session_routes())
+        .merge(crate::api::shared::schedule::routes::session_routes())
+        .merge(crate::api::shared::search::routes::session_routes())
+        .merge(crate::api::shared::bulk::routes::session_routes())
+        .merge(crate::api::shared::tags::routes::session_routes())
 }
 
 async fn health_check() -> &'static str {

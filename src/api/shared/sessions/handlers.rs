@@ -9,15 +9,15 @@ use axum::{
 use futures::stream::Stream;
 use uuid::Uuid;
 
-use crate::device_props::ResolvedDeviceProps;
-use crate::error::ApiError;
-use crate::models::common::SuccessResponse;
-use crate::models::sessions::{
+use crate::api::shared::sessions::models::{
     ConnectRequest, CreateSessionRequest, CreateSessionResponse, DeviceInfo, PairCodeRequest,
     PairCodeResponse, QrCodeResponse, SessionInfo, SessionListResponse, SessionStatus,
     SessionStatusResponse,
 };
-use crate::models::webhooks::{WebhookConfig, WebhookEvent};
+use crate::api::shared::webhooks::models::{WebhookConfig, WebhookEvent};
+use crate::device_props::ResolvedDeviceProps;
+use crate::error::ApiError;
+use crate::models::common::SuccessResponse;
 use crate::state::AppState;
 use wacore::proto_helpers::MessageExt;
 
@@ -294,12 +294,12 @@ pub async fn get_session_status(
                 true,
                 false,
                 false,
-                crate::models::sessions::PairStatus::default(),
+                crate::api::shared::sessions::models::PairStatus::default(),
                 None,
             )
         } else if let Some(runtime) = state.get_session(&session_id) {
             let ps = runtime.get_pair_state();
-            let pair = crate::models::sessions::PairStatus {
+            let pair = crate::api::shared::sessions::models::PairStatus {
                 last_qr_at: ps.last_qr_at,
                 last_pair_code_at: ps.last_pair_code_at,
                 pair_code_expires_at: ps.pair_code_expires_at,
@@ -341,13 +341,14 @@ pub async fn get_session_status(
                 session.is_logged_in,
                 false,
                 false,
-                crate::models::sessions::PairStatus::default(),
+                crate::api::shared::sessions::models::PairStatus::default(),
                 None,
             )
         };
 
     let mut diagnostics = session_diagnostics(&state, &session_id);
-    diagnostics.new_chats = crate::handlers::new_chats::counts(&state, &session_id).await;
+    diagnostics.new_chats =
+        crate::api::shared::new_chats::handlers::counts(&state, &session_id).await;
     Ok(Json(SessionStatusResponse {
         status,
         is_logged_in,
@@ -364,9 +365,9 @@ pub async fn get_session_status(
 fn session_diagnostics(
     state: &AppState,
     session_id: &str,
-) -> crate::models::sessions::SessionDiagnostics {
+) -> crate::api::shared::sessions::models::SessionDiagnostics {
     use std::sync::atomic::Ordering;
-    let mut d = crate::models::sessions::SessionDiagnostics::default();
+    let mut d = crate::api::shared::sessions::models::SessionDiagnostics::default();
     if let Some(runtime) = state.get_session(session_id) {
         d.messages_forwarded = runtime.messages_forwarded.load(Ordering::Relaxed);
         let last = runtime.last_message_forwarded_at.load(Ordering::Relaxed);
@@ -388,7 +389,7 @@ fn session_diagnostics(
         .into_iter()
         .map(|(id, config)| {
             let circuit = state.webhook_circuit_snapshot(&config.url);
-            crate::models::sessions::WebhookHealth {
+            crate::api::shared::sessions::models::WebhookHealth {
                 id,
                 receives_messages: config.events.iter().any(|e| e.matches("message")),
                 enabled: config.enabled,
@@ -2169,7 +2170,7 @@ async fn handle_event(
                 .await;
         }
         Event::LoggedOut(logged_out) => {
-            let new_chats = crate::handlers::new_chats::snapshot_on_logout(
+            let new_chats = crate::api::shared::new_chats::handlers::snapshot_on_logout(
                 state,
                 session_id,
                 &format!("{:?}", logged_out.reason),
@@ -2288,8 +2289,13 @@ async fn handle_event(
                 );
                 continue;
             }
-            crate::handlers::search::record_incoming(state, session_id, &im.message, &im.info)
-                .await;
+            crate::api::shared::search::handlers::record_incoming(
+                state,
+                session_id,
+                &im.message,
+                &im.info,
+            )
+            .await;
             let from_phone = resolve_jid_phone(&client, &im.info.source.sender).await;
             let chat_phone = resolve_jid_phone(&client, &im.info.source.chat).await;
             let data = message_event_data(&im.message, &im.info, from_phone, chat_phone);
@@ -2488,7 +2494,7 @@ fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_json::Value
 }
 
 /// Typed counterpart to [`extract_media_metadata`] for message-history
-/// persistence ([`crate::handlers::search::record_incoming`] /
+/// persistence ([`crate::api::shared::search::handlers::record_incoming`] /
 /// `record_outgoing`): the same five media envelopes, but shaped as
 /// [`crate::db::messages::MediaPointer`] instead of a webhook JSON blob,
 /// and `None` when the message isn't media or is missing a field
@@ -2644,7 +2650,7 @@ async fn resolve_jid_phone(
 /// Extracts user-visible content from a protobuf Message: best-effort text,
 /// optional caption, the high-level type slug, and the media mimetype if any.
 /// Shared with the message-history ingestion in
-/// [`crate::handlers::search`].
+/// [`crate::api::shared::search::handlers`].
 ///
 /// Every `extract_*` helper here first unwraps the ephemeral / view-once /
 /// device-sent / document-with-caption wrappers via

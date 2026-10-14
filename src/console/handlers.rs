@@ -18,8 +18,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::api::shared::sessions::models::{SessionInfo, SessionStatus};
 use crate::console::{render_page, render_partial, CONSOLE_COOKIE};
-use crate::models::sessions::{SessionInfo, SessionStatus};
 use crate::state::AppState;
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
@@ -152,7 +152,7 @@ struct OverviewData {
 /// session the pairing states get their own label: a session showing a
 /// QR used to read "OFFLINE", which sent people looking for a fault.
 fn session_status(state: &AppState, s: &SessionInfo) -> (&'static str, &'static str) {
-    if crate::handlers::sessions::is_cloud_session(s) {
+    if crate::api::shared::sessions::handlers::is_cloud_session(s) {
         return ("connected", "Ready");
     }
     status_row(runtime_status(state, s))
@@ -242,7 +242,7 @@ async fn build_overview_data(state: &AppState) -> OverviewData {
             "connecting" | "pairing" => pairing += 1,
             _ => offline += 1,
         }
-        let is_cloud = crate::handlers::sessions::is_cloud_session(s);
+        let is_cloud = crate::api::shared::sessions::handlers::is_cloud_session(s);
         let hooks = state.get_webhooks(&s.id);
         let webhooks_suspended = hooks
             .iter()
@@ -439,7 +439,7 @@ pub async fn session_page(
     };
 
     let (cls, label) = session_status(&state, &info);
-    let is_cloud = crate::handlers::sessions::is_cloud_session(&info);
+    let is_cloud = crate::api::shared::sessions::handlers::is_cloud_session(&info);
 
     let storage_path = state
         .session_manager()
@@ -500,7 +500,7 @@ pub async fn create_session_proxy(
         return *r;
     }
 
-    use crate::models::sessions::CreateSessionRequest;
+    use crate::api::shared::sessions::models::CreateSessionRequest;
     let create_req = CreateSessionRequest {
         id: req.id,
         name: req.name,
@@ -509,7 +509,13 @@ pub async fn create_session_proxy(
         device: None,
     };
 
-    match crate::handlers::sessions::create_session(State(state), None, Json(create_req)).await {
+    match crate::api::shared::sessions::handlers::create_session(
+        State(state),
+        None,
+        Json(create_req),
+    )
+    .await
+    {
         Ok(Json(resp)) => (StatusCode::CREATED, Json(resp)).into_response(),
         Err(e) => e.into_response(),
     }
@@ -533,7 +539,7 @@ pub async fn create_cloud_session_proxy(
         return *r;
     }
 
-    use crate::models::sessions::CreateSessionRequest;
+    use crate::api::shared::sessions::models::CreateSessionRequest;
     let create_req = CreateSessionRequest {
         id: Some(req.id.clone()),
         name: Some(req.id.clone()),
@@ -541,9 +547,12 @@ pub async fn create_cloud_session_proxy(
         webhook: None,
         device: None,
     };
-    if let Err(e) =
-        crate::handlers::sessions::create_session(State(state.clone()), None, Json(create_req))
-            .await
+    if let Err(e) = crate::api::shared::sessions::handlers::create_session(
+        State(state.clone()),
+        None,
+        Json(create_req),
+    )
+    .await
     {
         return e.into_response();
     }
@@ -567,25 +576,40 @@ pub async fn session_action_proxy(
 
     match op.as_str() {
         "connect" => {
-            match crate::handlers::sessions::connect_session(State(state), Path(sid), None).await {
+            match crate::api::shared::sessions::handlers::connect_session(
+                State(state),
+                Path(sid),
+                None,
+            )
+            .await
+            {
                 Ok(Json(_)) => StatusCode::OK.into_response(),
                 Err(e) => e.into_response(),
             }
         }
         "disconnect" => {
-            match crate::handlers::sessions::disconnect_session(State(state), Path(sid)).await {
+            match crate::api::shared::sessions::handlers::disconnect_session(
+                State(state),
+                Path(sid),
+            )
+            .await
+            {
                 Ok(Json(_)) => StatusCode::OK.into_response(),
                 Err(e) => e.into_response(),
             }
         }
         "logout" => {
-            match crate::handlers::sessions::logout_session(State(state), Path(sid)).await {
+            match crate::api::shared::sessions::handlers::logout_session(State(state), Path(sid))
+                .await
+            {
                 Ok(Json(_)) => StatusCode::OK.into_response(),
                 Err(e) => e.into_response(),
             }
         }
         "delete" => {
-            match crate::handlers::sessions::delete_session(State(state), Path(sid)).await {
+            match crate::api::shared::sessions::handlers::delete_session(State(state), Path(sid))
+                .await
+            {
                 Ok(Json(_)) => StatusCode::OK.into_response(),
                 Err(e) => e.into_response(),
             }

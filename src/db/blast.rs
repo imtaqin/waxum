@@ -6,7 +6,7 @@
 //! `UNIQUE (job_id, recipient)`, with `session_id` denormalized so
 //! cross-job dedup can find every recipient a session ever `sent` to).
 //!
-//! The background worker in [`crate::handlers::blast`] claims the
+//! The background worker in [`crate::api::shared::blast::handlers`] claims the
 //! oldest due job via [`claim_next_due`] (or resumes an interrupted
 //! `running` one via [`running_job`]), drains [`pending_recipients`] in
 //! batches, settles each row with the `mark_recipient_*` family, bumps

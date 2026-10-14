@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::sessions::SessionInfo;
+use crate::api::shared::sessions::models::SessionInfo;
 
 /// Attaches WhatsApp Cloud API credentials to a session, switching its
 /// `provider` to `whatsapp_cloud`. `access_token`, `app_secret` and

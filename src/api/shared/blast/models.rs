@@ -10,7 +10,7 @@
 //! and recipient representations returned by the management endpoints,
 //! and the query filters for the list endpoints. Persistence lives in
 //! [`crate::db::blast`]; the worker and HTTP handlers live in
-//! [`crate::handlers::blast`].
+//! [`crate::api::shared::blast::handlers`].
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

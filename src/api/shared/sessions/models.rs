@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use utoipa::ToSchema;
 
-use super::webhooks::WebhookRequest;
+use crate::api::shared::webhooks::models::WebhookRequest;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -291,7 +291,7 @@ pub struct SessionDiagnostics {
     pub webhooks: Vec<WebhookHealth>,
     /// New outgoing chats started through waxum, by rolling window. See
     /// `GET .../settings/new-chat-limit` for the limit and past incidents.
-    pub new_chats: crate::handlers::new_chats::NewChatCounts,
+    pub new_chats: crate::api::shared::new_chats::handlers::NewChatCounts,
 }
 
 /// Delivery health of one webhook, as seen by the fan-out.

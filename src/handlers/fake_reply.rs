@@ -2,7 +2,7 @@
 //! so the outgoing message appears to be a reply to a previous (non-existent)
 //! message. Used by blast to appear more natural / human-like.
 
-use crate::models::messages::FakeReplyConfig;
+use crate::api::shared::messages::models::FakeReplyConfig;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use waproto::buffa::MessageField;

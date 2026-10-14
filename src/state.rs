@@ -22,10 +22,10 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
 
+use crate::api::shared::sessions::models::SessionStatus;
+use crate::api::shared::webhooks::models::{WebhookConfig, WebhookDlqEntry};
 use crate::db::session::DbPool;
 use crate::db::SessionManager;
-use crate::models::sessions::SessionStatus;
-use crate::models::webhooks::{WebhookConfig, WebhookDlqEntry};
 use crate::nats::NatsManager;
 
 /// Value of the `X-Webhook-Signature-Version` header sent with every
@@ -184,7 +184,7 @@ pub struct SessionState {
     /// `Event::Connected` (or when the session goes away entirely via
     /// `Event::LoggedOut`). `None` means "not currently retrying" -- either
     /// genuinely connected, or never connected in the first place. The
-    /// reconnect watchdog ([`crate::handlers::sessions::run_reconnect_watchdog`])
+    /// reconnect watchdog ([`crate::api::shared::sessions::handlers::run_reconnect_watchdog`])
     /// reads this to decide when a session has been stuck retrying for too
     /// long and needs a forced full rebuild rather than waiting on
     /// whatsapp-rust's own backoff indefinitely.
@@ -1163,7 +1163,7 @@ impl AppState {
     /// Same as [`Self::session_iter`], but keeping each runtime's session
     /// id alongside it -- needed by anything that has to act back on a
     /// specific session (e.g. the reconnect watchdog calling
-    /// [`crate::handlers::sessions::connect_client`]), since
+    /// [`crate::api::shared::sessions::handlers::connect_client`]), since
     /// [`SessionState`] doesn't carry its own id.
     pub fn session_iter_with_ids(&self) -> Vec<(String, Arc<SessionState>)> {
         self.inner
