@@ -18,6 +18,7 @@ pub mod mex;
 pub mod newsletter;
 pub mod presence;
 pub mod privacy;
+pub mod profile;
 pub mod schedule;
 pub mod search;
 pub mod sessions;

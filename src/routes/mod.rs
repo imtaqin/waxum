@@ -536,6 +536,14 @@ fn session_routes() -> Router<AppState> {
             post(handlers::messages::send_newsletter_forward),
         )
         .route(
+            "/{session_id}/profile",
+            put(handlers::profile::update_profile),
+        )
+        .route(
+            "/{session_id}/profile/picture",
+            delete(handlers::profile::remove_profile_picture),
+        )
+        .route(
             "/{session_id}/contacts/check",
             post(handlers::contacts::check_on_whatsapp),
         )
