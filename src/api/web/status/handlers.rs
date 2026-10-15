@@ -41,21 +41,21 @@ pub async fn send_status_reaction(
     let status_broadcast = Jid::status_broadcast();
     let now_ms = chrono::Utc::now().timestamp_millis();
 
-    let message = wa::Message {
-        reaction_message: MessageField::some(wa::message::ReactionMessage {
-            key: Some(wa::MessageKey {
+    let message = nx!(wa::Message {
+        reaction_message: MessageField::some(nx!(wa::message::ReactionMessage {
+            key: Some(nx!(wa::MessageKey {
                 remote_jid: Some(status_broadcast.to_string()),
                 from_me: Some(false),
                 id: Some(request.message_id.clone()),
                 participant: Some(owner.to_string()),
-            })
+            }))
             .into(),
             text: Some(request.reaction.clone()),
             grouping_key: None,
             sender_timestamp_ms: Some(now_ms),
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     client
         .send_message(status_broadcast, message)

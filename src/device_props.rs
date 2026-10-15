@@ -105,11 +105,11 @@ fn parse_version(s: &str) -> Option<wa::device_props::AppVersion> {
     if parts.is_empty() {
         return None;
     }
-    Some(wa::device_props::AppVersion {
+    Some(nx!(wa::device_props::AppVersion {
         primary: parts.first().copied(),
         secondary: parts.get(1).copied(),
         tertiary: parts.get(2).copied(),
         quaternary: parts.get(3).copied(),
         quinary: parts.get(4).copied(),
-    })
+    }))
 }

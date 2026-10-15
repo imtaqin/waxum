@@ -2,7 +2,6 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use std::sync::atomic::Ordering;
 
 use crate::api::shared::messages::models::{
     SpamReportRequest as ApiSpamReportRequest, SpamReportResponse,
@@ -329,9 +328,7 @@ pub async fn set_auto_reconnect(
 
     let error_count = match runtime.get_client() {
         Some(client) => {
-            client
-                .enable_auto_reconnect
-                .store(request.enabled, Ordering::Relaxed);
+            client.set_auto_reconnect(request.enabled);
             client.stats().reconnect_errors
         }
         None => 0,

@@ -102,15 +102,17 @@ pub async fn execute_image(
         } else {
             request
                 .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
+                .map(|id| {
+                    nx!(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
                 })
                 .into()
         };
 
-    let message = waproto::whatsapp::Message {
-        image_message: MessageField::some(waproto::whatsapp::message::ImageMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        image_message: MessageField::some(nx!(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -121,9 +123,9 @@ pub async fn execute_image(
             caption: request.caption,
             context_info,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -139,12 +141,12 @@ pub async fn execute_image(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -239,15 +241,17 @@ pub async fn execute_video(
         } else {
             request
                 .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
+                .map(|id| {
+                    nx!(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
                 })
                 .into()
         };
 
-    let message = waproto::whatsapp::Message {
-        video_message: MessageField::some(waproto::whatsapp::message::VideoMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        video_message: MessageField::some(nx!(waproto::whatsapp::message::VideoMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -258,9 +262,9 @@ pub async fn execute_video(
             caption: request.caption,
             context_info,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -276,12 +280,12 @@ pub async fn execute_video(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -370,8 +374,8 @@ pub async fn execute_audio(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    let message = waproto::whatsapp::Message {
-        audio_message: MessageField::some(waproto::whatsapp::message::AudioMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        audio_message: MessageField::some(nx!(waproto::whatsapp::message::AudioMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -381,9 +385,9 @@ pub async fn execute_audio(
             mimetype: Some(mimetype),
             ptt: Some(request.ptt),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -399,12 +403,12 @@ pub async fn execute_audio(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -499,15 +503,17 @@ pub async fn execute_document(
         } else {
             request
                 .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
+                .map(|id| {
+                    nx!(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
                 })
                 .into()
         };
 
-    let message = waproto::whatsapp::Message {
-        document_message: MessageField::some(waproto::whatsapp::message::DocumentMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        document_message: MessageField::some(nx!(waproto::whatsapp::message::DocumentMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -519,9 +525,9 @@ pub async fn execute_document(
             caption: request.caption,
             context_info,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -537,12 +543,12 @@ pub async fn execute_document(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -631,8 +637,8 @@ pub async fn execute_sticker(
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
 
-    let message = waproto::whatsapp::Message {
-        sticker_message: MessageField::some(waproto::whatsapp::message::StickerMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        sticker_message: MessageField::some(nx!(waproto::whatsapp::message::StickerMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -641,9 +647,9 @@ pub async fn execute_sticker(
             file_length: Some(data.len() as u64),
             mimetype: Some("image/webp".to_string()),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -659,12 +665,12 @@ pub async fn execute_sticker(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })

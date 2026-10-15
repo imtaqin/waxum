@@ -117,10 +117,16 @@ pub async fn update_profile(
         updated.push("about");
     }
     if let Some(name) = &request.name {
-        profile
+        let outcome = profile
             .set_push_name(name.trim())
             .await
             .map_err(|e| ApiError::Internal(format!("name: {e}")))?;
+        if let whatsapp_rust::PushNameOutcome::SyncPending { source } = &outcome {
+            tracing::warn!(
+                session_id = %session_id,
+                "push name sent but the app-state sync is still pending: {source}"
+            );
+        }
         updated.push("name");
     }
     if let Some(jpeg) = picture {

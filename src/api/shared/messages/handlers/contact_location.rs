@@ -83,16 +83,16 @@ pub async fn execute_location(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        location_message: MessageField::some(waproto::whatsapp::message::LocationMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        location_message: MessageField::some(nx!(waproto::whatsapp::message::LocationMessage {
             degrees_latitude: Some(request.latitude),
             degrees_longitude: Some(request.longitude),
             name: request.name,
             address: request.address,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -108,12 +108,12 @@ pub async fn execute_location(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -196,14 +196,14 @@ pub async fn execute_contact(
 
     let vcard = build_vcard(&request.contact);
 
-    let message = waproto::whatsapp::Message {
-        contact_message: MessageField::some(waproto::whatsapp::message::ContactMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        contact_message: MessageField::some(nx!(waproto::whatsapp::message::ContactMessage {
             display_name: Some(request.contact.display_name.clone()),
             vcard: Some(vcard),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -219,12 +219,12 @@ pub async fn execute_contact(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })

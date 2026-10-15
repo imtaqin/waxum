@@ -223,7 +223,7 @@ pub(super) async fn force_rebuild(
     client: &std::sync::Arc<whatsapp_rust::Client>,
     forced_by: &str,
 ) {
-    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.disconnect())
+    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.shutdown())
         .await
         .is_err()
     {

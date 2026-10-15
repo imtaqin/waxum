@@ -137,9 +137,12 @@ async fn place_encoded_audio_call(
 
     let call_id_bg = call_id.clone();
     let state_bg = state.clone();
-    let events = handle_arc.events();
+    let events = handle_arc.take_events();
     let call_id_events = call_id.clone();
     tokio::spawn(async move {
+        let Some(mut events) = events else {
+            return;
+        };
         while let Ok(ev) = events.recv().await {
             let is_rtcp = matches!(ev, whatsapp_rust::voip::CallEvent::RtcpReceived { .. });
             if is_rtcp {

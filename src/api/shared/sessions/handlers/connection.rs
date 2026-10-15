@@ -112,7 +112,7 @@ pub async fn connect_session(
             return Err(ApiError::AlreadyConnected);
         }
         if let Some(old_client) = runtime.get_client() {
-            old_client.disconnect().await;
+            old_client.shutdown().await;
         }
         runtime.set_client(None);
         runtime.set_status(SessionStatus::Disconnected);
@@ -351,7 +351,7 @@ pub(super) async fn ensure_connecting_for_wait(
     }
 
     if let Some(old_client) = runtime.get_client() {
-        old_client.disconnect().await;
+        old_client.shutdown().await;
     }
     runtime.set_client(None);
     runtime.set_status(SessionStatus::Connecting);
@@ -569,7 +569,7 @@ pub async fn disconnect_session(
 
     let client = runtime.get_client().ok_or(ApiError::NotConnected)?;
 
-    client.disconnect().await;
+    client.shutdown().await;
     runtime.set_status(SessionStatus::Disconnected);
     runtime.set_client(None);
     runtime.clear_reconnecting();
@@ -609,8 +609,13 @@ pub(crate) async fn unlink_session(state: &AppState, session_id: &str) {
     if let Ok(Some(storage_path)) = state.session_manager().get_storage_path(session_id).await {
         let db_path = format!("{}/whatsapp.db", storage_path);
         if tokio::fs::try_exists(&db_path).await.unwrap_or(false) {
-            let reset = match whatsapp_rust_sqlite_storage::SqliteStore::new(&db_path).await {
-                Ok(store) => store.reset_device(1).await.map(|_| ()),
+            let reset = match whatsapp_rust_sqlite_storage::SqliteDatabase::open(
+                &db_path,
+                whatsapp_rust_sqlite_storage::SqliteDatabaseConfig::default(),
+            )
+            .await
+            {
+                Ok(database) => database.reset_device(1).await.map(|_| ()),
                 Err(e) => Err(e),
             };
             if let Err(e) = reset {
@@ -636,10 +641,8 @@ pub(crate) async fn unlink_session(state: &AppState, session_id: &str) {
 /// short by the timeout the socket and run loop are still up. Disconnect
 /// is idempotent, so this is called whether or not logout finished.
 pub(super) async fn stop_client(session_id: &str, client: &std::sync::Arc<whatsapp_rust::Client>) {
-    client
-        .enable_auto_reconnect
-        .store(false, std::sync::atomic::Ordering::Relaxed);
-    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.disconnect())
+    client.set_auto_reconnect(false);
+    if tokio::time::timeout(REBUILD_DISCONNECT_TIMEOUT, client.shutdown())
         .await
         .is_err()
     {
@@ -762,7 +765,7 @@ pub(super) async fn connect_client(
 
     let db_path = format!("{}/whatsapp.db", storage_path);
 
-    let backend = SqliteStore::new(&db_path)
+    let backend = SqliteStore::open(&db_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     let chat_store_backend = backend.clone();
@@ -810,10 +813,7 @@ pub(super) async fn connect_client(
 
     if let Some(runtime) = state.get_session(session_id) {
         let c = bot.client();
-        c.enable_auto_reconnect.store(
-            runtime.auto_reconnect_enabled(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        c.set_auto_reconnect(runtime.auto_reconnect_enabled());
         c.set_skip_history_sync(runtime.skip_history_sync());
         match whatsapp_rust_chat_store::ChatStore::new(&chat_store_backend).await {
             Ok(store) => {
@@ -863,7 +863,7 @@ pub(super) async fn connect_client_with_pair_code(
 
     let db_path = format!("{}/whatsapp.db", storage_path);
 
-    let backend = SqliteStore::new(&db_path)
+    let backend = SqliteStore::open(&db_path)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     let chat_store_backend = backend.clone();
@@ -929,10 +929,7 @@ pub(super) async fn connect_client_with_pair_code(
 
     if let Some(runtime) = state.get_session(session_id) {
         let c = bot.client();
-        c.enable_auto_reconnect.store(
-            runtime.auto_reconnect_enabled(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        c.set_auto_reconnect(runtime.auto_reconnect_enabled());
         c.set_skip_history_sync(runtime.skip_history_sync());
         match whatsapp_rust_chat_store::ChatStore::new(&chat_store_backend).await {
             Ok(store) => {

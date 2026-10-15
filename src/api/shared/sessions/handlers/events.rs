@@ -138,11 +138,9 @@ pub(super) async fn handle_event(
             );
             if let Some(client) = runtime.get_client() {
                 if is_lock {
-                    client
-                        .enable_auto_reconnect
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    client.set_auto_reconnect(false);
                 }
-                client.disconnect().await;
+                client.shutdown().await;
             }
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
@@ -1087,7 +1085,7 @@ pub(super) fn event_to_json(
         Event::Presence(presence) => {
             serde_json::json!({
                 "jid": presence.from.to_string(),
-                "available": !presence.unavailable,
+                "available": presence.status == wacore::types::presence::PresenceStatus::Available,
                 "last_seen": presence.last_seen,
             })
         }
@@ -1113,7 +1111,7 @@ pub(super) fn event_to_json(
                 "notify": call.notify,
                 "platform": call.platform,
                 "version": call.version,
-                "timestamp": call.timestamp.timestamp(),
+                "timestamp": call.timestamp.map(|t| t.timestamp()),
                 "offline": call.offline,
                 "action": format!("{:?}", call.action),
             })
@@ -1272,7 +1270,7 @@ mod tests {
         use waproto::whatsapp::Message;
 
         fn document() -> wm::DocumentMessage {
-            wm::DocumentMessage {
+            nx!(wm::DocumentMessage {
                 media_key: Some(vec![1; 32]),
                 file_sha256: Some(vec![2; 32]),
                 file_enc_sha256: Some(vec![3; 32]),
@@ -1283,15 +1281,15 @@ mod tests {
                         .to_string(),
                 ),
                 ..Default::default()
-            }
+            })
         }
 
         #[test]
         fn plain_document_has_a_pointer() {
-            let msg = Message {
+            let msg = nx!(Message {
                 document_message: MessageField::some(document()),
                 ..Default::default()
-            };
+            });
             let ptr = extract_media_pointer(&msg).expect("pointer");
             assert_eq!(ptr.media_type, "document");
             assert_eq!(ptr.file_length, 4096);
@@ -1299,16 +1297,16 @@ mod tests {
 
         #[test]
         fn document_with_caption_wrapper_has_a_pointer() {
-            let inner = Message {
+            let inner = nx!(Message {
                 document_message: MessageField::some(document()),
                 ..Default::default()
-            };
-            let msg = Message {
-                document_with_caption_message: MessageField::some(wm::FutureProofMessage {
+            });
+            let msg = nx!(Message {
+                document_with_caption_message: MessageField::some(nx!(wm::FutureProofMessage {
                     message: MessageField::some(inner),
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let ptr = extract_media_pointer(&msg).expect("pointer");
             assert_eq!(ptr.media_type, "document");
             assert_eq!(ptr.direct_path, "/v/doc.enc");
@@ -1322,32 +1320,32 @@ mod tests {
         use waproto::whatsapp::{ContextInfo, Message};
 
         fn quoted(id: &str) -> MessageField<ContextInfo> {
-            MessageField::some(ContextInfo {
+            MessageField::some(nx!(ContextInfo {
                 stanza_id: Some(id.to_string()),
                 ..Default::default()
-            })
+            }))
         }
 
         fn quick_reply_tap() -> Message {
-            Message {
-                interactive_response_message: MessageField::some(wm::InteractiveResponseMessage {
-                    body: MessageField::some(wm::interactive_response_message::Body {
+            nx!(Message {
+                interactive_response_message: MessageField::some(nx!(wm::InteractiveResponseMessage {
+                    body: MessageField::some(nx!(wm::interactive_response_message::Body {
                         text: Some("✅ Setuju".to_string()),
                         ..Default::default()
-                    }),
+                    })),
                     context_info: quoted("3EB0D7A57AA45E7D72FE2B"),
                     interactive_response_message: Some(
                         wm::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(
-                            Box::new(wm::interactive_response_message::NativeFlowResponseMessage {
+                            Box::new(nx!(wm::interactive_response_message::NativeFlowResponseMessage {
                                 name: Some("quick_reply".to_string()),
                                 params_json: Some(r#"{"id":"approve"}"#.to_string()),
                                 version: Some(3),
-                            }),
+                            })),
                         ),
                     ),
-                }),
+                })),
                 ..Default::default()
-            }
+            })
         }
 
         fn info() -> wacore::types::message::MessageInfo {
@@ -1380,20 +1378,20 @@ mod tests {
 
         #[test]
         fn list_row_pick_reports_the_row_id_and_title() {
-            let msg = Message {
-                list_response_message: MessageField::some(wm::ListResponseMessage {
+            let msg = nx!(Message {
+                list_response_message: MessageField::some(nx!(wm::ListResponseMessage {
                     title: Some("Hari ini".to_string()),
                     list_type: Some(wm::list_response_message::ListType::SINGLE_SELECT),
-                    single_select_reply: MessageField::some(
+                    single_select_reply: MessageField::some(nx!(
                         wm::list_response_message::SingleSelectReply {
                             selected_row_id: Some("rep_today".to_string()),
-                        },
-                    ),
+                        }
+                    ),),
                     context_info: quoted("3EB096CDC66E16DACCA06C"),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let data = message_event_data(&msg, &info(), None, None);
             assert_eq!(data["message_type"], "list_response");
             assert_eq!(data["selected_id"], "rep_today");
@@ -1405,31 +1403,33 @@ mod tests {
 
         #[test]
         fn legacy_buttons_and_template_buttons_report_the_selection() {
-            let buttons = Message {
-                buttons_response_message: MessageField::some(wm::ButtonsResponseMessage {
+            let buttons = nx!(Message {
+                buttons_response_message: MessageField::some(nx!(wm::ButtonsResponseMessage {
                     selected_button_id: Some("reject".to_string()),
                     r#type: Some(wm::buttons_response_message::Type::DISPLAY_TEXT),
                     response: Some(wm::buttons_response_message::Response::SelectedDisplayText(
                         "❌ Tolak".to_string(),
                     )),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let sel = extract_interactive_selection(&buttons).unwrap();
             assert_eq!(sel.kind, "buttons_response");
             assert_eq!(sel.id.as_deref(), Some("reject"));
             assert_eq!(sel.text.as_deref(), Some("❌ Tolak"));
 
-            let template = Message {
-                template_button_reply_message: MessageField::some(wm::TemplateButtonReplyMessage {
-                    selected_id: Some("track".to_string()),
-                    selected_display_text: Some("Track order".to_string()),
-                    selected_index: Some(0),
-                    ..Default::default()
-                }),
+            let template = nx!(Message {
+                template_button_reply_message: MessageField::some(nx!(
+                    wm::TemplateButtonReplyMessage {
+                        selected_id: Some("track".to_string()),
+                        selected_display_text: Some("Track order".to_string()),
+                        selected_index: Some(0),
+                        ..Default::default()
+                    }
+                )),
                 ..Default::default()
-            };
+            });
             let (text, _, message_type, _) = extract_message_content(&template);
             assert_eq!(message_type, "template_button_reply");
             assert_eq!(text.as_deref(), Some("Track order"));
@@ -1437,65 +1437,65 @@ mod tests {
 
         #[test]
         fn a_flow_submission_keeps_the_whole_form_and_falls_back_to_id_for_text() {
-            let msg = Message {
-                interactive_response_message: MessageField::some(wm::InteractiveResponseMessage {
+            let msg = nx!(Message {
+                interactive_response_message: MessageField::some(nx!(wm::InteractiveResponseMessage {
                     interactive_response_message: Some(
                         wm::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(
-                            Box::new(wm::interactive_response_message::NativeFlowResponseMessage {
+                            Box::new(nx!(wm::interactive_response_message::NativeFlowResponseMessage {
                                 name: Some("flow".to_string()),
                                 params_json: Some(
                                     r#"{"flow_token":"t1","slot":"09:00"}"#.to_string(),
                                 ),
                                 version: Some(3),
-                            }),
+                            })),
                         ),
                     ),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let data = message_event_data(&msg, &info(), None, None);
             assert_eq!(data["message_type"], "interactive_response");
             assert_eq!(data["selected_id"], serde_json::Value::Null);
             assert_eq!(data["native_flow"]["params"]["slot"], "09:00");
 
-            let text_only = Message {
-                list_response_message: MessageField::some(wm::ListResponseMessage {
-                    single_select_reply: MessageField::some(
+            let text_only = nx!(Message {
+                list_response_message: MessageField::some(nx!(wm::ListResponseMessage {
+                    single_select_reply: MessageField::some(nx!(
                         wm::list_response_message::SingleSelectReply {
                             selected_row_id: Some("row_9".to_string()),
-                        },
-                    ),
+                        }
+                    ),),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let (text, _, _, _) = extract_message_content(&text_only);
             assert_eq!(text.as_deref(), Some("row_9"));
         }
 
         #[test]
         fn replies_in_a_disappearing_messages_chat_are_unwrapped() {
-            let wrapped = Message {
-                ephemeral_message: MessageField::some(wm::FutureProofMessage {
+            let wrapped = nx!(Message {
+                ephemeral_message: MessageField::some(nx!(wm::FutureProofMessage {
                     message: MessageField::some(quick_reply_tap()),
-                }),
+                })),
                 ..Default::default()
-            };
+            });
             let data = message_event_data(&wrapped, &info(), None, None);
             assert_eq!(data["message_type"], "interactive_response");
             assert_eq!(data["selected_id"], "approve");
             assert_eq!(data["quoted_message_id"], "3EB0D7A57AA45E7D72FE2B");
 
-            let plain_text = Message {
-                ephemeral_message: MessageField::some(wm::FutureProofMessage {
-                    message: MessageField::some(Message {
+            let plain_text = nx!(Message {
+                ephemeral_message: MessageField::some(nx!(wm::FutureProofMessage {
+                    message: MessageField::some(nx!(Message {
                         conversation: Some("halo".to_string()),
                         ..Default::default()
-                    }),
-                }),
+                    })),
+                })),
                 ..Default::default()
-            };
+            });
             let (text, _, message_type, _) = extract_message_content(&plain_text);
             assert_eq!(message_type, "text");
             assert_eq!(text.as_deref(), Some("halo"));
@@ -1503,10 +1503,10 @@ mod tests {
 
         #[test]
         fn ordinary_messages_have_no_selection() {
-            let msg = Message {
+            let msg = nx!(Message {
                 conversation: Some("hi".to_string()),
                 ..Default::default()
-            };
+            });
             assert!(extract_interactive_selection(&msg).is_none());
             let data = message_event_data(&msg, &info(), None, None);
             assert_eq!(data["selected_id"], serde_json::Value::Null);

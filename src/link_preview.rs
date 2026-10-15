@@ -504,10 +504,10 @@ mod tests {
 
     #[test]
     fn apply_fills_the_preview_fields_and_keeps_the_text() {
-        let mut m = waproto::whatsapp::message::ExtendedTextMessage {
+        let mut m = nx!(waproto::whatsapp::message::ExtendedTextMessage {
             text: Some("Read this: https://example.com/a".to_string()),
             ..Default::default()
-        };
+        });
         apply(
             &mut m,
             LinkPreview {

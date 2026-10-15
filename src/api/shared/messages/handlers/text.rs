@@ -128,9 +128,11 @@ pub async fn execute_text(
         } else {
             request
                 .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
+                .map(|id| {
+                    nx!(waproto::whatsapp::ContextInfo {
+                        stanza_id: Some(id),
+                        ..Default::default()
+                    })
                 })
                 .into()
         };
@@ -154,18 +156,18 @@ pub async fn execute_text(
     } else {
         None
     };
-    let mut extended = waproto::whatsapp::message::ExtendedTextMessage {
+    let mut extended = nx!(waproto::whatsapp::message::ExtendedTextMessage {
         text: Some(text),
         context_info,
         ..Default::default()
-    };
+    });
     if let Some(preview) = preview {
         crate::link_preview::apply(&mut extended, preview);
     }
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         extended_text_message: MessageField::some(extended),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -181,12 +183,12 @@ pub async fn execute_text(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -216,23 +218,28 @@ pub async fn edit_message(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let new_content = waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
+    let new_content = nx!(waproto::whatsapp::Message {
+        extended_text_message: MessageField::some(nx!(
             waproto::whatsapp::message::ExtendedTextMessage {
                 text: Some(request.text),
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     let result = client
-        .edit_message(to_jid.clone(), request.message_id, new_content)
+        .edit_message_raw(
+            to_jid.clone(),
+            request.message_id,
+            new_content,
+            whatsapp_rust::EditOptions::default(),
+        )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
-        message_id: result.message_id,
+        message_id: result.message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     }))
@@ -276,21 +283,21 @@ pub async fn send_reaction(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let key = waproto::whatsapp::MessageKey {
+    let key = nx!(waproto::whatsapp::MessageKey {
         remote_jid: Some(request.to.clone()),
         id: Some(request.message_id),
         from_me: Some(false),
         ..Default::default()
-    };
+    });
 
     let message_id = client
-        .send_reaction(to_jid.clone(), key, &request.emoji)
+        .send_reaction_raw(to_jid.clone(), key, &request.emoji)
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     }))
@@ -326,20 +333,22 @@ pub async fn send_pin_message(
         waproto::whatsapp::message::pin_in_chat_message::Type::UNPIN_FOR_ALL
     };
 
-    let message = waproto::whatsapp::Message {
-        pin_in_chat_message: MessageField::some(waproto::whatsapp::message::PinInChatMessage {
-            key: Some(waproto::whatsapp::MessageKey {
-                remote_jid: Some(request.chat.clone()),
-                id: Some(request.message_id),
-                from_me: Some(false),
-                ..Default::default()
-            })
-            .into(),
-            r#type: Some(pin_type),
-            sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
-        }),
+    let message = nx!(waproto::whatsapp::Message {
+        pin_in_chat_message: MessageField::some(nx!(
+            waproto::whatsapp::message::PinInChatMessage {
+                key: Some(nx!(waproto::whatsapp::MessageKey {
+                    remote_jid: Some(request.chat.clone()),
+                    id: Some(request.message_id),
+                    from_me: Some(false),
+                    ..Default::default()
+                }))
+                .into(),
+                r#type: Some(pin_type),
+                sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
+            }
+        )),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &chat_jid).await;
@@ -356,12 +365,12 @@ pub async fn send_pin_message(
         &session_id,
         &chat_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(Json(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: chat_jid.to_string(),
     }))
@@ -417,20 +426,20 @@ pub async fn execute_forward_message(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        extended_text_message: MessageField::some(nx!(
             waproto::whatsapp::message::ExtendedTextMessage {
                 text: Some(request.text),
-                context_info: MessageField::some(waproto::whatsapp::ContextInfo {
+                context_info: MessageField::some(nx!(waproto::whatsapp::ContextInfo {
                     is_forwarded: Some(true),
                     forwarding_score: Some(1),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -446,12 +455,12 @@ pub async fn execute_forward_message(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -510,22 +519,22 @@ pub async fn execute_comment(
     let target_jid = request
         .target_chat_jid
         .unwrap_or_else(|| request.to.clone());
-    let parent_key = waproto::whatsapp::MessageKey {
+    let parent_key = nx!(waproto::whatsapp::MessageKey {
         remote_jid: Some(target_jid),
         id: Some(request.target_message_id),
         from_me: Some(false),
         participant: request.target_participant,
-    };
+    });
 
     let message_id = client
         .comments()
-        .send_text(to_jid.clone(), parent_key, &request.text)
+        .send_text_raw(to_jid.clone(), parent_key, &request.text)
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -589,7 +598,7 @@ pub async fn revoke_message(
     };
 
     client
-        .revoke_message(to_jid, &request.message_id, revoke_type)
+        .revoke_message_raw(to_jid, request.message_id.as_str(), revoke_type)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
