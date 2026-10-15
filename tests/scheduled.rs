@@ -16,10 +16,10 @@ use chrono::{Duration, Utc};
 use common::{call, req_delete, req_get, req_json, Harness, TEST_TOKEN};
 use serde_json::json;
 
-use waxum::handlers::schedule::{should_schedule, SCHEDULE_GRACE};
-use waxum::models::messages::SendTextRequest;
-use waxum::models::schedule::{ScheduledStatus, SendResponse};
-use waxum::models::webhooks::WebhookEvent;
+use waxum::api::shared::messages::models::SendTextRequest;
+use waxum::api::shared::schedule::handlers::{should_schedule, SCHEDULE_GRACE};
+use waxum::api::shared::schedule::models::{ScheduledStatus, SendResponse};
+use waxum::api::shared::webhooks::models::WebhookEvent;
 
 async fn seed_session(h: &Harness, id: &str) {
     let (status, _) = call(
@@ -109,7 +109,7 @@ fn webhook_event_strings_cover_scheduled_events() {
 
 #[test]
 fn send_response_shapes_for_sent_and_pending() {
-    let sent = SendResponse::sent(waxum::models::messages::MessageResponse {
+    let sent = SendResponse::sent(waxum::api::shared::messages::models::MessageResponse {
         message_id: "MID".to_string(),
         timestamp: 123,
         to: "559999999999@s.whatsapp.net".to_string(),

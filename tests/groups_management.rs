@@ -1,5 +1,5 @@
 //! Contract tests for the group-management handlers
-//! (`src/handlers/groups_management.rs`, ten routes under
+//! (`src/api/web/groups/management.rs`, ten routes under
 //! `/api/v1/sessions/{session_id}/groups`).
 //!
 //! # How this file is organised
@@ -96,7 +96,7 @@ fn routes() -> Vec<(Method, String, Option<Value>)> {
     ]
 }
 
-/// Builds a request for one [`routes`] entry against `session_id`.
+/// Builds a request for one groups route against `session_id`.
 fn request(
     method: Method,
     session_id: &str,

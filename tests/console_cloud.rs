@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 /// The API router plus the console, wired the way `main.rs` does; the
 /// shared `Harness` only mounts the API.
 fn full_app(h: &Harness) -> Router {
-    waxum::routes::create_router()
+    waxum::api::router::create_router()
         .merge(waxum::console::console_router())
         .layer(axum::middleware::from_fn_with_state(
             h.state.clone(),

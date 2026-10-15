@@ -17,9 +17,9 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
+use waxum::api::router::create_router;
 use waxum::db::{schema, session::DbPool, sqlite_raw};
 use waxum::middleware;
-use waxum::routes::create_router;
 use waxum::state::AppState;
 
 pub const TEST_TOKEN: &str = "test-superadmin";

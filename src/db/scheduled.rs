@@ -2,7 +2,7 @@
 //!
 //! One row per parked send request: the endpoint key (e.g. `text`,
 //! `cta-url`), the original JSON body, and the UTC due time. The
-//! background scheduler in [`crate::handlers::schedule`] polls
+//! background scheduler in [`crate::api::shared::schedule::handlers`] polls
 //! [`due_pending`], claims a row via [`claim`] (pending → sending), and
 //! settles it with [`mark_sent`] / [`mark_failed`]. The management
 //! endpoints use [`list`], [`get`] and [`cancel_pending`].

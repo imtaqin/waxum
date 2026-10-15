@@ -1,6 +1,6 @@
 //! Contract tests for the bots handlers
 //! (`GET /sessions/{id}/bots`, `GET /sessions/{id}/capping`,
-//! `src/handlers/bots.rs`).
+//! `src/api/web/bots/handlers.rs`).
 //!
 //! Two GET routes, no body. `tests/presence.rs` is the worked example this
 //! mirrors: auth, unknown session, and DB-only session all resolve through

@@ -16,11 +16,11 @@ use axum::http::{Method, StatusCode};
 use common::{call, req_get, req_json, Harness, TEST_TOKEN};
 use serde_json::json;
 
-use waxum::handlers::schedule::validate_body;
-use waxum::models::blast::{
+use waxum::api::shared::blast::models::{
     BlastJobStatus, BlastOptions, BlastRecipientStatus, CreateBlastRequest,
 };
-use waxum::models::webhooks::WebhookEvent;
+use waxum::api::shared::schedule::handlers::validate_body;
+use waxum::api::shared::webhooks::models::WebhookEvent;
 
 async fn seed_session(h: &Harness, id: &str) {
     let (status, _) = call(
