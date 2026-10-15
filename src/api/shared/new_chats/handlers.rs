@@ -119,6 +119,15 @@ fn retry_after(started: &[i64], now: i64, max_new_chats: i64, window_hours: i64)
     Some((frees_slot + window - now).max(1))
 }
 
+/// New chats still allowed in the configured window.
+fn remaining(started: &[i64], now: i64, max_new_chats: i64, window_hours: i64) -> i64 {
+    let used = started
+        .iter()
+        .filter(|t| **t > now - window_hours * HOUR)
+        .count() as i64;
+    (max_new_chats - used).max(0)
+}
+
 /// Whether sends to this JID take part at all.
 fn is_direct_chat(jid: &str) -> bool {
     jid.ends_with("@s.whatsapp.net") || jid.ends_with("@lid")
@@ -254,6 +263,9 @@ pub struct NewChatLimitResponse {
     pub limit: Option<NewChatLimit>,
     /// New chats started through waxum, by rolling window.
     pub new_chats: NewChatCounts,
+    /// New chats still allowed inside the limit's own window, never below
+    /// 0. `null` when no limit is set.
+    pub remaining: Option<i64>,
     /// Seconds until the next new chat is allowed, when the limit is
     /// reached right now. `null` otherwise.
     pub retry_after_seconds: Option<i64>,
@@ -280,6 +292,7 @@ async fn describe(state: &AppState, session_id: &str) -> Result<NewChatLimitResp
     let started = store::started_since(pool, session_id, now - window_hours * HOUR).await?;
     let incidents = store::incidents(pool, session_id).await?;
     Ok(NewChatLimitResponse {
+        remaining: limit.map(|(max, window)| remaining(&started, now, max, window)),
         retry_after_seconds: limit
             .and_then(|(max, window)| retry_after(&started, now, max, window)),
         limit: limit.map(|(max_new_chats, window_hours)| NewChatLimit {
@@ -389,6 +402,71 @@ pub async fn clear_new_chat_limit(
     Ok(Json(describe(&state, &session_id).await?))
 }
 
+/// Whether the session already has a chat with a number.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ChatExistsResponse {
+    /// The JID that was checked, as resolved.
+    #[schema(example = "628111111111@s.whatsapp.net")]
+    pub jid: String,
+    /// `true` when the session started this chat through waxum or has any
+    /// stored message with it, in either direction.
+    pub exists: bool,
+    /// `true` when a send to this JID would start a new chat and count
+    /// toward the limit: a direct chat that does not exist yet.
+    pub counts_as_new_chat: bool,
+}
+
+/// Check whether the session already has a chat with a number or JID.
+///
+/// Answers from what waxum has stored, so chats that were only ever used
+/// from the phone, or whose messages were never ingested, report as
+/// missing. It does not ask WhatsApp whether the number is registered; use
+/// the contact check for that. A phone number is resolved to the contact's
+/// LID when the session is connected, since history may be stored under
+/// either.
+#[utoipa::path(
+    get,
+    path = "/api/v1/sessions/{session_id}/chats/{jid}/exists",
+    tag = "sessions",
+    security(("bearer_auth" = [])),
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Phone number or JID")
+    ),
+    responses(
+        (status = 200, description = "Whether the chat exists", body = ChatExistsResponse),
+        (status = 400, description = "Invalid JID"),
+        (status = 404, description = "Session not found")
+    )
+)]
+pub async fn chat_exists(
+    State(state): State<AppState>,
+    Path((session_id, requested)): Path<(String, String)>,
+) -> Result<Json<ChatExistsResponse>, ApiError> {
+    require_session(&state, &session_id).await?;
+    let parsed = crate::api::shared::messages::handlers::parse_jid(&requested)?;
+    let resolved = match state
+        .get_session(&session_id)
+        .and_then(|runtime| runtime.get_live_client())
+    {
+        Some(client) => {
+            crate::api::shared::messages::handlers::resolve_recipient_jid(client, parsed.clone())
+                .await
+        }
+        None => parsed.clone(),
+    };
+    let mut jids = vec![resolved.to_string()];
+    if parsed != resolved {
+        jids.push(parsed.to_string());
+    }
+    let exists = store::chat_known(state.session_manager().pool(), &session_id, &jids).await?;
+    Ok(Json(ChatExistsResponse {
+        counts_as_new_chat: !exists && is_direct_chat(&jids[0]),
+        jid: jids[0].clone(),
+        exists,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,6 +513,14 @@ mod tests {
             None,
             "nothing inside a 1 h window"
         );
+    }
+
+    #[test]
+    fn remaining_counts_down_inside_the_limits_own_window() {
+        let started = [NOW - 30 * HOUR, NOW - 2 * HOUR, NOW - HOUR];
+        assert_eq!(remaining(&started, NOW, 5, 24), 3);
+        assert_eq!(remaining(&started, NOW, 2, 24), 0, "never negative");
+        assert_eq!(remaining(&started, NOW, 5, 48), 2, "wider window sees more");
     }
 
     #[test]
