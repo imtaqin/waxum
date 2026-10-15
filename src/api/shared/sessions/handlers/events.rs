@@ -457,6 +457,10 @@ pub(super) fn extract_media_metadata(msg: &waproto::whatsapp::Message) -> serde_
 /// `/media/download` requires (an incomplete pointer is useless, so a
 /// message with one is stored with no media pointer at all rather than
 /// a partially-filled one).
+///
+/// The message is unwrapped first ([`MessageExt::get_base_message`]), because
+/// a document sent with a caption arrives inside `document_with_caption_message`
+/// and would otherwise be stored without a pointer.
 pub(crate) fn extract_media_pointer(
     msg: &waproto::whatsapp::Message,
 ) -> Option<crate::db::messages::MediaPointer> {
@@ -479,6 +483,7 @@ pub(crate) fn extract_media_pointer(
         };
     }
 
+    let msg = msg.get_base_message();
     if let Some(im) = msg.image_message.as_option() {
         return pointer!(im, "image");
     }
@@ -1259,6 +1264,56 @@ pub(super) fn event_to_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod media_pointer {
+        use super::super::*;
+        use waproto::buffa::MessageField;
+        use waproto::whatsapp::message as wm;
+        use waproto::whatsapp::Message;
+
+        fn document() -> wm::DocumentMessage {
+            wm::DocumentMessage {
+                media_key: Some(vec![1; 32]),
+                file_sha256: Some(vec![2; 32]),
+                file_enc_sha256: Some(vec![3; 32]),
+                direct_path: Some("/v/doc.enc".to_string()),
+                file_length: Some(4096),
+                mimetype: Some(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        .to_string(),
+                ),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn plain_document_has_a_pointer() {
+            let msg = Message {
+                document_message: MessageField::some(document()),
+                ..Default::default()
+            };
+            let ptr = extract_media_pointer(&msg).expect("pointer");
+            assert_eq!(ptr.media_type, "document");
+            assert_eq!(ptr.file_length, 4096);
+        }
+
+        #[test]
+        fn document_with_caption_wrapper_has_a_pointer() {
+            let inner = Message {
+                document_message: MessageField::some(document()),
+                ..Default::default()
+            };
+            let msg = Message {
+                document_with_caption_message: MessageField::some(wm::FutureProofMessage {
+                    message: MessageField::some(inner),
+                }),
+                ..Default::default()
+            };
+            let ptr = extract_media_pointer(&msg).expect("pointer");
+            assert_eq!(ptr.media_type, "document");
+            assert_eq!(ptr.direct_path, "/v/doc.enc");
+        }
+    }
 
     mod interactive_replies {
         use super::super::*;
