@@ -142,9 +142,11 @@ pub async fn add_message_label(
         .chat_jid
         .parse()
         .map_err(|e| ApiError::InvalidJid(format!("{}: {e}", req.chat_jid)))?;
+    let message_id = whatsapp_rust::MessageId::try_from(req.message_id.clone())
+        .map_err(|e| ApiError::BadRequest(format!("invalid message_id: {e}")))?;
     client
         .labels()
-        .add_message_label(&label_id, &chat_jid, &req.message_id)
+        .add_message_label(&label_id, &chat_jid, &message_id)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(serde_json::json!({ "success": true })))
@@ -169,9 +171,11 @@ pub async fn remove_message_label(
         .chat_jid
         .parse()
         .map_err(|e| ApiError::InvalidJid(format!("{}: {e}", req.chat_jid)))?;
+    let message_id = whatsapp_rust::MessageId::try_from(req.message_id.clone())
+        .map_err(|e| ApiError::BadRequest(format!("invalid message_id: {e}")))?;
     client
         .labels()
-        .remove_message_label(&label_id, &chat_jid, &req.message_id)
+        .remove_message_label(&label_id, &chat_jid, &message_id)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(serde_json::json!({ "success": true })))

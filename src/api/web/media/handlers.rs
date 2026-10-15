@@ -186,9 +186,10 @@ pub async fn download_media(
         &file_enc_sha256,
         request.file_length,
         request.media_type.to_wacore_media_type(),
-    );
+    )
+    .map_err(|e| ApiError::BadRequest(format!("Invalid media reference: {e}")))?;
     let data = client
-        .download_from_params(&params)
+        .download(&params, Default::default())
         .await
         .map_err(|e| ApiError::MediaDownloadFailed(e.to_string()))?;
 

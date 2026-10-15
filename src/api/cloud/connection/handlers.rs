@@ -59,7 +59,7 @@ pub async fn connect_cloud(
     manager.connect_cloud(&session_id, &request).await?;
     if let Some(runtime) = state.remove_session(&session_id) {
         if let Some(client) = runtime.get_client() {
-            client.disconnect().await;
+            client.shutdown().await;
         }
         runtime.set_client(None);
     }

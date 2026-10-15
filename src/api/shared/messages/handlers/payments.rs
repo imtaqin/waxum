@@ -69,8 +69,8 @@ pub async fn execute_order(
         _ => None,
     });
 
-    let message = waproto::whatsapp::Message {
-        order_message: MessageField::some(waproto::whatsapp::message::OrderMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        order_message: MessageField::some(nx!(waproto::whatsapp::message::OrderMessage {
             order_id: Some(request.order_id),
             item_count: request.item_count,
             status,
@@ -81,9 +81,9 @@ pub async fn execute_order(
             total_amount1000: request.total_amount_1000,
             total_currency_code: request.total_currency_code,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -99,12 +99,12 @@ pub async fn execute_order(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -166,16 +166,16 @@ pub async fn execute_invoice(
         _ => None,
     });
 
-    let message = waproto::whatsapp::Message {
-        invoice_message: MessageField::some(waproto::whatsapp::message::InvoiceMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        invoice_message: MessageField::some(nx!(waproto::whatsapp::message::InvoiceMessage {
             note: request.note,
             token: request.token,
             attachment_type,
             attachment_mimetype: request.attachment_mimetype,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -191,12 +191,12 @@ pub async fn execute_invoice(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -252,17 +252,17 @@ pub async fn execute_payment_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        payment_invite_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        payment_invite_message: MessageField::some(nx!(
             waproto::whatsapp::message::PaymentInviteMessage {
                 service_type: request.service_type.and_then(
                     waproto::whatsapp::message::payment_invite_message::ServiceType::from_i32,
                 ),
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -278,12 +278,12 @@ pub async fn execute_payment_invite(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -339,34 +339,38 @@ pub async fn execute_payment(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let note_message = request.note.map(|text| waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
-            waproto::whatsapp::message::ExtendedTextMessage {
-                text: Some(text),
-                ..Default::default()
-            },
-        ),
-        ..Default::default()
+    let note_message = request.note.map(|text| {
+        nx!(waproto::whatsapp::Message {
+            extended_text_message: MessageField::some(nx!(
+                waproto::whatsapp::message::ExtendedTextMessage {
+                    text: Some(text),
+                    ..Default::default()
+                }
+            ),),
+            ..Default::default()
+        })
     });
 
-    let request_message_key = request
-        .request_message_id
-        .map(|id| waproto::whatsapp::MessageKey {
+    let request_message_key = request.request_message_id.map(|id| {
+        nx!(waproto::whatsapp::MessageKey {
             remote_jid: Some(request.to.clone()),
             id: Some(id),
             from_me: Some(false),
             ..Default::default()
-        });
+        })
+    });
 
-    let message = waproto::whatsapp::Message {
-        send_payment_message: MessageField::some(waproto::whatsapp::message::SendPaymentMessage {
-            note_message: note_message.into(),
-            request_message_key: request_message_key.into(),
-            transaction_data: request.transaction_data,
-            ..Default::default()
-        }),
+    let message = nx!(waproto::whatsapp::Message {
+        send_payment_message: MessageField::some(nx!(
+            waproto::whatsapp::message::SendPaymentMessage {
+                note_message: note_message.into(),
+                request_message_key: request_message_key.into(),
+                transaction_data: request.transaction_data,
+                ..Default::default()
+            }
+        )),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -382,12 +386,12 @@ pub async fn execute_payment(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -443,18 +447,20 @@ pub async fn execute_request_payment(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let note_message = request.note.map(|text| waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
-            waproto::whatsapp::message::ExtendedTextMessage {
-                text: Some(text),
-                ..Default::default()
-            },
-        ),
-        ..Default::default()
+    let note_message = request.note.map(|text| {
+        nx!(waproto::whatsapp::Message {
+            extended_text_message: MessageField::some(nx!(
+                waproto::whatsapp::message::ExtendedTextMessage {
+                    text: Some(text),
+                    ..Default::default()
+                }
+            ),),
+            ..Default::default()
+        })
     });
 
-    let message = waproto::whatsapp::Message {
-        request_payment_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        request_payment_message: MessageField::some(nx!(
             waproto::whatsapp::message::RequestPaymentMessage {
                 note_message: note_message.into(),
                 currency_code_iso4217: Some(request.currency_code),
@@ -462,10 +468,10 @@ pub async fn execute_request_payment(
                 request_from: Some(request.to.clone()),
                 expiry_timestamp: request.expiry_timestamp,
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -481,12 +487,12 @@ pub async fn execute_request_payment(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -542,20 +548,20 @@ pub async fn execute_cancel_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        cancel_payment_request_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        cancel_payment_request_message: MessageField::some(nx!(
             waproto::whatsapp::message::CancelPaymentRequestMessage {
-                key: Some(waproto::whatsapp::MessageKey {
+                key: Some(nx!(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.request_message_id),
                     from_me: Some(false),
                     ..Default::default()
-                })
+                }))
                 .into(),
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -571,12 +577,12 @@ pub async fn execute_cancel_payment_request(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -632,20 +638,20 @@ pub async fn execute_decline_payment_request(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        decline_payment_request_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        decline_payment_request_message: MessageField::some(nx!(
             waproto::whatsapp::message::DeclinePaymentRequestMessage {
-                key: Some(waproto::whatsapp::MessageKey {
+                key: Some(nx!(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.request_message_id),
                     from_me: Some(false),
                     ..Default::default()
-                })
+                }))
                 .into(),
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -661,12 +667,12 @@ pub async fn execute_decline_payment_request(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })

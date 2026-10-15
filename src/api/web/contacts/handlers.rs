@@ -194,11 +194,21 @@ pub async fn get_profile_picture(
     let client = get_client(&state, &session_id)?;
     let jid: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
 
+    use wacore_binary::JidExt as _;
+    let target = if jid.is_group() {
+        whatsapp_rust::ProfilePictureTarget::Group(&jid)
+    } else {
+        whatsapp_rust::ProfilePictureTarget::Contact(&jid)
+    };
     let picture = client
-        .contacts()
-        .get_profile_picture(&jid, false)
+        .pictures()
+        .lookup(whatsapp_rust::ProfilePictureRequest::new(
+            target,
+            whatsapp_rust::ProfilePictureType::Full,
+        ))
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .into_found();
 
     match picture {
         Some(pic) => Ok(Json(ProfilePictureResponse {

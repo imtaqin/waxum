@@ -47,15 +47,15 @@ pub async fn mex_query(
 ) -> Result<Json<MexApiResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
 
-    let mex_request = whatsapp_rust::MexRequest {
-        doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomQuery"),
-        declared_variables: &[],
-        variables: request.variables,
-    };
+    let mex_request = whatsapp_rust::MexRequest::new_raw(
+        build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomQuery"),
+        &[],
+        request.variables,
+    );
 
     let result = client
         .mex()
-        .query(mex_request)
+        .execute(mex_request)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -99,15 +99,15 @@ pub async fn mex_mutate(
 ) -> Result<Json<MexApiResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
 
-    let mex_request = whatsapp_rust::MexRequest {
-        doc: build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomMutation"),
-        declared_variables: &[],
-        variables: request.variables,
-    };
+    let mex_request = whatsapp_rust::MexRequest::new_raw(
+        build_mex_doc(request.doc_name, request.doc_id, "WAWebMexCustomMutation"),
+        &[],
+        request.variables,
+    );
 
     let result = client
         .mex()
-        .mutate(mex_request)
+        .execute(mex_request)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
