@@ -271,6 +271,7 @@ use utoipa::OpenApi;
         crate::api::shared::new_chats::handlers::get_new_chat_limit,
         crate::api::shared::new_chats::handlers::set_new_chat_limit,
         crate::api::shared::new_chats::handlers::clear_new_chat_limit,
+        crate::api::shared::new_chats::handlers::chat_exists,
 
         crate::api::web::bots::handlers::list_bots,
         crate::api::web::bots::handlers::get_capping,
