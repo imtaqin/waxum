@@ -1,6 +1,6 @@
 //! Contract tests for the chatstate handlers
 //! (`POST /sessions/{id}/chatstate/send`, `POST /sessions/{id}/chatstate/typing`,
-//! `src/handlers/chatstate.rs`).
+//! `src/api/web/chatstate/handlers.rs`).
 //!
 //! Both routes call `get_client` before touching their body's `to` field, so
 //! (unlike some `calls.rs` routes) the client gate always runs first: an

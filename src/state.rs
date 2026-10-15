@@ -22,10 +22,10 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use whatsapp_rust::Client;
 
+use crate::api::shared::sessions::models::SessionStatus;
+use crate::api::shared::webhooks::models::{WebhookConfig, WebhookDlqEntry};
 use crate::db::session::DbPool;
 use crate::db::SessionManager;
-use crate::models::sessions::SessionStatus;
-use crate::models::webhooks::{WebhookConfig, WebhookDlqEntry};
 use crate::nats::NatsManager;
 
 /// Value of the `X-Webhook-Signature-Version` header sent with every
@@ -184,7 +184,7 @@ pub struct SessionState {
     /// `Event::Connected` (or when the session goes away entirely via
     /// `Event::LoggedOut`). `None` means "not currently retrying" -- either
     /// genuinely connected, or never connected in the first place. The
-    /// reconnect watchdog ([`crate::handlers::sessions::run_reconnect_watchdog`])
+    /// reconnect watchdog ([`crate::api::shared::sessions::handlers::run_reconnect_watchdog`])
     /// reads this to decide when a session has been stuck retrying for too
     /// long and needs a forced full rebuild rather than waiting on
     /// whatsapp-rust's own backoff indefinitely.
@@ -609,7 +609,7 @@ struct AppStateInner {
     /// Edge-TTS voice list, fetched once on first `GET /api/v1/voices`
     /// and reused after that — the list is stable per Edge-TTS release,
     /// so there is no point re-querying it on every request.
-    pub voice_cache: RwLock<Option<Vec<crate::models::calls::VoiceEntry>>>,
+    pub voice_cache: RwLock<Option<Vec<crate::api::web::calls::models::VoiceEntry>>>,
 }
 
 /// A structured event captured from `broadcast_to_webhooks` for both the
@@ -888,11 +888,11 @@ impl AppState {
         ring.iter().rev().take(limit).cloned().collect()
     }
 
-    pub fn cached_voices(&self) -> Option<Vec<crate::models::calls::VoiceEntry>> {
+    pub fn cached_voices(&self) -> Option<Vec<crate::api::web::calls::models::VoiceEntry>> {
         self.inner.voice_cache.read().clone()
     }
 
-    pub fn set_cached_voices(&self, voices: Vec<crate::models::calls::VoiceEntry>) {
+    pub fn set_cached_voices(&self, voices: Vec<crate::api::web::calls::models::VoiceEntry>) {
         *self.inner.voice_cache.write() = Some(voices);
     }
 
@@ -1163,7 +1163,7 @@ impl AppState {
     /// Same as [`Self::session_iter`], but keeping each runtime's session
     /// id alongside it -- needed by anything that has to act back on a
     /// specific session (e.g. the reconnect watchdog calling
-    /// [`crate::handlers::sessions::connect_client`]), since
+    /// [`crate::api::shared::sessions::handlers::connect_client`]), since
     /// [`SessionState`] doesn't carry its own id.
     pub fn session_iter_with_ids(&self) -> Vec<(String, Arc<SessionState>)> {
         self.inner

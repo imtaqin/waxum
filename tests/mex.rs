@@ -1,4 +1,4 @@
-//! Contract tests for the mex handlers (`src/handlers/mex.rs`), the
+//! Contract tests for the mex handlers (`src/api/web/mex/handlers.rs`), the
 //! passthrough to WhatsApp's internal GraphQL ("mex") endpoint.
 //!
 //! # The contract
@@ -9,7 +9,7 @@
 //! they were published in the OpenAPI document while every request to them
 //! fell through to the router's 404. The two characterization tests that
 //! pinned that gap lived here and were deleted when the routes were
-//! registered in `src/routes/mod.rs` (IMT-28); the four tests below are the
+//! registered in `src/api/web/mex/routes.rs` (IMT-28); the four tests below are the
 //! contract the handlers had implemented all along.
 //!
 //! Both handlers resolve their client through the same local `get_client` as

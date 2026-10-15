@@ -1,5 +1,5 @@
 //! Contract tests for the label, quick-reply and link-preview handlers
-//! (`src/handlers/labels.rs`, nine routes under
+//! (`src/api/web/labels/handlers.rs`, nine routes under
 //! `/api/v1/sessions/{session_id}`).
 //!
 //! # How this file is organised

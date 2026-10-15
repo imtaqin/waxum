@@ -2,8 +2,8 @@
 //!
 //! One `messages` row per ingested message, BOTH directions: incoming
 //! rows are captured from the event stream in
-//! [`crate::handlers::sessions`], outgoing rows from the `execute_*`
-//! send core in [`crate::handlers::messages`]. Ingestion is best-effort
+//! [`crate::api::shared::sessions::handlers`], outgoing rows from the `execute_*`
+//! send core in [`crate::api::shared::messages::handlers`]. Ingestion is best-effort
 //! everywhere — a failed insert must never break send or receive, so
 //! callers log and continue.
 //!
@@ -63,12 +63,12 @@ pub struct NewMessage {
     /// Download pointers for media message types, `None` for
     /// text/location/contact/etc. All base64-encoded except
     /// `direct_path`, `media_type`, and `mimetype` — the same shapes
-    /// [`crate::models::media::DownloadMediaRequest`] expects, so a
+    /// [`crate::api::web::media::models::DownloadMediaRequest`] expects, so a
     /// caller can round-trip these fields straight into
     /// `POST /media/download` with no re-encoding.
     pub media: Option<MediaPointer>,
     /// `ContextInfo.stanzaId` when this message is a reply, `None`
-    /// otherwise. See [`crate::handlers::sessions::extract_quoted_context`].
+    /// otherwise. See [`crate::api::shared::sessions::handlers::extract_quoted_context`].
     pub quoted_message_id: Option<String>,
     /// `ContextInfo.participant` — the quoted message's sender — when
     /// this message is a reply and the field was present on the wire.
@@ -87,7 +87,7 @@ pub struct MediaPointer {
     pub direct_path: String,
     pub file_length: i64,
     /// One of `image`, `video`, `audio`, `document`, `sticker` —
-    /// matches `crate::models::media::MediaType`'s snake_case wire
+    /// matches `crate::api::web::media::models::MediaType`'s snake_case wire
     /// form.
     pub media_type: String,
     pub mimetype: String,

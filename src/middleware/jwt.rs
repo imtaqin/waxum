@@ -20,7 +20,7 @@
 //! that session's own `cloud_app_secret`, never a waxum bearer token.
 //! `.../cloud/flow-endpoint/exchange` (the WhatsApp Flows Data Exchange
 //! endpoint) is exempt for the same reason; see
-//! [`crate::handlers::cloud_flows`] for its signature + RSA/AES checks.
+//! [`crate::api::cloud::flows::handlers`] for its signature + RSA/AES checks.
 //! `/swagger-ui` and `/api-docs` go
 //! through the same check as everything else — either header carries the
 //! plain `SUPERADMIN_TOKEN` (or a superadmin JWT), or the browser already
