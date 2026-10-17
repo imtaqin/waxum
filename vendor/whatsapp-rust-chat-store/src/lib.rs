@@ -39,6 +39,7 @@ mod store;
 pub mod types;
 
 pub use error::{ChatStoreError, Result};
+pub use materialize::{base_message, message_kind};
 pub use store::{ChatStore, KIND_SYSTEM, SYSTEM_SEPARATOR};
 pub use types::{
     ArrivalCursor, ChatCursor, ChatEntry, ContactEntry, MediaRef, MessageCursor, MessageKind,

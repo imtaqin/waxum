@@ -229,7 +229,7 @@ impl ChatStore {
         message: &wa::Message,
         timestamp: DateTime<Utc>,
     ) -> Result<()> {
-        let base = wacore::proto_helpers::MessageExt::get_base_message(message);
+        let base = crate::materialize::base_message(message);
         self.tx
             .send(WriterMsg::Outgoing {
                 chat: chat.clone(),
@@ -256,7 +256,7 @@ impl ChatStore {
         new_content: &wa::Message,
         timestamp: DateTime<Utc>,
     ) -> Result<()> {
-        let base = wacore::proto_helpers::MessageExt::get_base_message(new_content);
+        let base = crate::materialize::base_message(new_content);
         self.tx
             .send(WriterMsg::Edit {
                 chat: chat.clone(),
