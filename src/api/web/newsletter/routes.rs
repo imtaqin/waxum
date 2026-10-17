@@ -12,6 +12,14 @@ pub fn session_routes() -> Router<AppState> {
             get(handlers::list_messages),
         )
         .route(
+            "/{session_id}/newsletters/invite/{code}",
+            get(handlers::get_metadata_by_invite),
+        )
+        .route(
+            "/{session_id}/newsletters/{jid}/messages/{server_id}/react",
+            post(handlers::react_to_post),
+        )
+        .route(
             "/{session_id}/newsletters/subscribed",
             get(handlers::list_subscribed),
         )
