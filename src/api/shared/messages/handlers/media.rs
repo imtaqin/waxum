@@ -100,13 +100,15 @@ pub async fn execute_image(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
-            request
-                .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
-                })
-                .into()
+            reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into()
         };
 
     let message = waproto::whatsapp::Message {
@@ -237,13 +239,15 @@ pub async fn execute_video(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
-            request
-                .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
-                })
-                .into()
+            reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into()
         };
 
     let message = waproto::whatsapp::Message {
@@ -380,6 +384,15 @@ pub async fn execute_audio(
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             ptt: Some(request.ptt),
+            context_info: reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into(),
             ..Default::default()
         }),
         ..Default::default()
@@ -497,13 +510,15 @@ pub async fn execute_document(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
-            request
-                .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
-                })
-                .into()
+            reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into()
         };
 
     let message = waproto::whatsapp::Message {
@@ -640,6 +655,15 @@ pub async fn execute_sticker(
             file_enc_sha256: Some(upload.file_enc_sha256.to_vec()),
             file_length: Some(data.len() as u64),
             mimetype: Some("image/webp".to_string()),
+            context_info: reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into(),
             ..Default::default()
         }),
         ..Default::default()

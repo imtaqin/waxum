@@ -126,13 +126,15 @@ pub async fn execute_text(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
-            request
-                .reply_to
-                .map(|id| waproto::whatsapp::ContextInfo {
-                    stanza_id: Some(id),
-                    ..Default::default()
-                })
-                .into()
+            reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into()
         };
 
     let mut text = request.text;
@@ -227,9 +229,23 @@ pub async fn edit_message(
     };
 
     let result = client
-        .edit_message(to_jid.clone(), request.message_id, new_content)
+        .edit_message(
+            to_jid.clone(),
+            request.message_id.clone(),
+            new_content.clone(),
+        )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    if let Some(store) = chat_store(&state, &session_id) {
+        if let Err(e) = store.record_edit(
+            &to_jid,
+            &request.message_id,
+            &new_content,
+            chrono::Utc::now(),
+        ) {
+            tracing::warn!("chat store edit failed: {}", e);
+        }
+    }
 
     Ok(Json(MessageResponse {
         message_id: result.message_id,
@@ -276,18 +292,18 @@ pub async fn send_reaction(
     let client = get_client(&state, &session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let key = waproto::whatsapp::MessageKey {
-        remote_jid: Some(request.to.clone()),
-        id: Some(request.message_id),
-        from_me: Some(false),
-        ..Default::default()
-    };
+    let key = message_key_for(&state, &session_id, &to_jid, &request.message_id).await;
 
     let message_id = client
-        .send_reaction(to_jid.clone(), key, &request.emoji)
+        .send_reaction(to_jid.clone(), key.clone(), &request.emoji)
         .await
         .map(|r| r.message_id)
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    if let Some(store) = chat_store(&state, &session_id) {
+        if let Err(e) = store.record_reaction(&to_jid, &key, &request.emoji, chrono::Utc::now()) {
+            tracing::warn!("chat store reaction failed: {}", e);
+        }
+    }
 
     Ok(Json(MessageResponse {
         message_id,
@@ -328,13 +344,8 @@ pub async fn send_pin_message(
 
     let message = waproto::whatsapp::Message {
         pin_in_chat_message: MessageField::some(waproto::whatsapp::message::PinInChatMessage {
-            key: Some(waproto::whatsapp::MessageKey {
-                remote_jid: Some(request.chat.clone()),
-                id: Some(request.message_id),
-                from_me: Some(false),
-                ..Default::default()
-            })
-            .into(),
+            key: Some(message_key_for(&state, &session_id, &chat_jid, &request.message_id).await)
+                .into(),
             r#type: Some(pin_type),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
         }),
@@ -589,9 +600,14 @@ pub async fn revoke_message(
     };
 
     client
-        .revoke_message(to_jid, &request.message_id, revoke_type)
+        .revoke_message(to_jid.clone(), &request.message_id, revoke_type)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
+    if let Some(store) = chat_store(&state, &session_id) {
+        if let Err(e) = store.record_revoke(&to_jid, &request.message_id, chrono::Utc::now()) {
+            tracing::warn!("chat store revoke failed: {}", e);
+        }
+    }
 
     Ok(Json(SuccessResponse { success: true }))
 }

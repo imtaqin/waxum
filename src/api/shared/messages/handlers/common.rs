@@ -236,3 +236,101 @@ mod tests {
         assert_eq!(parse_presence_delay(Some(&u64::MAX.to_string())), 10_000);
     }
 }
+
+/// The session's chat store, when its client is up.
+pub(crate) fn chat_store(
+    state: &AppState,
+    session_id: &str,
+) -> Option<std::sync::Arc<whatsapp_rust_chat_store::ChatStore>> {
+    state.get_session(session_id)?.get_chat_store()
+}
+
+/// The chat store's copy of a message in this session, if it has one.
+pub(crate) async fn stored_message(
+    state: &AppState,
+    session_id: &str,
+    chat: &Jid,
+    message_id: &str,
+) -> Option<whatsapp_rust_chat_store::StoredMessage> {
+    let store = state.get_session(session_id)?.get_chat_store()?;
+    store.message(chat, message_id).await.ok().flatten()
+}
+
+/// The full key of a message: who sent it comes from the chat store, so
+/// keys for our own messages and for other members' group messages are
+/// right. An unknown message falls back to an incoming key with no
+/// participant.
+pub(crate) async fn message_key_for(
+    state: &AppState,
+    session_id: &str,
+    chat: &Jid,
+    message_id: &str,
+) -> waproto::whatsapp::MessageKey {
+    let stored = stored_message(state, session_id, chat, message_id).await;
+    let from_me = stored.as_ref().is_some_and(|m| m.from_me);
+    let participant = stored
+        .as_ref()
+        .filter(|m| !m.from_me && chat.server == wacore_binary::jid::Server::Group)
+        .map(|m| m.sender_jid.to_non_ad());
+    waproto::whatsapp::MessageKey {
+        remote_jid: Some(chat.to_string()),
+        id: Some(message_id.to_string()),
+        from_me: Some(from_me),
+        participant: participant.map(|j| j.to_string()),
+    }
+}
+
+/// A copy of `message` fit to travel as a quote: the innermost content
+/// without its own reply context, so quotes do not nest.
+fn quotable(message: &waproto::whatsapp::Message) -> waproto::whatsapp::Message {
+    use wacore::proto_helpers::MessageExt;
+    let mut base = message.get_base_message().clone();
+    macro_rules! strip {
+        ($($field:ident),*) => {
+            $(if let Some(m) = base.$field.as_option_mut() {
+                m.context_info = Default::default();
+            })*
+        };
+    }
+    strip!(
+        extended_text_message,
+        image_message,
+        video_message,
+        audio_message,
+        document_message,
+        sticker_message,
+        contact_message,
+        location_message
+    );
+    base
+}
+
+/// `ContextInfo` for a reply to `reply_to`: the quoted id plus, when the
+/// chat store has the message, its sender and content, which recipients
+/// need to render the quote (and group members need to know whom it
+/// quotes).
+pub(crate) async fn reply_context(
+    state: &AppState,
+    session_id: &str,
+    client: &whatsapp_rust::Client,
+    chat: &Jid,
+    reply_to: Option<String>,
+) -> Option<waproto::whatsapp::ContextInfo> {
+    let id = reply_to.filter(|id| !id.is_empty())?;
+    let mut context = waproto::whatsapp::ContextInfo {
+        stanza_id: Some(id.clone()),
+        ..Default::default()
+    };
+    if let Some(stored) = stored_message(state, session_id, chat, &id).await {
+        let sender = if stored.from_me {
+            client.pn()
+        } else {
+            Some(stored.sender_jid.to_non_ad())
+        };
+        context.participant = sender.map(|j| j.to_string());
+        if let Some(message) = stored.message.as_deref() {
+            context.quoted_message = waproto::buffa::MessageField::some(quotable(message));
+        }
+    }
+    Some(context)
+}
