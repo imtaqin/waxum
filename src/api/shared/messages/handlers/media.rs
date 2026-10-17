@@ -384,6 +384,11 @@ pub async fn execute_audio(
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             ptt: Some(request.ptt),
+            seconds: request.seconds,
+            waveform: request
+                .waveform
+                .as_deref()
+                .and_then(|w| base64::engine::general_purpose::STANDARD.decode(w).ok()),
             context_info: reply_context(
                 state,
                 session_id,

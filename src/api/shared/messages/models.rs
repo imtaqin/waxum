@@ -127,6 +127,12 @@ pub struct SendAudioRequest {
     #[serde(default)]
     pub ptt: bool,
 
+    /// Duration in seconds, shown on the voice note before it downloads.
+    pub seconds: Option<u32>,
+
+    /// Voice-note waveform: base64 of up to 64 bytes, each 0 to 100.
+    pub waveform: Option<String>,
+
     pub reply_to: Option<String>,
 
     /// Optional ISO-8601 UTC time to defer delivery until. When set in
