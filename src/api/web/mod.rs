@@ -16,6 +16,7 @@ pub mod business;
 pub mod calls;
 pub mod chats;
 pub mod chatstate;
+pub mod communities;
 pub mod contacts;
 pub mod fake_reply;
 pub mod groups;
@@ -43,6 +44,7 @@ pub fn session_routes() -> Router<AppState> {
         .merge(business::routes::session_routes())
         .merge(calls::routes::session_routes())
         .merge(chats::routes::session_routes())
+        .merge(communities::routes::session_routes())
         .merge(chatstate::routes::session_routes())
         .merge(contacts::routes::session_routes())
         .merge(groups::routes::session_routes())
