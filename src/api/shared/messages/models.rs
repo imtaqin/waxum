@@ -33,6 +33,10 @@ pub struct SendTextRequest {
 
     pub reply_to: Option<String>,
 
+    /// Chat `reply_to` is in, when it is not `to`: replying privately to
+    /// a group message from a 1:1 chat.
+    pub reply_chat: Option<String>,
+
     pub fake_reply: Option<FakeReplyConfig>,
 
     /// Optional list of JIDs to @mention in the message. Each entry may

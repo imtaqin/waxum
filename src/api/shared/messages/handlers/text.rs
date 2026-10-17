@@ -126,11 +126,15 @@ pub async fn execute_text(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
+            let reply_chat = match request.reply_chat.as_deref() {
+                Some(chat) => parse_jid(chat)?,
+                None => to_jid.clone(),
+            };
             reply_context(
                 state,
                 session_id,
                 &client,
-                &to_jid,
+                &reply_chat,
                 request.reply_to.clone(),
             )
             .await
@@ -348,6 +352,11 @@ pub async fn send_pin_message(
                 .into(),
             r#type: Some(pin_type),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
+        }),
+        message_context_info: MessageField::some(waproto::whatsapp::MessageContextInfo {
+            message_add_on_duration_in_secs: (request.duration_seconds > 0)
+                .then_some(request.duration_seconds as u32),
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -583,6 +592,7 @@ pub async fn send_message(
             to: request.to,
             text: request.text,
             reply_to: None,
+            reply_chat: None,
             fake_reply: None,
             mentions: None,
             mention_all: None,
