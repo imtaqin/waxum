@@ -428,6 +428,34 @@ pub async fn execute_forward_message(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
+    if let (Some(chat), Some(id)) = (&request.chat, &request.message_id) {
+        use wacore::proto_helpers::MessageExt;
+        let chat = parse_jid(chat)?;
+        let original = stored_message(state, session_id, &chat, id)
+            .await
+            .and_then(|m| m.message)
+            .ok_or_else(|| ApiError::MessageNotFound(id.clone()))?;
+        let message = original.get_base_message().prepare_for_forward();
+        let message_id = client
+            .send_message(to_jid.clone(), message.clone())
+            .await
+            .map(|r| r.message_id)
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        crate::api::shared::search::handlers::record_outgoing(
+            state,
+            session_id,
+            &to_jid,
+            &message,
+            &message_id,
+        )
+        .await;
+        return Ok(MessageResponse {
+            message_id,
+            timestamp: chrono::Utc::now().timestamp(),
+            to: to_jid.to_string(),
+        });
+    }
+
     let message = waproto::whatsapp::Message {
         extended_text_message: MessageField::some(
             waproto::whatsapp::message::ExtendedTextMessage {

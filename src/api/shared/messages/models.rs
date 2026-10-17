@@ -735,7 +735,18 @@ pub struct ForwardMessageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
+    /// Text to send as a forwarded message. Ignored when `message_id` is
+    /// set.
+    #[serde(default)]
     pub text: String,
+
+    /// Chat the original message is in. With `message_id`, the stored
+    /// message itself is forwarded, media and all.
+    #[schema(example = "628123456789@s.whatsapp.net")]
+    pub chat: Option<String>,
+
+    /// Id of the message to forward, looked up in `chat`.
+    pub message_id: Option<String>,
 
     pub reply_to: Option<String>,
 
