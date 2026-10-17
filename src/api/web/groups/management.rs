@@ -485,3 +485,100 @@ fn get_client(
 
     runtime.get_live_client().ok_or(ApiError::NotConnected)
 }
+
+#[utoipa::path(
+    put,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/{group_jid}/picture",
+    tag = "groups",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("group_jid" = String, Path, description = "Group JID")
+    ),
+    request_body = SetGroupPictureRequest,
+    responses(
+        (status = 200, description = "Group picture changed", body = crate::api::common::SuccessResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn set_group_picture(
+    State(state): State<AppState>,
+    Path((session_id, group_jid)): Path<(String, String)>,
+    Json(request): Json<SetGroupPictureRequest>,
+) -> Result<Json<crate::api::common::SuccessResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let jid: Jid = group_jid
+        .parse()
+        .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
+    let (bytes, _) = crate::api::shared::messages::handlers::get_media_data(&request.image).await?;
+    let jpeg = crate::api::web::profile::handlers::square_jpeg(bytes)?;
+    client
+        .groups()
+        .set_profile_picture(jid, jpeg)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(crate::api::common::SuccessResponse::new()))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/join",
+    tag = "groups",
+    params(("session_id" = String, Path, description = "Session ID")),
+    request_body = JoinGroupRequest,
+    responses(
+        (status = 200, description = "Joined, or join request sent for approval", body = JoinGroupResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn join_group(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<JoinGroupRequest>,
+) -> Result<Json<JoinGroupResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let result = client
+        .groups()
+        .join_with_invite_code(&request.code)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    let pending_approval = matches!(result, whatsapp_rust::JoinGroupResult::PendingApproval(_));
+    Ok(Json(JoinGroupResponse {
+        group_jid: result.group_jid().to_string(),
+        pending_approval,
+    }))
+}
+
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/invite/{code}",
+    tag = "groups",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("code" = String, Path, description = "Invite code")
+    ),
+    responses(
+        (status = 200, description = "What the invite leads to, without joining", body = InviteInfoResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn get_invite_info(
+    State(state): State<AppState>,
+    Path((session_id, code)): Path<(String, String)>,
+) -> Result<Json<InviteInfoResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let metadata = client
+        .groups()
+        .get_invite_info(&code)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    Ok(Json(InviteInfoResponse {
+        group_jid: metadata.id.to_string(),
+        subject: metadata.subject,
+        participants: metadata.participants.len(),
+        creator: metadata.creator.map(|j| j.to_string()),
+        created_at: metadata.creation_time,
+    }))
+}

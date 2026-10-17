@@ -202,6 +202,12 @@ use utoipa::OpenApi;
         crate::api::web::calls::handlers::transcribe_call,
 
         crate::api::web::status::handlers::send_status_reaction,
+        crate::api::web::status::handlers::post_text_status,
+        crate::api::web::status::handlers::post_image_status,
+        crate::api::web::status::handlers::revoke_status,
+        crate::api::web::groups::management::set_group_picture,
+        crate::api::web::groups::management::join_group,
+        crate::api::web::groups::management::get_invite_info,
 
         crate::api::web::media::handlers::upload_media,
         crate::api::web::media::handlers::download_media,
@@ -462,6 +468,13 @@ use utoipa::OpenApi;
             crate::api::web::calls::models::SetVideoOrientationRequest,
 
             crate::api::web::status::models::StatusReactionRequest,
+            crate::api::web::status::models::TextStatusRequest,
+            crate::api::web::status::models::ImageStatusRequest,
+            crate::api::web::status::models::StatusPostResponse,
+            crate::api::web::groups::models::SetGroupPictureRequest,
+            crate::api::web::groups::models::JoinGroupRequest,
+            crate::api::web::groups::models::JoinGroupResponse,
+            crate::api::web::groups::models::InviteInfoResponse,
 
             crate::api::web::media::models::UploadMediaResponse,
             crate::api::web::media::models::MediaType,

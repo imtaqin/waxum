@@ -151,3 +151,34 @@ pub enum MemberLinkMode {
     AdminLink,
     AllMemberLink,
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetGroupPictureRequest {
+    /// New group picture, as a URL or base64. It is centre-cropped to a
+    /// square and re-encoded as JPEG.
+    pub image: crate::api::shared::messages::models::MediaData,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct JoinGroupRequest {
+    /// Invite code or full `https://chat.whatsapp.com/...` link.
+    #[schema(example = "https://chat.whatsapp.com/AbCdEf123456")]
+    pub code: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JoinGroupResponse {
+    pub group_jid: String,
+    /// `true` when the group requires admin approval and the request is
+    /// waiting for it.
+    pub pending_approval: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InviteInfoResponse {
+    pub group_jid: String,
+    pub subject: Option<String>,
+    pub participants: usize,
+    pub creator: Option<String>,
+    pub created_at: Option<u64>,
+}

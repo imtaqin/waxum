@@ -32,7 +32,7 @@ fn get_client(
     runtime.get_live_client().ok_or(ApiError::NotConnected)
 }
 
-fn square_jpeg(bytes: Vec<u8>) -> Result<Vec<u8>, ApiError> {
+pub(crate) fn square_jpeg(bytes: Vec<u8>) -> Result<Vec<u8>, ApiError> {
     use image::{codecs::jpeg::JpegEncoder, imageops::FilterType};
 
     let decoded = image::load_from_memory(&bytes)
