@@ -528,6 +528,130 @@ impl ChatStore {
         Ok(row.map(Into::into))
     }
 
+    /// Starred messages across every chat, newest first.
+    pub async fn starred(&self, limit: i64) -> Result<Vec<StoredMessage>> {
+        use schema::messages::dsl;
+        let limit = limit.max(0);
+        let device_id = self.device_id();
+        let rows: Vec<MessageRow> = self
+            .db()
+            .read(move |conn| {
+                dsl::messages
+                    .filter(dsl::device_id.eq(device_id).and(dsl::starred.eq(true)))
+                    .order((dsl::timestamp_ms.desc(), dsl::rowid.desc()))
+                    .limit(limit)
+                    .load(conn)
+                    .map_err(db_err)
+            })
+            .await?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// A chat's messages of the given kinds (database labels, see
+    /// [`MessageKind::as_str`](crate::MessageKind::as_str)), newest first:
+    /// the media, docs and links tabs of a chat's info screen.
+    pub async fn messages_of_kinds(
+        &self,
+        chat: &Jid,
+        kinds: &[&str],
+        limit: i64,
+    ) -> Result<Vec<StoredMessage>> {
+        use schema::messages::dsl;
+        let limit = limit.max(0);
+        let device_id = self.device_id();
+        let chat = chat.to_string();
+        let kinds: Vec<String> = kinds.iter().map(|k| k.to_string()).collect();
+        let rows: Vec<MessageRow> = self
+            .db()
+            .read(move |conn| {
+                let keys =
+                    crate::lid::chat_key_candidates(conn, device_id, &chat).map_err(db_err)?;
+                dsl::messages
+                    .filter(
+                        dsl::device_id
+                            .eq(device_id)
+                            .and(dsl::chat_jid.eq_any(keys))
+                            .and(dsl::kind.eq_any(kinds))
+                            .and(dsl::revoked.eq(false)),
+                    )
+                    .order((dsl::timestamp_ms.desc(), dsl::rowid.desc()))
+                    .limit(limit)
+                    .load(conn)
+                    .map_err(db_err)
+            })
+            .await?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// A chat's text messages that carry a link, newest first.
+    pub async fn messages_with_links(&self, chat: &Jid, limit: i64) -> Result<Vec<StoredMessage>> {
+        use schema::messages::dsl;
+        let limit = limit.max(0);
+        let device_id = self.device_id();
+        let chat = chat.to_string();
+        let rows: Vec<MessageRow> = self
+            .db()
+            .read(move |conn| {
+                let keys =
+                    crate::lid::chat_key_candidates(conn, device_id, &chat).map_err(db_err)?;
+                dsl::messages
+                    .filter(
+                        dsl::device_id
+                            .eq(device_id)
+                            .and(dsl::chat_jid.eq_any(keys))
+                            .and(dsl::revoked.eq(false))
+                            .and(
+                                dsl::text_content
+                                    .like("%http://%")
+                                    .or(dsl::text_content.like("%https://%"))
+                                    .or(dsl::text_content.like("%www.%")),
+                            ),
+                    )
+                    .order((dsl::timestamp_ms.desc(), dsl::rowid.desc()))
+                    .limit(limit)
+                    .load(conn)
+                    .map_err(db_err)
+            })
+            .await?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Every known contact, by best display name.
+    pub async fn contacts(&self) -> Result<Vec<ContactEntry>> {
+        use schema::contacts::dsl;
+        let device_id = self.device_id();
+        let rows: Vec<ContactRow> = self
+            .db()
+            .read(move |conn| {
+                dsl::contacts
+                    .filter(dsl::device_id.eq(device_id))
+                    .select((
+                        dsl::jid,
+                        dsl::push_name,
+                        dsl::full_name,
+                        dsl::first_name,
+                        dsl::business_name,
+                    ))
+                    .load(conn)
+                    .map_err(db_err)
+            })
+            .await?;
+        let mut contacts: Vec<ContactEntry> = rows
+            .into_iter()
+            .map(
+                |(jid, push_name, full_name, first_name, business_name)| ContactEntry {
+                    jid: parse_jid(&jid),
+                    push_name,
+                    full_name,
+                    first_name,
+                    business_name,
+                },
+            )
+            .collect();
+        contacts.sort_by_cached_key(|c| c.display_name().unwrap_or_default().to_lowercase());
+        Ok(contacts)
+    }
+
     pub async fn reactions(&self, chat: &Jid, msg_id: &str) -> Result<Vec<ReactionEntry>> {
         use schema::reactions::dsl;
         let device_id = self.device_id();
