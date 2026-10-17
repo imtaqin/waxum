@@ -583,6 +583,32 @@ impl ChatStore {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    /// Messages of the given kinds across every chat, newest first: recent
+    /// stickers for a sticker picker, for example.
+    pub async fn recent_of_kinds(&self, kinds: &[&str], limit: i64) -> Result<Vec<StoredMessage>> {
+        use schema::messages::dsl;
+        let limit = limit.max(0);
+        let device_id = self.device_id();
+        let kinds: Vec<String> = kinds.iter().map(|k| k.to_string()).collect();
+        let rows: Vec<MessageRow> = self
+            .db()
+            .read(move |conn| {
+                dsl::messages
+                    .filter(
+                        dsl::device_id
+                            .eq(device_id)
+                            .and(dsl::kind.eq_any(kinds))
+                            .and(dsl::revoked.eq(false)),
+                    )
+                    .order((dsl::timestamp_ms.desc(), dsl::rowid.desc()))
+                    .limit(limit)
+                    .load(conn)
+                    .map_err(db_err)
+            })
+            .await?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     /// A chat's text messages that carry a link, newest first.
     pub async fn messages_with_links(&self, chat: &Jid, limit: i64) -> Result<Vec<StoredMessage>> {
         use schema::messages::dsl;
