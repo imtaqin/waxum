@@ -17,3 +17,14 @@ pub struct UpdateProfileRequest {
     /// accepted; it is centre-cropped to a square and re-encoded as JPEG.
     pub picture: Option<MediaData>,
 }
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+pub struct ProfileResponse {
+    pub jid: Option<String>,
+    pub lid: Option<String>,
+    pub phone_number: Option<String>,
+    pub name: String,
+    pub about: Option<String>,
+    /// Direct URL of the full-size profile picture, if one is set.
+    pub picture_url: Option<String>,
+}

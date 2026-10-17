@@ -148,6 +148,7 @@ use utoipa::OpenApi;
         crate::api::web::contacts::handlers::check_on_whatsapp,
         crate::api::web::contacts::handlers::get_contact_info,
         crate::api::web::contacts::handlers::get_profile_picture,
+        crate::api::web::profile::handlers::get_profile,
         crate::api::web::profile::handlers::update_profile,
         crate::api::web::profile::handlers::remove_profile_picture,
         crate::api::web::contacts::handlers::get_user_info,
@@ -206,6 +207,8 @@ use utoipa::OpenApi;
         crate::api::web::media::handlers::download_media,
 
         crate::api::web::privacy::handlers::get_privacy_settings,
+        crate::api::web::privacy::handlers::set_privacy_setting,
+        crate::api::web::privacy::handlers::set_default_disappearing,
 
         crate::api::web::mex::handlers::mex_query,
         crate::api::web::mex::handlers::mex_mutate,
@@ -392,6 +395,9 @@ use utoipa::OpenApi;
 
             crate::api::web::contacts::models::CheckOnWhatsAppRequest,
             crate::api::web::profile::models::UpdateProfileRequest,
+            crate::api::web::profile::models::ProfileResponse,
+            crate::api::web::privacy::models::SetPrivacyRequest,
+            crate::api::web::privacy::models::DefaultDisappearingRequest,
             crate::api::web::contacts::models::CheckOnWhatsAppResponse,
             crate::api::web::contacts::models::WhatsAppCheckResult,
             crate::api::web::contacts::models::GetContactInfoRequest,
