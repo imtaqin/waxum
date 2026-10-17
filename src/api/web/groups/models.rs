@@ -24,6 +24,27 @@ pub struct GroupInfoCached {
     pub participants: Vec<GroupParticipant>,
 
     pub addressing_mode: String,
+
+    pub subject: Option<String>,
+
+    pub description: Option<String>,
+
+    pub creator: Option<String>,
+
+    /// Unix seconds.
+    pub creation_time: Option<u64>,
+
+    /// Only admins can send messages.
+    pub is_announce: bool,
+
+    /// Only admins can edit group info.
+    pub is_locked: bool,
+
+    /// Disappearing-message timer in seconds, when one is set.
+    pub ephemeral_expiration: Option<u32>,
+
+    /// Join requests need admin approval.
+    pub membership_approval: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -129,6 +150,12 @@ pub struct SetGroupSettingsRequest {
 
     /// Who can edit group invite link
     pub member_link_mode: Option<MemberLinkMode>,
+
+    /// Only admins can send messages.
+    pub announce: Option<bool>,
+
+    /// Only admins can edit the group's subject, description and picture.
+    pub locked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]

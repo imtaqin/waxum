@@ -448,28 +448,49 @@ pub async fn set_group_settings(
         .parse()
         .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
 
-    // The whatsapp-rust library currently only supports setting these modes at group creation time
-    // via GroupCreateOptions. For existing groups, we send the update via the raw group metadata IQ.
-    // For now, we validate the request and return the intended settings.
-    let _ = client
-        .groups()
-        .fetch_metadata(&jid)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    // Log the intended settings change
-    if let Some(mode) = &request.membership_approval_mode {
-        tracing::info!(
-            "Group {} membership_approval_mode set to {:?}",
-            group_jid,
-            mode
-        );
+    let groups = client.groups();
+    let internal = |e: whatsapp_rust::GroupError| ApiError::Internal(e.to_string());
+    if let Some(mode) = request.membership_approval_mode {
+        let mode = match mode {
+            MembershipApprovalMode::On => whatsapp_rust::MembershipApprovalMode::On,
+            MembershipApprovalMode::Off => whatsapp_rust::MembershipApprovalMode::Off,
+        };
+        groups
+            .set_membership_approval(jid.clone(), mode)
+            .await
+            .map_err(internal)?;
     }
-    if let Some(mode) = &request.member_add_mode {
-        tracing::info!("Group {} member_add_mode set to {:?}", group_jid, mode);
+    if let Some(mode) = request.member_add_mode {
+        let mode = match mode {
+            MemberAddMode::AdminAdd => whatsapp_rust::MemberAddMode::AdminAdd,
+            MemberAddMode::AllMemberAdd => whatsapp_rust::MemberAddMode::AllMemberAdd,
+        };
+        groups
+            .set_member_add_mode(jid.clone(), mode)
+            .await
+            .map_err(internal)?;
     }
-    if let Some(mode) = &request.member_link_mode {
-        tracing::info!("Group {} member_link_mode set to {:?}", group_jid, mode);
+    if let Some(mode) = request.member_link_mode {
+        let mode = match mode {
+            MemberLinkMode::AdminLink => whatsapp_rust::MemberLinkMode::AdminLink,
+            MemberLinkMode::AllMemberLink => whatsapp_rust::MemberLinkMode::AllMemberLink,
+        };
+        groups
+            .set_member_link_mode(&jid, mode)
+            .await
+            .map_err(internal)?;
+    }
+    if let Some(announce) = request.announce {
+        groups
+            .set_announce(jid.clone(), announce)
+            .await
+            .map_err(internal)?;
+    }
+    if let Some(locked) = request.locked {
+        groups
+            .set_locked(jid.clone(), locked)
+            .await
+            .map_err(internal)?;
     }
 
     Ok(Json(SuccessResponse { success: true }))
