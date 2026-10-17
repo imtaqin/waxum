@@ -8,6 +8,10 @@ use axum::Router;
 pub fn session_routes() -> Router<AppState> {
     Router::new()
         .route(
+            "/{session_id}/newsletters/{jid}/messages",
+            get(handlers::list_messages),
+        )
+        .route(
             "/{session_id}/newsletters/subscribed",
             get(handlers::list_subscribed),
         )

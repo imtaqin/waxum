@@ -24,6 +24,7 @@ pub mod media;
 pub mod mex;
 pub mod newsletter;
 pub mod operations;
+pub mod polls;
 pub mod presence;
 pub mod privacy;
 pub mod profile;
@@ -50,6 +51,7 @@ pub fn session_routes() -> Router<AppState> {
         .merge(mex::routes::session_routes())
         .merge(newsletter::routes::session_routes())
         .merge(operations::routes::session_routes())
+        .merge(polls::routes::session_routes())
         .merge(presence::routes::session_routes())
         .merge(privacy::routes::session_routes())
         .merge(profile::routes::session_routes())
