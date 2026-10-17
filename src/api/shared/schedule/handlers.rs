@@ -200,6 +200,7 @@ fn row_to_model(row: &ScheduledRow) -> ScheduledMessage {
         id: row.id.clone(),
         session_id: row.session_id.clone(),
         endpoint: row.endpoint.clone(),
+        body: serde_json::from_str(&row.body).unwrap_or(serde_json::Value::Null),
         send_at: parse_stored_ts(&row.send_at),
         status: ScheduledStatus::from_str(&row.status),
         error: row.error.clone(),
