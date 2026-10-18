@@ -5632,11 +5632,13 @@ dependencies = [
 name = "whatsapp-rust-chat-store"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "buffa",
  "chrono",
  "diesel",
  "diesel_migrations",
  "log",
+ "serde",
  "serde_json",
  "thiserror 2.0.19",
  "tokio",

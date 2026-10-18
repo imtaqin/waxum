@@ -37,6 +37,7 @@ mod queries;
 mod schema;
 mod store;
 pub mod types;
+pub mod wire;
 
 pub use error::{ChatStoreError, Result};
 pub use materialize::{base_message, message_kind};
