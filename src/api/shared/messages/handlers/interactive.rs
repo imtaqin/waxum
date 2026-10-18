@@ -80,9 +80,22 @@ pub async fn execute_poll(
                 name: Some(request.name),
                 options,
                 selectable_options_count: Some(request.selectable_count),
+                context_info: reply_context(
+                    state,
+                    session_id,
+                    &client,
+                    &to_jid,
+                    request.reply_to.clone(),
+                )
+                .await
+                .into(),
                 ..Default::default()
             }
         ),),
+        message_context_info: MessageField::some(nx!(waproto::whatsapp::MessageContextInfo {
+            message_secret: Some(rand::random::<[u8; 32]>().to_vec()),
+            ..Default::default()
+        })),
         ..Default::default()
     });
 
@@ -495,15 +508,15 @@ pub async fn execute_interactive(
         if let Some(ref fake) = request.fake_reply {
             crate::api::web::fake_reply::handlers::build_fake_reply_context_info(fake).into()
         } else {
-            request
-                .reply_to
-                .map(|id| {
-                    nx!(waproto::whatsapp::ContextInfo {
-                        stanza_id: Some(id),
-                        ..Default::default()
-                    })
-                })
-                .into()
+            reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into()
         };
 
     let interactive = nx!(waproto::whatsapp::message::InteractiveMessage {
@@ -920,12 +933,9 @@ pub async fn execute_poll_update(
     let message = nx!(waproto::whatsapp::Message {
         poll_update_message: MessageField::some(nx!(
             waproto::whatsapp::message::PollUpdateMessage {
-                poll_creation_message_key: Some(nx!(waproto::whatsapp::MessageKey {
-                    remote_jid: Some(request.to.clone()),
-                    id: Some(request.poll_message_id),
-                    from_me: Some(false),
-                    ..Default::default()
-                }))
+                poll_creation_message_key: Some(
+                    message_key_for(state, session_id, &to_jid, &request.poll_message_id).await,
+                )
                 .into(),
                 vote: Some(nx!(waproto::whatsapp::message::PollEncValue {
                     enc_payload,
@@ -1122,13 +1132,15 @@ pub async fn execute_list_response(
                 ),)
                 .into(),
                 description: request.description,
-                context_info: request
-                    .reply_to
-                    .map(|id| nx!(waproto::whatsapp::ContextInfo {
-                        stanza_id: Some(id),
-                        ..Default::default()
-                    }))
-                    .into(),
+                context_info: reply_context(
+                    state,
+                    session_id,
+                    &client,
+                    &to_jid,
+                    request.reply_to.clone(),
+                )
+                .await
+                .into(),
             }
         ),),
         ..Default::default()
@@ -1408,13 +1420,15 @@ pub async fn execute_template_button_reply(
                 selected_id: Some(request.selected_id),
                 selected_display_text: Some(request.selected_display_text),
                 selected_index: request.selected_index,
-                context_info: request
-                    .reply_to
-                    .map(|id| nx!(waproto::whatsapp::ContextInfo {
-                        stanza_id: Some(id),
-                        ..Default::default()
-                    }))
-                    .into(),
+                context_info: reply_context(
+                    state,
+                    session_id,
+                    &client,
+                    &to_jid,
+                    request.reply_to.clone(),
+                )
+                .await
+                .into(),
                 ..Default::default()
             }
         ),),

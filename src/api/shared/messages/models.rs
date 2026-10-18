@@ -33,6 +33,10 @@ pub struct SendTextRequest {
 
     pub reply_to: Option<String>,
 
+    /// Chat `reply_to` is in, when it is not `to`: replying privately to
+    /// a group message from a 1:1 chat.
+    pub reply_chat: Option<String>,
+
     pub fake_reply: Option<FakeReplyConfig>,
 
     /// Optional list of JIDs to @mention in the message. Each entry may
@@ -126,6 +130,12 @@ pub struct SendAudioRequest {
 
     #[serde(default)]
     pub ptt: bool,
+
+    /// Duration in seconds, shown on the voice note before it downloads.
+    pub seconds: Option<u32>,
+
+    /// Voice-note waveform: base64 of up to 64 bytes, each 0 to 100.
+    pub waveform: Option<String>,
 
     pub reply_to: Option<String>,
 
@@ -735,7 +745,18 @@ pub struct ForwardMessageRequest {
     #[schema(example = "559999999999@s.whatsapp.net")]
     pub to: String,
 
+    /// Text to send as a forwarded message. Ignored when `message_id` is
+    /// set.
+    #[serde(default)]
     pub text: String,
+
+    /// Chat the original message is in. With `message_id`, the stored
+    /// message itself is forwarded, media and all.
+    #[schema(example = "628123456789@s.whatsapp.net")]
+    pub chat: Option<String>,
+
+    /// Id of the message to forward, looked up in `chat`.
+    pub message_id: Option<String>,
 
     pub reply_to: Option<String>,
 

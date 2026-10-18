@@ -89,6 +89,15 @@ pub async fn execute_location(
             degrees_longitude: Some(request.longitude),
             name: request.name,
             address: request.address,
+            context_info: reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into(),
             ..Default::default()
         })),
         ..Default::default()
@@ -200,6 +209,15 @@ pub async fn execute_contact(
         contact_message: MessageField::some(nx!(waproto::whatsapp::message::ContactMessage {
             display_name: Some(request.contact.display_name.clone()),
             vcard: Some(vcard),
+            context_info: reply_context(
+                state,
+                session_id,
+                &client,
+                &to_jid,
+                request.reply_to.clone(),
+            )
+            .await
+            .into(),
             ..Default::default()
         })),
         ..Default::default()

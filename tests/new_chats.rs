@@ -239,3 +239,70 @@ async fn a_failed_send_is_not_counted() {
     let (_, recorded) = scope(admit(&h.state, "nc-1", &jid(number), number)).await;
     assert_eq!(recorded.len(), 1, "and it counts as new again next time");
 }
+
+/// `remaining` follows the limit's own window, and the exists endpoint
+/// separates chats waxum knows about from numbers that would count.
+#[tokio::test]
+async fn remaining_and_chat_exists_answer_the_questions_from_157() {
+    let h = Harness::new().await;
+    session(&h).await;
+
+    let (_, body) = call(&h.app, req_get(LIMIT_PATH, Some(TEST_TOKEN))).await;
+    assert!(
+        body["remaining"].is_null(),
+        "no limit, no remaining: {body}"
+    );
+
+    let (status, body) = call(
+        &h.app,
+        req_json(
+            Method::PUT,
+            LIMIT_PATH,
+            Some(TEST_TOKEN),
+            json!({"max_new_chats": 3, "window_hours": 24}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["remaining"], 3, "{body}");
+
+    let known = "628111111111@s.whatsapp.net";
+    let unknown = "628999999999@s.whatsapp.net";
+    admit(&h.state, "nc-1", &jid(known), known)
+        .await
+        .expect("first new chat");
+
+    let (_, body) = call(&h.app, req_get(LIMIT_PATH, Some(TEST_TOKEN))).await;
+    assert_eq!(body["remaining"], 2, "{body}");
+
+    let exists = |jid: &str| format!("/api/v1/sessions/nc-1/chats/{jid}/exists");
+    let (status, body) = call(&h.app, req_get(&exists(known), Some(TEST_TOKEN))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["exists"], true, "{body}");
+    assert_eq!(body["counts_as_new_chat"], false);
+
+    let (_, body) = call(&h.app, req_get(&exists("628999999999"), Some(TEST_TOKEN))).await;
+    assert_eq!(body["exists"], false, "{body}");
+    assert_eq!(body["counts_as_new_chat"], true);
+    assert_eq!(body["jid"], unknown);
+
+    let (_, body) = call(
+        &h.app,
+        req_get(&exists("120363000000000001@g.us"), Some(TEST_TOKEN)),
+    )
+    .await;
+    assert_eq!(
+        body["counts_as_new_chat"], false,
+        "groups never count: {body}"
+    );
+
+    let (status, _) = call(
+        &h.app,
+        req_get(
+            "/api/v1/sessions/missing/chats/628111111111/exists",
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

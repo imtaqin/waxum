@@ -90,6 +90,52 @@ pub fn resolve_database_url() -> (String, DbBackend) {
     (format!("sqlite://{}", path), DbBackend::SQLite)
 }
 
+/// Opens a connection pool for `database_url` on the given backend and
+/// checks that it answers.
+pub async fn connect(database_url: &str, backend: DbBackend) -> anyhow::Result<session::DbPool> {
+    let pool = match backend {
+        DbBackend::Postgres => {
+            use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod};
+            use tokio_postgres::NoTls;
+
+            let pg_config: tokio_postgres::Config = database_url.parse()?;
+            let mgr_config = ManagerConfig {
+                recycling_method: RecyclingMethod::Fast,
+            };
+            let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
+            let pg_pool = deadpool_postgres::Pool::builder(mgr).max_size(16).build()?;
+            let _ = pg_pool.get().await?;
+            session::DbPool::Postgres(pg_pool)
+        }
+        DbBackend::MySQL => {
+            let opts = mysql_async::Opts::from_url(database_url)?;
+            let max_pool: usize = std::env::var("WA_RS_MYSQL_MAX_POOL")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(64);
+            let constraints = mysql_async::PoolConstraints::new(4, max_pool).unwrap_or_else(|| {
+                mysql_async::PoolConstraints::new(2, 10).expect("safe defaults")
+            });
+            let pool_opts = mysql_async::PoolOpts::default()
+                .with_constraints(constraints)
+                .with_inactive_connection_ttl(std::time::Duration::from_secs(300))
+                .with_ttl_check_interval(std::time::Duration::from_secs(60));
+            let opts = mysql_async::OptsBuilder::from_opts(opts).pool_opts(pool_opts);
+            let my_pool = mysql_async::Pool::new(opts);
+            let _conn = my_pool.get_conn().await?;
+            session::DbPool::MySQL(my_pool)
+        }
+        DbBackend::SQLite => {
+            let path = database_url
+                .strip_prefix("sqlite://")
+                .unwrap_or(database_url);
+            let handle = sqlite_raw::open(path)?;
+            session::DbPool::SQLite(handle)
+        }
+    };
+    Ok(pool)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum DbBackend {
     Postgres,

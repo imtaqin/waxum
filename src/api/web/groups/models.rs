@@ -24,6 +24,27 @@ pub struct GroupInfoCached {
     pub participants: Vec<GroupParticipant>,
 
     pub addressing_mode: String,
+
+    pub subject: Option<String>,
+
+    pub description: Option<String>,
+
+    pub creator: Option<String>,
+
+    /// Unix seconds.
+    pub creation_time: Option<u64>,
+
+    /// Only admins can send messages.
+    pub is_announce: bool,
+
+    /// Only admins can edit group info.
+    pub is_locked: bool,
+
+    /// Disappearing-message timer in seconds, when one is set.
+    pub ephemeral_expiration: Option<u32>,
+
+    /// Join requests need admin approval.
+    pub membership_approval: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -129,6 +150,12 @@ pub struct SetGroupSettingsRequest {
 
     /// Who can edit group invite link
     pub member_link_mode: Option<MemberLinkMode>,
+
+    /// Only admins can send messages.
+    pub announce: Option<bool>,
+
+    /// Only admins can edit the group's subject, description and picture.
+    pub locked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
@@ -150,4 +177,35 @@ pub enum MemberAddMode {
 pub enum MemberLinkMode {
     AdminLink,
     AllMemberLink,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetGroupPictureRequest {
+    /// New group picture, as a URL or base64. It is centre-cropped to a
+    /// square and re-encoded as JPEG.
+    pub image: crate::api::shared::messages::models::MediaData,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct JoinGroupRequest {
+    /// Invite code or full `https://chat.whatsapp.com/...` link.
+    #[schema(example = "https://chat.whatsapp.com/AbCdEf123456")]
+    pub code: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JoinGroupResponse {
+    pub group_jid: String,
+    /// `true` when the group requires admin approval and the request is
+    /// waiting for it.
+    pub pending_approval: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InviteInfoResponse {
+    pub group_jid: String,
+    pub subject: Option<String>,
+    pub participants: usize,
+    pub creator: Option<String>,
+    pub created_at: Option<u64>,
 }

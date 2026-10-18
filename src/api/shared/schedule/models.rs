@@ -68,6 +68,10 @@ pub struct ScheduledMessage {
     #[schema(example = "text")]
     pub endpoint: String,
 
+    /// The send request that will be dispatched, as submitted.
+    #[schema(value_type = Object, example = json!({"to": "559999999999@s.whatsapp.net", "text": "Hello!"}))]
+    pub body: serde_json::Value,
+
     /// UTC time the message becomes due.
     #[schema(example = "2026-01-01T12:00:00Z")]
     pub send_at: DateTime<Utc>,

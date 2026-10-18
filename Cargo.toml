@@ -20,7 +20,7 @@ whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-r
 # Chat store was extracted from the whatsapp-rust monorepo (#1346) without a
 # published replacement yet — vendored here from the last monorepo rev that
 # carried it, with its wacore deps re-pointed at the same rev as the rest.
-whatsapp-rust-chat-store = { path = "vendor/whatsapp-rust-chat-store" }
+whatsapp-rust-chat-store = { path = "vendor/whatsapp-rust-chat-store", features = ["search"] }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }

@@ -32,7 +32,7 @@ fn get_client(
     runtime.get_live_client().ok_or(ApiError::NotConnected)
 }
 
-fn square_jpeg(bytes: Vec<u8>) -> Result<Vec<u8>, ApiError> {
+pub(crate) fn square_jpeg(bytes: Vec<u8>) -> Result<Vec<u8>, ApiError> {
     use image::{codecs::jpeg::JpegEncoder, imageops::FilterType};
 
     let decoded = image::load_from_memory(&bytes)
@@ -170,4 +170,51 @@ pub async fn remove_profile_picture(
     Ok(Json(SuccessResponse::with_message(
         "Profile picture removed",
     )))
+}
+
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/profile",
+    tag = "profile",
+    params(("session_id" = String, Path, description = "Session ID")),
+    responses(
+        (status = 200, description = "The linked account's own name, About and picture", body = crate::api::web::profile::models::ProfileResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn get_profile(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<crate::api::web::profile::models::ProfileResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let jid = client.pn();
+    let mut about = None;
+    let mut picture_url = None;
+    if let Some(own) = jid.clone() {
+        if let Ok(info) = client
+            .contacts()
+            .get_user_info(std::slice::from_ref(&own))
+            .await
+        {
+            about = info.into_values().next().and_then(|i| i.status);
+        }
+        let request = whatsapp_rust::ProfilePictureRequest::new(
+            whatsapp_rust::ProfilePictureTarget::Contact(&own),
+            whatsapp_rust::ProfilePictureType::Full,
+        );
+        if let Ok(lookup) = client.pictures().lookup(request).await {
+            if let Some(picture) = lookup.into_found() {
+                picture_url = Some(picture.url);
+            }
+        }
+    }
+    Ok(Json(crate::api::web::profile::models::ProfileResponse {
+        phone_number: jid.as_ref().map(|j| j.user.to_string()),
+        jid: jid.map(|j| j.to_string()),
+        lid: client.lid().map(|j| j.to_string()),
+        name: client.push_name(),
+        about,
+        picture_url,
+    }))
 }

@@ -60,3 +60,35 @@ pub struct NewsletterAdminInfoResponse {
 pub struct NewsletterFollowersResponse {
     pub followers: serde_json::Value,
 }
+
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+pub struct NewsletterMessagesQuery {
+    /// How many messages to return (default 50, at most 100).
+    pub count: Option<u32>,
+    /// Server id to page back from: only messages older than it.
+    pub before: Option<u64>,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+pub struct NewsletterReaction {
+    pub emoji: String,
+    pub count: u64,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+pub struct NewsletterMessageItem {
+    pub message_id: String,
+    pub server_id: u64,
+    pub timestamp: u64,
+    pub text: Option<String>,
+    pub views: Option<u64>,
+    pub reactions: Vec<NewsletterReaction>,
+    /// The message protobuf, base64. Absent for messages the server sent
+    /// without content (revoked ones).
+    pub message_proto: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+pub struct NewsletterMessagesResponse {
+    pub messages: Vec<NewsletterMessageItem>,
+}
