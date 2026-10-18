@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use wacore_binary::jid::Jid;
 
 use crate::types::{
-    ChatEntry, ContactEntry, MessageKind, MessageStatus, ReactionEntry, ReceiptEntry,
-    StoreChange, StoredMessage,
+    ChatEntry, ContactEntry, MessageKind, MessageStatus, ReactionEntry, ReceiptEntry, StoreChange,
+    StoredMessage,
 };
 
 fn ms(t: DateTime<Utc>) -> i64 {
@@ -305,10 +305,7 @@ mod tests {
         assert_eq!(back.kind, MessageKind::Text);
         assert_eq!(back.status, MessageStatus::Read);
         assert_eq!(back.seq, 42);
-        assert_eq!(
-            back.message.unwrap().conversation.as_deref(),
-            Some("halo")
-        );
+        assert_eq!(back.message.unwrap().conversation.as_deref(), Some("halo"));
     }
 
     #[test]

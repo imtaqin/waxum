@@ -219,9 +219,11 @@ pub async fn search(
     let store = store(&state, &session_id)?;
     let limit = q.limit.unwrap_or(50);
     let rows = match q.chat.as_deref().filter(|c| !c.is_empty()) {
-        Some(chat) => store
-            .search_messages_in_chat(&parse(chat)?, &q.q, limit)
-            .await,
+        Some(chat) => {
+            store
+                .search_messages_in_chat(&parse(chat)?, &q.q, limit)
+                .await
+        }
         None => store.search_messages(&q.q, limit).await,
     }
     .map_err(internal)?;
