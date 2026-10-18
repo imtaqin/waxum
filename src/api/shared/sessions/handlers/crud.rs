@@ -228,7 +228,7 @@ pub async fn delete_session(
 
     if let Some(runtime) = state.get_session(&session_id) {
         if let Some(client) = runtime.get_client() {
-            client.disconnect().await;
+            client.shutdown().await;
         }
     }
 

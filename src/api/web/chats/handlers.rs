@@ -3,7 +3,8 @@ use axum::{
     Json,
 };
 use wacore_binary::jid::{Jid, Server};
-use whatsapp_rust::features::{message_key, message_range, SyncActionMessageRange};
+use whatsapp_rust::features::{message_range, SyncActionMessageRange};
+use whatsapp_rust::{MessageId, MessageRef};
 
 use crate::api::common::SuccessResponse;
 use crate::api::shared::messages::handlers::{chat_store, get_client, parse_jid, stored_message};
@@ -37,8 +38,20 @@ async fn last_message_range(
     let ts = last.timestamp.timestamp();
     let participant =
         (!last.from_me && chat.server == Server::Group).then(|| last.sender_jid.to_non_ad());
-    let key = message_key(last.id, chat, last.from_me, participant.as_ref());
+    let key = message_ref(chat, &last.id, last.from_me, participant.as_ref()).ok()?;
     Some(message_range(ts, None, vec![(key, ts)]))
+}
+
+/// The typed reference whatsapp-rust takes for a message in `chat`;
+/// `sender` is the author in groups when it isn't us.
+fn message_ref<'a>(
+    chat: &'a Jid,
+    id: &str,
+    from_me: bool,
+    sender: Option<&'a Jid>,
+) -> Result<MessageRef<'a>, ApiError> {
+    let id = MessageId::new(id).map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    MessageRef::new(chat, id, sender, from_me).map_err(|e| ApiError::BadRequest(e.to_string()))
 }
 
 #[utoipa::path(
@@ -337,17 +350,12 @@ pub async fn star_message(
         .as_ref()
         .filter(|m| !m.from_me && chat.server == Server::Group)
         .map(|m| m.sender_jid.to_non_ad());
+    let target = message_ref(&chat, &request.message_id, from_me, participant.as_ref())?;
     let actions = client.chat_actions();
     if request.starred {
-        actions
-            .star_message(&chat, participant.as_ref(), &request.message_id, from_me)
-            .await
-            .map_err(internal)?;
+        actions.star_message(&target).await.map_err(internal)?;
     } else {
-        actions
-            .unstar_message(&chat, participant.as_ref(), &request.message_id, from_me)
-            .await
-            .map_err(internal)?;
+        actions.unstar_message(&target).await.map_err(internal)?;
     }
     Ok(Json(SuccessResponse::new()))
 }
@@ -378,16 +386,10 @@ pub async fn delete_for_me(
         .filter(|m| !m.from_me && chat.server == Server::Group)
         .map(|m| m.sender_jid.to_non_ad());
     let timestamp = stored.as_ref().map(|m| m.timestamp.timestamp());
+    let target = message_ref(&chat, &request.message_id, from_me, participant.as_ref())?;
     client
         .chat_actions()
-        .delete_message_for_me(
-            &chat,
-            participant.as_ref(),
-            &request.message_id,
-            from_me,
-            true,
-            timestamp,
-        )
+        .delete_message_for_me(&target, true, timestamp)
         .await
         .map_err(internal)?;
     Ok(Json(SuccessResponse::new()))

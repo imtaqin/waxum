@@ -32,7 +32,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use wacore::types::events::{ChannelEventHandler, Event as WaEvent, EventInterest, EventKind};
-use wacore::types::presence::{ChatPresence, ChatPresenceMedia};
+use wacore::types::presence::{ChatActivity, PresenceStatus};
 use wacore_binary::jid::Jid;
 use whatsapp_rust_chat_store::wire::{
     WireChat, WireContact, WireEvent, WireMessage, WireReaction, WireReceipt,
@@ -256,7 +256,7 @@ fn realtime(event: &WaEvent) -> Option<WireEvent> {
     match event {
         WaEvent::Presence(update) => Some(WireEvent::Presence {
             jid: update.from.to_non_ad_string(),
-            available: !update.unavailable,
+            available: update.status == PresenceStatus::Available,
             last_seen_ms: update.last_seen.map(|t| t.timestamp_millis()),
         }),
         WaEvent::ChatPresence(update) => Some(WireEvent::Typing {
@@ -264,11 +264,11 @@ fn realtime(event: &WaEvent) -> Option<WireEvent> {
             sender: update.source.sender.to_non_ad_string(),
             group: update.source.is_group,
             state: match update.state {
-                ChatPresence::Composing => "composing",
+                ChatActivity::Typing | ChatActivity::RecordingAudio => "composing",
                 _ => "paused",
             }
             .to_string(),
-            audio: update.media == ChatPresenceMedia::Audio,
+            audio: update.state == ChatActivity::RecordingAudio,
         }),
         WaEvent::PictureUpdate(update) => Some(WireEvent::Picture {
             jid: update.jid.to_non_ad_string(),

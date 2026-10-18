@@ -136,13 +136,15 @@ pub async fn create_community(
     Json(request): Json<CreateCommunityRequest>,
 ) -> Result<Json<CreateCommunityResponse>, ApiError> {
     let client = get_client(&state, &session_id)?;
-    let options = whatsapp_rust::features::CreateCommunityOptions {
-        name: request.name,
-        description: request.description,
-        closed: false,
-        allow_non_admin_sub_group_creation: false,
-        create_general_chat: false,
-    };
+    let bad = |e: &dyn std::fmt::Display| ApiError::BadRequest(e.to_string());
+    let mut options =
+        whatsapp_rust::features::CreateCommunityOptions::new(request.name).map_err(|e| bad(&e))?;
+    options.description = request
+        .description
+        .map(wacore::iq::groups::GroupDescription::new)
+        .transpose()
+        .map_err(|e| bad(&e))?;
+    options.create_general_chat = false;
     let created = client.community().create(options).await.map_err(internal)?;
     Ok(Json(CreateCommunityResponse {
         jid: created.metadata.id.to_string(),

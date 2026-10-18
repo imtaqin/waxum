@@ -62,18 +62,18 @@ pub async fn execute_newsletter_admin_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        newsletter_admin_invite_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        newsletter_admin_invite_message: MessageField::some(nx!(
             waproto::whatsapp::message::NewsletterAdminInviteMessage {
                 newsletter_jid: Some(request.newsletter_jid),
                 newsletter_name: Some(request.newsletter_name),
                 caption: request.caption,
                 invite_expiration: request.invite_expiration,
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -89,12 +89,12 @@ pub async fn execute_newsletter_admin_invite(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -150,17 +150,17 @@ pub async fn execute_newsletter_follower_invite(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        newsletter_follower_invite_message_v2: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        newsletter_follower_invite_message_v2: MessageField::some(nx!(
             waproto::whatsapp::message::NewsletterFollowerInviteMessage {
                 newsletter_jid: Some(request.newsletter_jid),
                 newsletter_name: Some(request.newsletter_name),
                 caption: request.caption,
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -176,12 +176,12 @@ pub async fn execute_newsletter_follower_invite(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -249,30 +249,30 @@ pub async fn execute_newsletter_forward(
         ),
     };
 
-    let message = waproto::whatsapp::Message {
-        extended_text_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        extended_text_message: MessageField::some(nx!(
             waproto::whatsapp::message::ExtendedTextMessage {
                 text: Some(request.text),
-                context_info: MessageField::some(waproto::whatsapp::ContextInfo {
+                context_info: MessageField::some(nx!(waproto::whatsapp::ContextInfo {
                     is_forwarded: Some(true),
                     forwarding_score: Some(1),
-                    forwarded_newsletter_message_info: Some(
+                    forwarded_newsletter_message_info: Some(nx!(
                         waproto::whatsapp::context_info::ForwardedNewsletterMessageInfo {
                             newsletter_jid: Some(request.newsletter_jid),
                             server_message_id: Some(request.server_message_id),
                             newsletter_name: request.newsletter_name,
                             content_type,
                             ..Default::default()
-                        },
-                    )
+                        }
+                    ),)
                     .into(),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -288,12 +288,12 @@ pub async fn execute_newsletter_forward(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })

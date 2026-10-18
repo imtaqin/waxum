@@ -41,21 +41,21 @@ pub async fn send_status_reaction(
     let status_broadcast = Jid::status_broadcast();
     let now_ms = chrono::Utc::now().timestamp_millis();
 
-    let message = wa::Message {
-        reaction_message: MessageField::some(wa::message::ReactionMessage {
-            key: Some(wa::MessageKey {
+    let message = nx!(wa::Message {
+        reaction_message: MessageField::some(nx!(wa::message::ReactionMessage {
+            key: Some(nx!(wa::MessageKey {
                 remote_jid: Some(status_broadcast.to_string()),
                 from_me: Some(false),
                 id: Some(request.message_id.clone()),
                 participant: Some(owner.to_string()),
-            })
+            }))
             .into(),
             text: Some(request.reaction.clone()),
             grouping_key: None,
             sender_timestamp_ms: Some(now_ms),
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     client
         .send_message(status_broadcast, message)
@@ -141,18 +141,18 @@ pub async fn post_text_status(
         .send_text(&request.text, argb, font, &recipients, Default::default())
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let message = wa::Message {
-        extended_text_message: MessageField::some(wa::message::ExtendedTextMessage {
+    let message = nx!(wa::Message {
+        extended_text_message: MessageField::some(nx!(wa::message::ExtendedTextMessage {
             text: Some(request.text),
             background_argb: Some(argb),
             font: Some(font),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
-    record_own_status(&state, &session_id, &message, &result.message_id).await;
+    });
+    record_own_status(&state, &session_id, &message, result.message_id.as_str()).await;
     Ok(Json(crate::api::web::status::models::StatusPostResponse {
-        message_id: result.message_id,
+        message_id: result.message_id.to_string(),
         recipients: recipients.len(),
     }))
 }
@@ -199,8 +199,8 @@ pub async fn post_image_status(
         )
         .await
         .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
-    let message = wa::Message {
-        image_message: MessageField::some(wa::message::ImageMessage {
+    let message = nx!(wa::Message {
+        image_message: MessageField::some(nx!(wa::message::ImageMessage {
             url: Some(upload.url.clone()),
             direct_path: Some(upload.direct_path.clone()),
             media_key: Some(upload.media_key.to_vec()),
@@ -211,9 +211,9 @@ pub async fn post_image_status(
             caption: request.caption.clone(),
             jpeg_thumbnail: Some(thumbnail.clone()),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
     let result = client
         .status()
         .send_image(
@@ -225,9 +225,9 @@ pub async fn post_image_status(
         )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
-    record_own_status(&state, &session_id, &message, &result.message_id).await;
+    record_own_status(&state, &session_id, &message, result.message_id.as_str()).await;
     Ok(Json(crate::api::web::status::models::StatusPostResponse {
-        message_id: result.message_id,
+        message_id: result.message_id.to_string(),
         recipients: recipients.len(),
     }))
 }
@@ -254,7 +254,12 @@ pub async fn revoke_status(
     let recipients = status_recipients(&state, &session_id).await;
     client
         .status()
-        .revoke(&message_id, &recipients, Default::default())
+        .revoke(
+            whatsapp_rust::MessageId::new(&message_id)
+                .map_err(|e| ApiError::BadRequest(e.to_string()))?,
+            &recipients,
+            Default::default(),
+        )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     if let Some(store) = crate::api::shared::messages::handlers::chat_store(&state, &session_id) {

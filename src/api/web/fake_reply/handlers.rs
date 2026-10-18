@@ -196,12 +196,12 @@ pub fn build_fake_reply_context_info(cfg: &FakeReplyConfig) -> Option<wa::Contex
 
     let quoted = build_quoted_message(&cfg.reply_type, cfg.title.as_deref(), cfg.body.as_deref())?;
 
-    Some(wa::ContextInfo {
+    Some(nx!(wa::ContextInfo {
         stanza_id: Some(stanza_id),
         participant: Some(participant),
         quoted_message: MessageField::some(quoted),
         ..Default::default()
-    })
+    }))
 }
 
 fn build_quoted_message(
@@ -217,10 +217,10 @@ fn build_quoted_message(
                 .map(|s| s.to_string())
                 .or_else(|| title.map(|s| s.to_string()))
                 .unwrap_or_else(|| pick(TEXT_MESSAGES).to_string());
-            Some(wa::Message {
+            Some(nx!(wa::Message {
                 conversation: Some(text),
                 ..Default::default()
-            })
+            }))
         }
 
         "product" => {
@@ -234,24 +234,26 @@ fn build_quoted_message(
             let price = pick(IDR_PRICES_1000);
             let business_jid = random_jid();
 
-            Some(wa::Message {
-                product_message: MessageField::some(wa::message::ProductMessage {
-                    product: MessageField::some(wa::message::product_message::ProductSnapshot {
-                        product_image: None.into(),
-                        product_id: Some(format!("PROD_{}", rand_digits(8))),
-                        title: Some(product_title),
-                        description: Some(desc),
-                        currency_code: Some("IDR".to_string()),
-                        price_amount1000: Some(price),
-                        retailer_id: Some(retailer),
-                        product_image_count: Some(rng.gen_range(1..=5)),
-                        ..Default::default()
-                    }),
+            Some(nx!(wa::Message {
+                product_message: MessageField::some(nx!(wa::message::ProductMessage {
+                    product: MessageField::some(nx!(
+                        wa::message::product_message::ProductSnapshot {
+                            product_image: None.into(),
+                            product_id: Some(format!("PROD_{}", rand_digits(8))),
+                            title: Some(product_title),
+                            description: Some(desc),
+                            currency_code: Some("IDR".to_string()),
+                            price_amount1000: Some(price),
+                            retailer_id: Some(retailer),
+                            product_image_count: Some(rng.gen_range(1..=5)),
+                            ..Default::default()
+                        }
+                    )),
                     business_owner_jid: Some(business_jid),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         "order" => {
@@ -262,8 +264,8 @@ fn build_quoted_message(
                 format!("Pesanan {} x{}", pick(PRODUCT_NAMES), rng.gen_range(1..=5))
             });
 
-            Some(wa::Message {
-                order_message: MessageField::some(wa::message::OrderMessage {
+            Some(nx!(wa::Message {
+                order_message: MessageField::some(nx!(wa::message::OrderMessage {
                     order_id: Some(format!("ORD_{}", rand_digits(10))),
                     item_count: Some(rng.gen_range(1..=8)),
                     status: Some(wa::message::order_message::OrderStatus::INQUIRY),
@@ -272,9 +274,9 @@ fn build_quoted_message(
                     order_title: Some(order_title),
                     seller_jid: Some(random_jid()),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         "location" => {
@@ -285,16 +287,16 @@ fn build_quoted_message(
             // Small jitter so it doesn't look too uniform
             let lat_jitter = rng.gen_range(-0.005..0.005);
             let lng_jitter = rng.gen_range(-0.005..0.005);
-            Some(wa::Message {
-                location_message: MessageField::some(wa::message::LocationMessage {
+            Some(nx!(wa::Message {
+                location_message: MessageField::some(nx!(wa::message::LocationMessage {
                     degrees_latitude: Some(lat + lat_jitter),
                     degrees_longitude: Some(lng + lng_jitter),
                     name: Some(name_override),
                     address: body.map(|s| s.to_string()),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         "video" => {
@@ -302,31 +304,31 @@ fn build_quoted_message(
                 .map(|s| s.to_string())
                 .or_else(|| title.map(|s| s.to_string()))
                 .unwrap_or_else(|| pick(VIDEO_CAPTIONS).to_string());
-            Some(wa::Message {
-                video_message: MessageField::some(wa::message::VideoMessage {
+            Some(nx!(wa::Message {
+                video_message: MessageField::some(nx!(wa::message::VideoMessage {
                     seconds: Some(rng.gen_range(5..=180)),
                     caption: Some(caption),
                     mimetype: Some("video/mp4".to_string()),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         "document" => {
             let filename = title
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| pick(DOCUMENT_NAMES).to_string());
-            Some(wa::Message {
-                document_message: MessageField::some(wa::message::DocumentMessage {
+            Some(nx!(wa::Message {
+                document_message: MessageField::some(nx!(wa::message::DocumentMessage {
                     title: Some(filename.clone()),
                     file_name: Some(filename),
                     mimetype: Some("application/pdf".to_string()),
                     caption: body.map(|s| s.to_string()),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         "contact" => {
@@ -338,14 +340,14 @@ fn build_quoted_message(
                 "BEGIN:VCARD\nVERSION:3.0\nFN:{}\nTEL;type=CELL:+{}\nEND:VCARD",
                 name, phone
             );
-            Some(wa::Message {
-                contact_message: MessageField::some(wa::message::ContactMessage {
+            Some(nx!(wa::Message {
+                contact_message: MessageField::some(nx!(wa::message::ContactMessage {
                     display_name: Some(name),
                     vcard: Some(vcard),
                     ..Default::default()
-                }),
+                })),
                 ..Default::default()
-            })
+            }))
         }
 
         _ => None,

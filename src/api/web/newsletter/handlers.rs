@@ -406,7 +406,7 @@ pub async fn list_messages(
                     })
             });
             NewsletterMessageItem {
-                message_id: m.message_id,
+                message_id: m.message_id.map(|id| id.to_string()).unwrap_or_default(),
                 server_id: m.server_id,
                 timestamp: m.timestamp,
                 text,
@@ -484,7 +484,7 @@ pub async fn react_to_post(
     let jid: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
     client
         .newsletter()
-        .send_reaction(&jid, server_id, &request.emoji)
+        .send_reaction_raw(&jid, server_id, &request.emoji)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(crate::api::common::SuccessResponse::new()))

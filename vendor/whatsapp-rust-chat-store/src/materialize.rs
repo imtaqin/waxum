@@ -231,7 +231,7 @@ fn business_text(base: &wa::Message) -> Option<&str> {
         use wa::message::buttons_response_message::Response;
         return match resp.response.as_ref() {
             Some(Response::SelectedDisplayText(text)) => Some(text.as_str()),
-            None => None,
+            _ => None,
         };
     }
     if let Some(list) = base.list_message.as_option() {

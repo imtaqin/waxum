@@ -66,16 +66,16 @@ pub async fn execute_poll(
     let options: Vec<waproto::whatsapp::message::poll_creation_message::Option> = request
         .options
         .into_iter()
-        .map(
-            |name| waproto::whatsapp::message::poll_creation_message::Option {
+        .map(|name| {
+            nx!(waproto::whatsapp::message::poll_creation_message::Option {
                 option_name: Some(name),
                 ..Default::default()
-            },
-        )
+            })
+        })
         .collect();
 
-    let message = waproto::whatsapp::Message {
-        poll_creation_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        poll_creation_message: MessageField::some(nx!(
             waproto::whatsapp::message::PollCreationMessage {
                 name: Some(request.name),
                 options,
@@ -90,14 +90,14 @@ pub async fn execute_poll(
                 .await
                 .into(),
                 ..Default::default()
-            },
-        ),
-        message_context_info: MessageField::some(waproto::whatsapp::MessageContextInfo {
+            }
+        ),),
+        message_context_info: MessageField::some(nx!(waproto::whatsapp::MessageContextInfo {
             message_secret: Some(rand::random::<[u8; 32]>().to_vec()),
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -113,12 +113,12 @@ pub async fn execute_poll(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -204,19 +204,21 @@ pub async fn execute_buttons(
     let buttons: Vec<waproto::whatsapp::message::buttons_message::Button> = request
         .buttons
         .into_iter()
-        .map(|b| waproto::whatsapp::message::buttons_message::Button {
-            button_id: Some(b.button_id),
-            button_text: Some(
-                waproto::whatsapp::message::buttons_message::button::ButtonText {
-                    display_text: Some(b.display_text),
-                },
-            )
-            .into(),
-            r#type: Some(
-                waproto::whatsapp::message::buttons_message::button::Type::from_i32(1)
-                    .unwrap_or_default(),
-            ),
-            ..Default::default()
+        .map(|b| {
+            nx!(waproto::whatsapp::message::buttons_message::Button {
+                button_id: Some(b.button_id),
+                button_text: Some(nx!(
+                    waproto::whatsapp::message::buttons_message::button::ButtonText {
+                        display_text: Some(b.display_text),
+                    }
+                ),)
+                .into(),
+                r#type: Some(
+                    waproto::whatsapp::message::buttons_message::button::Type::from_i32(1)
+                        .unwrap_or_default(),
+                ),
+                ..Default::default()
+            })
         })
         .collect();
 
@@ -224,8 +226,8 @@ pub async fn execute_buttons(
         .header_text
         .map(waproto::whatsapp::message::buttons_message::Header::Text);
 
-    let message = waproto::whatsapp::Message {
-        buttons_message: MessageField::some(waproto::whatsapp::message::ButtonsMessage {
+    let message = nx!(waproto::whatsapp::Message {
+        buttons_message: MessageField::some(nx!(waproto::whatsapp::message::ButtonsMessage {
             content_text: Some(request.content_text),
             footer_text: request.footer,
             buttons,
@@ -235,9 +237,9 @@ pub async fn execute_buttons(
             }),
             header,
             ..Default::default()
-        }),
+        })),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -253,12 +255,12 @@ pub async fn execute_buttons(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -376,36 +378,36 @@ pub async fn execute_list(
         "sections": sections_json
     });
 
-    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+    let native_flow = nx!(waproto::whatsapp::message::interactive_message::NativeFlowMessage {
         buttons: vec![
-            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+            nx!(waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
                 name: Some("single_select".to_string()),
                 button_params_json: Some(list_params.to_string()),
-            },
+            }),
         ],
         ..Default::default()
-    };
+    });
 
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         interactive_message: MessageField::some(
-            waproto::whatsapp::message::InteractiveMessage {
-                body: Some(waproto::whatsapp::message::interactive_message::Body {
+            nx!(waproto::whatsapp::message::InteractiveMessage {
+                body: Some(nx!(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.description),
-                }).into(),
+                })).into(),
                 footer: request.footer.map(|f| {
-                    waproto::whatsapp::message::interactive_message::Footer {
+                    nx!(waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    }
+                    })
                 }).into(),
                 interactive_message: Some(
                     waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
-            },
+            }),
         ),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -421,12 +423,12 @@ pub async fn execute_list(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -488,17 +490,19 @@ pub async fn execute_interactive(
         .buttons
         .into_iter()
         .map(|b| {
-            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+            nx!(waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
                 name: Some(b.name),
                 button_params_json: Some(b.button_params_json),
-            }
+            })
         })
         .collect();
 
-    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
-        buttons,
-        ..Default::default()
-    };
+    let native_flow = nx!(
+        waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+            buttons,
+            ..Default::default()
+        }
+    );
 
     let context_info: MessageField<waproto::whatsapp::ContextInfo> =
         if let Some(ref fake) = request.fake_reply {
@@ -515,18 +519,18 @@ pub async fn execute_interactive(
             .into()
         };
 
-    let interactive = waproto::whatsapp::message::InteractiveMessage {
-        body: Some(waproto::whatsapp::message::interactive_message::Body {
+    let interactive = nx!(waproto::whatsapp::message::InteractiveMessage {
+        body: Some(nx!(waproto::whatsapp::message::interactive_message::Body {
             text: Some(request.body_text),
-        })
+        }))
         .into(),
         footer: request
             .footer_text
             .map(
-                |f| waproto::whatsapp::message::interactive_message::Footer {
+                |f| nx!(waproto::whatsapp::message::interactive_message::Footer {
                     text: Some(f),
                     ..Default::default()
-                },
+                }),
             )
             .into(),
         interactive_message: Some(
@@ -536,22 +540,22 @@ pub async fn execute_interactive(
         ),
         context_info,
         ..Default::default()
-    };
+    });
 
-    let inner = waproto::whatsapp::Message {
+    let inner = nx!(waproto::whatsapp::Message {
         interactive_message: MessageField::some(interactive),
         ..Default::default()
-    };
+    });
 
     let message = if request.view_once {
-        waproto::whatsapp::Message {
-            view_once_message_v2: MessageField::some(
+        nx!(waproto::whatsapp::Message {
+            view_once_message_v2: MessageField::some(nx!(
                 waproto::whatsapp::message::FutureProofMessage {
                     message: MessageField::some(inner),
-                },
-            ),
+                }
+            ),),
             ..Default::default()
-        }
+        })
     } else {
         inner
     };
@@ -570,12 +574,12 @@ pub async fn execute_interactive(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -641,16 +645,16 @@ pub async fn execute_cta_url(
         "merchant_url": merchant_url,
     });
 
-    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+    let native_flow = nx!(waproto::whatsapp::message::interactive_message::NativeFlowMessage {
         buttons: vec![
-            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+            nx!(waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
                 name: Some("cta_url".to_string()),
                 button_params_json: Some(params.to_string()),
-            },
+            }),
         ],
         message_params_json: Some("{\"tag\":\"cta_url\"}".to_string()),
         ..Default::default()
-    };
+    });
 
     let header_media = if let Some(ref media_ref) = request.image {
         let (data, mimetype) = get_media_data(media_ref).await?;
@@ -662,7 +666,7 @@ pub async fn execute_cta_url(
             )
             .await
             .map_err(|e| ApiError::MediaUploadFailed(e.to_string()))?;
-        Some(waproto::whatsapp::message::ImageMessage {
+        Some(nx!(waproto::whatsapp::message::ImageMessage {
             url: Some(upload.url),
             direct_path: Some(upload.direct_path),
             media_key: Some(upload.media_key.to_vec()),
@@ -671,7 +675,7 @@ pub async fn execute_cta_url(
             file_length: Some(data.len() as u64),
             mimetype: Some(mimetype),
             ..Default::default()
-        })
+        }))
     } else {
         None
     };
@@ -682,7 +686,7 @@ pub async fn execute_cta_url(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| request.display_text.clone());
 
-    let header = waproto::whatsapp::message::interactive_message::Header {
+    let header = nx!(waproto::whatsapp::message::interactive_message::Header {
         title: Some(header_title),
         has_media_attachment: Some(header_media.is_some()),
         media: header_media.map(|img| {
@@ -691,29 +695,29 @@ pub async fn execute_cta_url(
             )
         }),
         ..Default::default()
-    };
+    });
 
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         interactive_message: MessageField::some(
-            waproto::whatsapp::message::InteractiveMessage {
+            nx!(waproto::whatsapp::message::InteractiveMessage {
                 header: MessageField::some(header),
-                body: Some(waproto::whatsapp::message::interactive_message::Body {
+                body: Some(nx!(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.body_text),
-                }).into(),
+                })).into(),
                 footer: request.footer_text.map(|f| {
-                    waproto::whatsapp::message::interactive_message::Footer {
+                    nx!(waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    }
+                    })
                 }).into(),
                 interactive_message: Some(
                     waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
-            },
+            }),
         ),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -729,12 +733,12 @@ pub async fn execute_cta_url(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -806,38 +810,40 @@ pub async fn execute_quick_reply(
                 "display_text": b.display_text,
                 "id": b.id,
             });
-            waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
+            nx!(waproto::whatsapp::message::interactive_message::native_flow_message::NativeFlowButton {
                 name: Some("quick_reply".to_string()),
                 button_params_json: Some(params.to_string()),
-            }
+            })
         })
         .collect();
 
-    let native_flow = waproto::whatsapp::message::interactive_message::NativeFlowMessage {
-        buttons,
-        ..Default::default()
-    };
+    let native_flow = nx!(
+        waproto::whatsapp::message::interactive_message::NativeFlowMessage {
+            buttons,
+            ..Default::default()
+        }
+    );
 
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         interactive_message: MessageField::some(
-            waproto::whatsapp::message::InteractiveMessage {
-                body: Some(waproto::whatsapp::message::interactive_message::Body {
+            nx!(waproto::whatsapp::message::InteractiveMessage {
+                body: Some(nx!(waproto::whatsapp::message::interactive_message::Body {
                     text: Some(request.body_text),
-                }).into(),
+                })).into(),
                 footer: request.footer_text.map(|f| {
-                    waproto::whatsapp::message::interactive_message::Footer {
+                    nx!(waproto::whatsapp::message::interactive_message::Footer {
                         text: Some(f),
                         ..Default::default()
-                    }
+                    })
                 }).into(),
                 interactive_message: Some(
                     waproto::whatsapp::message::interactive_message::InteractiveMessage::NativeFlowMessage(Box::new(native_flow)),
                 ),
                 ..Default::default()
-            },
+            }),
         ),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -853,12 +859,12 @@ pub async fn execute_quick_reply(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -924,22 +930,24 @@ pub async fn execute_poll_update(
             .unwrap_or_default()
     });
 
-    let message = waproto::whatsapp::Message {
-        poll_update_message: MessageField::some(waproto::whatsapp::message::PollUpdateMessage {
-            poll_creation_message_key: Some(
-                message_key_for(state, session_id, &to_jid, &request.poll_message_id).await,
-            )
-            .into(),
-            vote: Some(waproto::whatsapp::message::PollEncValue {
-                enc_payload,
-                enc_iv,
-            })
-            .into(),
-            sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
-            ..Default::default()
-        }),
+    let message = nx!(waproto::whatsapp::Message {
+        poll_update_message: MessageField::some(nx!(
+            waproto::whatsapp::message::PollUpdateMessage {
+                poll_creation_message_key: Some(
+                    message_key_for(state, session_id, &to_jid, &request.poll_message_id).await,
+                )
+                .into(),
+                vote: Some(nx!(waproto::whatsapp::message::PollEncValue {
+                    enc_payload,
+                    enc_iv,
+                }))
+                .into(),
+                sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
+                ..Default::default()
+            }
+        )),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -955,12 +963,12 @@ pub async fn execute_poll_update(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -1015,26 +1023,26 @@ pub async fn execute_buttons_response(
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         buttons_response_message: MessageField::some(
-            waproto::whatsapp::message::ButtonsResponseMessage {
+            nx!(waproto::whatsapp::message::ButtonsResponseMessage {
             selected_button_id: Some(request.selected_button_id),
             r#type: Some(waproto::whatsapp::message::buttons_response_message::Type::DISPLAY_TEXT),
             context_info: request.reply_to.map(|id| {
-                waproto::whatsapp::ContextInfo {
+                nx!(waproto::whatsapp::ContextInfo {
                     stanza_id: Some(id),
                     ..Default::default()
-                }
+                })
             }).into(),
                 response: Some(
                     waproto::whatsapp::message::buttons_response_message::Response::SelectedDisplayText(
                         request.selected_display_text,
                     ),
                 ),
-            },
+            }),
         ),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -1050,12 +1058,12 @@ pub async fn execute_buttons_response(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -1110,18 +1118,18 @@ pub async fn execute_list_response(
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let message = waproto::whatsapp::Message {
-        list_response_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        list_response_message: MessageField::some(nx!(
             waproto::whatsapp::message::ListResponseMessage {
                 title: Some(request.title),
                 list_type: Some(
                     waproto::whatsapp::message::list_response_message::ListType::SINGLE_SELECT,
                 ),
-                single_select_reply: Some(
+                single_select_reply: Some(nx!(
                     waproto::whatsapp::message::list_response_message::SingleSelectReply {
                         selected_row_id: Some(request.selected_row_id),
-                    },
-                )
+                    }
+                ),)
                 .into(),
                 description: request.description,
                 context_info: reply_context(
@@ -1133,10 +1141,10 @@ pub async fn execute_list_response(
                 )
                 .await
                 .into(),
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -1152,12 +1160,12 @@ pub async fn execute_list_response(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -1212,35 +1220,36 @@ pub async fn execute_interactive_response(
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let native_flow =
+    let native_flow = nx!(
         waproto::whatsapp::message::interactive_response_message::NativeFlowResponseMessage {
             name: Some(request.name),
             params_json: Some(request.params_json),
             version: Some(request.version),
-        };
+        }
+    );
 
-    let message = waproto::whatsapp::Message {
+    let message = nx!(waproto::whatsapp::Message {
         interactive_response_message: MessageField::some(
-            waproto::whatsapp::message::InteractiveResponseMessage {
+            nx!(waproto::whatsapp::message::InteractiveResponseMessage {
                 body: request.body_text.map(|text| {
-                    waproto::whatsapp::message::interactive_response_message::Body {
+                    nx!(waproto::whatsapp::message::interactive_response_message::Body {
                         text: Some(text),
                         ..Default::default()
-                    }
+                    })
                 }).into(),
                 context_info: request.reply_to.map(|id| {
-                    waproto::whatsapp::ContextInfo {
+                    nx!(waproto::whatsapp::ContextInfo {
                         stanza_id: Some(id),
                         ..Default::default()
-                    }
+                    })
                 }).into(),
                 interactive_response_message: Some(
                     waproto::whatsapp::message::interactive_response_message::InteractiveResponseMessage::NativeFlowResponseMessage(Box::new(native_flow)),
                 ),
-            },
+            }),
         ),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -1256,12 +1265,12 @@ pub async fn execute_interactive_response(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -1317,8 +1326,8 @@ pub async fn execute_highly_structured(
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
     crate::api::shared::new_chats::handlers::admit(state, session_id, &to_jid, &request.to).await?;
 
-    let message = waproto::whatsapp::Message {
-        highly_structured_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        highly_structured_message: MessageField::some(nx!(
             waproto::whatsapp::message::HighlyStructuredMessage {
                 namespace: Some(request.namespace),
                 element_name: Some(request.element_name),
@@ -1326,10 +1335,10 @@ pub async fn execute_highly_structured(
                 fallback_lg: request.fallback_lg,
                 fallback_lc: request.fallback_lc,
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -1345,12 +1354,12 @@ pub async fn execute_highly_structured(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -1405,8 +1414,8 @@ pub async fn execute_template_button_reply(
     let client = get_client(state, session_id)?;
     let to_jid = resolve_recipient_jid(client.clone(), parse_jid(&request.to)?).await;
 
-    let message = waproto::whatsapp::Message {
-        template_button_reply_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        template_button_reply_message: MessageField::some(nx!(
             waproto::whatsapp::message::TemplateButtonReplyMessage {
                 selected_id: Some(request.selected_id),
                 selected_display_text: Some(request.selected_display_text),
@@ -1421,10 +1430,10 @@ pub async fn execute_template_button_reply(
                 .await
                 .into(),
                 ..Default::default()
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -1440,12 +1449,12 @@ pub async fn execute_template_button_reply(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })

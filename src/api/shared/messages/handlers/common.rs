@@ -205,38 +205,6 @@ pub(super) async fn show_typing_before_send(client: &whatsapp_rust::Client, jid:
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_presence_delay_defaults_on_missing_or_malformed_input() {
-        for raw in [
-            None,
-            Some(""),
-            Some("  "),
-            Some("soon"),
-            Some("-5"),
-            Some("1.5"),
-        ] {
-            assert_eq!(parse_presence_delay(raw), 1200);
-        }
-    }
-
-    #[test]
-    fn parse_presence_delay_accepts_milliseconds() {
-        assert_eq!(parse_presence_delay(Some("0")), 0);
-        assert_eq!(parse_presence_delay(Some("750")), 750);
-        assert_eq!(parse_presence_delay(Some(" 1500 ")), 1500);
-    }
-
-    #[test]
-    fn parse_presence_delay_caps_absurd_values() {
-        assert_eq!(parse_presence_delay(Some("600000")), 10_000);
-        assert_eq!(parse_presence_delay(Some(&u64::MAX.to_string())), 10_000);
-    }
-}
-
 /// The session's chat store, when its client is up.
 pub(crate) fn chat_store(
     state: &AppState,
@@ -272,12 +240,12 @@ pub(crate) async fn message_key_for(
         .as_ref()
         .filter(|m| !m.from_me && chat.server == wacore_binary::jid::Server::Group)
         .map(|m| m.sender_jid.to_non_ad());
-    waproto::whatsapp::MessageKey {
+    nx!(waproto::whatsapp::MessageKey {
         remote_jid: Some(chat.to_string()),
         id: Some(message_id.to_string()),
         from_me: Some(from_me),
         participant: participant.map(|j| j.to_string()),
-    }
+    })
 }
 
 /// A copy of `message` fit to travel as a quote: the innermost content
@@ -317,10 +285,10 @@ pub(crate) async fn reply_context(
     reply_to: Option<String>,
 ) -> Option<waproto::whatsapp::ContextInfo> {
     let id = reply_to.filter(|id| !id.is_empty())?;
-    let mut context = waproto::whatsapp::ContextInfo {
+    let mut context = nx!(waproto::whatsapp::ContextInfo {
         stanza_id: Some(id.clone()),
         ..Default::default()
-    };
+    });
     if let Some(stored) = stored_message(state, session_id, chat, &id).await {
         let sender = if stored.from_me {
             client.pn()
@@ -333,4 +301,36 @@ pub(crate) async fn reply_context(
         }
     }
     Some(context)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_presence_delay_defaults_on_missing_or_malformed_input() {
+        for raw in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("soon"),
+            Some("-5"),
+            Some("1.5"),
+        ] {
+            assert_eq!(parse_presence_delay(raw), 1200);
+        }
+    }
+
+    #[test]
+    fn parse_presence_delay_accepts_milliseconds() {
+        assert_eq!(parse_presence_delay(Some("0")), 0);
+        assert_eq!(parse_presence_delay(Some("750")), 750);
+        assert_eq!(parse_presence_delay(Some(" 1500 ")), 1500);
+    }
+
+    #[test]
+    fn parse_presence_delay_caps_absurd_values() {
+        assert_eq!(parse_presence_delay(Some("600000")), 10_000);
+        assert_eq!(parse_presence_delay(Some(&u64::MAX.to_string())), 10_000);
+    }
 }

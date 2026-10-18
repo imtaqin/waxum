@@ -437,7 +437,7 @@ impl SessionState {
     /// doesn't accept a write that will never leave the socket.
     pub fn get_live_client(&self) -> Option<Arc<Client>> {
         let c = self.client.read().clone()?;
-        if c.is_connected() && c.is_logged_in() {
+        if c.is_socket_connected() && c.is_logged_in() {
             Some(c)
         } else {
             None
@@ -448,7 +448,7 @@ impl SessionState {
     /// when the cached client agrees it's connected AND authenticated.
     pub fn is_alive(&self) -> bool {
         match self.client.read().as_ref() {
-            Some(c) => c.is_connected() && c.is_logged_in(),
+            Some(c) => c.is_socket_connected() && c.is_logged_in(),
             None => false,
         }
     }
@@ -460,7 +460,7 @@ impl SessionState {
     /// `socket_alive` on /status, /readyz, and /metrics.
     pub fn socket_alive(&self) -> bool {
         match self.client.read().as_ref() {
-            Some(c) => c.is_connected(),
+            Some(c) => c.is_socket_connected(),
             None => false,
         }
     }

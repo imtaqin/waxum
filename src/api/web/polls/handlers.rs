@@ -264,23 +264,23 @@ pub async fn vote(
     let own_pn = client.pn().ok_or(ApiError::NotConnected)?;
     let creator_is_me = own_pn.to_non_ad().user == info.creator.user
         || client.lid().is_some_and(|l| l.user == info.creator.user);
-    let message = wa::Message {
-        poll_update_message: MessageField::some(wa::message::PollUpdateMessage {
-            poll_creation_message_key: MessageField::some(wa::MessageKey {
+    let message = nx!(wa::Message {
+        poll_update_message: MessageField::some(nx!(wa::message::PollUpdateMessage {
+            poll_creation_message_key: MessageField::some(nx!(wa::MessageKey {
                 remote_jid: Some(chat.to_string()),
                 from_me: Some(creator_is_me),
                 id: Some(message_id.clone()),
                 participant: (chat.server == Server::Group).then(|| info.creator.to_string()),
-            }),
-            vote: MessageField::some(wa::message::PollEncValue {
+            })),
+            vote: MessageField::some(nx!(wa::message::PollEncValue {
                 enc_payload: Some(payload),
                 enc_iv: Some(iv.to_vec()),
-            }),
+            })),
             metadata: MessageField::none(),
             sender_timestamp_ms: Some(chrono::Utc::now().timestamp_millis()),
-        }),
+        })),
         ..Default::default()
-    };
+    });
     let sent = client
         .send_message(chat.clone(), message.clone())
         .await
@@ -290,10 +290,10 @@ pub async fn vote(
         &session_id,
         &chat,
         &message,
-        &sent.message_id,
+        sent.message_id.as_str(),
     )
     .await;
     Ok(Json(PollVoteResponse {
-        message_id: sent.message_id,
+        message_id: sent.message_id.to_string(),
     }))
 }

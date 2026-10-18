@@ -88,7 +88,7 @@ pub async fn purge_sessions(
             .flatten();
         if let Some(runtime) = state.get_session(&id) {
             if let Some(client) = runtime.get_client() {
-                client.disconnect().await;
+                client.shutdown().await;
             }
         }
         state.remove_session(&id);
@@ -135,7 +135,7 @@ pub async fn disconnect_all(
         let runtime = state.get_session(&s.id);
         match runtime.and_then(|r| r.get_client()) {
             Some(client) => {
-                client.disconnect().await;
+                client.shutdown().await;
                 if let Some(runtime) = state.get_session(&s.id) {
                     runtime.set_status(SessionStatus::Disconnected);
                     runtime.set_client(None);

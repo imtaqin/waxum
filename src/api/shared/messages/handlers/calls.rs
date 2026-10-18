@@ -67,16 +67,16 @@ pub async fn execute_scheduled_call(
         _ => waproto::whatsapp::message::scheduled_call_creation_message::CallType::VOICE,
     };
 
-    let message = waproto::whatsapp::Message {
-        scheduled_call_creation_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        scheduled_call_creation_message: MessageField::some(nx!(
             waproto::whatsapp::message::ScheduledCallCreationMessage {
                 scheduled_timestamp_ms: Some(request.scheduled_timestamp_ms),
                 call_type: Some(call_type),
                 title: request.title,
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -92,12 +92,12 @@ pub async fn execute_scheduled_call(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
@@ -158,21 +158,21 @@ pub async fn execute_scheduled_call_edit(
         _ => waproto::whatsapp::message::scheduled_call_edit_message::EditType::UNKNOWN,
     };
 
-    let message = waproto::whatsapp::Message {
-        scheduled_call_edit_message: MessageField::some(
+    let message = nx!(waproto::whatsapp::Message {
+        scheduled_call_edit_message: MessageField::some(nx!(
             waproto::whatsapp::message::ScheduledCallEditMessage {
-                key: Some(waproto::whatsapp::MessageKey {
+                key: Some(nx!(waproto::whatsapp::MessageKey {
                     remote_jid: Some(request.to.clone()),
                     id: Some(request.scheduled_call_message_id),
                     from_me: Some(true),
                     ..Default::default()
-                })
+                }))
                 .into(),
                 edit_type: Some(edit_type),
-            },
-        ),
+            }
+        ),),
         ..Default::default()
-    };
+    });
 
     if auto_presence_on_send() {
         show_typing_before_send(&client, &to_jid).await;
@@ -188,12 +188,12 @@ pub async fn execute_scheduled_call_edit(
         session_id,
         &to_jid,
         &message,
-        &message_id,
+        message_id.as_str(),
     )
     .await;
 
     Ok(MessageResponse {
-        message_id,
+        message_id: message_id.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
         to: to_jid.to_string(),
     })
