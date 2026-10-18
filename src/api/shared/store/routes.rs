@@ -21,6 +21,7 @@ pub fn session_routes() -> Router<AppState> {
         )
         .route("/{session_id}/store/chats/{jid}/kinds", get(handlers::kinds))
         .route("/{session_id}/store/chats/{jid}/links", get(handlers::links))
+        .route("/{session_id}/store/recent", get(handlers::recent))
         .route("/{session_id}/store/starred", get(handlers::starred))
         .route("/{session_id}/store/search", get(handlers::search))
         .route("/{session_id}/store/contacts", get(handlers::contacts))

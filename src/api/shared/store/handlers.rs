@@ -10,6 +10,7 @@
 //! - `GET /api/v1/sessions/{sid}/store/chats/{jid}/messages/{id}/receipts`
 //! - `GET /api/v1/sessions/{sid}/store/chats/{jid}/kinds?kinds=image,video&limit=`
 //! - `GET /api/v1/sessions/{sid}/store/chats/{jid}/links?limit=`
+//! - `GET /api/v1/sessions/{sid}/store/recent?kinds=sticker&limit=`
 //! - `GET /api/v1/sessions/{sid}/store/starred?limit=`
 //! - `GET /api/v1/sessions/{sid}/store/search?q=&chat=&limit=`
 //! - `GET /api/v1/sessions/{sid}/store/contacts`
@@ -155,6 +156,20 @@ pub async fn kinds(
     let kinds: Vec<&str> = q.kinds.split(',').filter(|k| !k.is_empty()).collect();
     let rows = store(&state, &session_id)?
         .messages_of_kinds(&parse(&jid)?, &kinds, q.limit.unwrap_or(200))
+        .await
+        .map_err(internal)?;
+    Ok(Json(rows.iter().map(WireMessage::from).collect()))
+}
+
+/// The newest messages of some kinds across all chats.
+pub async fn recent(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Query(q): Query<KindsQuery>,
+) -> Result<Json<Vec<WireMessage>>, ApiError> {
+    let kinds: Vec<&str> = q.kinds.split(',').filter(|k| !k.is_empty()).collect();
+    let rows = store(&state, &session_id)?
+        .recent_of_kinds(&kinds, q.limit.unwrap_or(200))
         .await
         .map_err(internal)?;
     Ok(Json(rows.iter().map(WireMessage::from).collect()))
