@@ -69,7 +69,7 @@ pub fn acquire_instance_lock(storage_path: &str) -> Result<InstanceLock, String>
     Ok(InstanceLock { path })
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn pid_is_alive(pid: u32) -> bool {
     Path::new(&format!("/proc/{pid}")).exists()
 }
@@ -84,7 +84,7 @@ fn pid_is_alive(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "windows")))]
 fn pid_is_alive(_pid: u32) -> bool {
     true
 }
