@@ -699,7 +699,17 @@ impl AppState {
     ) -> Self {
         let base_storage_path = std::env::var("WHATSAPP_STORAGE_PATH")
             .unwrap_or_else(|_| "./whatsapp_sessions".to_string());
+        Self::with_storage_path(pool, nats, recordings, base_storage_path).await
+    }
 
+    /// Same as [`AppState::new`] with the session storage directory given
+    /// explicitly instead of read from `WHATSAPP_STORAGE_PATH`.
+    pub async fn with_storage_path(
+        pool: DbPool,
+        nats: Option<NatsManager>,
+        recordings: crate::storage::RecordingStore,
+        base_storage_path: String,
+    ) -> Self {
         let _ = tokio::fs::create_dir_all(&base_storage_path).await;
 
         let session_manager = SessionManager::new(pool);

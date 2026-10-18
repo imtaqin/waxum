@@ -136,6 +136,7 @@ impl EventHandler for ChatStoreHandler {
             EventKind::DeleteChatUpdate,
             EventKind::ClearChatUpdate,
             EventKind::DeleteMessageForMeUpdate,
+            EventKind::GroupUpdate,
         ])
     }
 }
@@ -228,7 +229,7 @@ impl ChatStore {
         message: &wa::Message,
         timestamp: DateTime<Utc>,
     ) -> Result<()> {
-        let base = wacore::proto_helpers::MessageExt::get_base_message(message);
+        let base = crate::materialize::base_message(message);
         self.tx
             .send(WriterMsg::Outgoing {
                 chat: chat.clone(),
@@ -255,7 +256,7 @@ impl ChatStore {
         new_content: &wa::Message,
         timestamp: DateTime<Utc>,
     ) -> Result<()> {
-        let base = wacore::proto_helpers::MessageExt::get_base_message(new_content);
+        let base = crate::materialize::base_message(new_content);
         self.tx
             .send(WriterMsg::Edit {
                 chat: chat.clone(),
@@ -925,6 +926,7 @@ fn apply_event(
             Ok(())
         }
         Event::Receipt(receipt) => apply_receipt(conn, device_id, receipt, cs),
+        Event::GroupUpdate(update) => apply_group_update(conn, device_id, update, cs),
         Event::ServerAck(ack) => {
             if let AckApplied::Deferrable(chat) = apply_server_ack(conn, device_id, ack, cs)? {
                 deferred.defer(ack, chat, wacore::time::now_utc().timestamp_millis());
@@ -2428,8 +2430,31 @@ fn apply_history_message(
             }
             MessageOp::Ignore => {}
         }
+    } else if let Some(stub) = wmi.message_stub_type {
+        let mut parts = vec![format!("stub{}", stub as i32), sender.to_string()];
+        parts.extend(wmi.message_stub_parameters.iter().cloned());
+        let text = parts.join(SYSTEM_SEPARATOR);
+        let stored = insert_message(
+            conn,
+            device_id,
+            NewMessage {
+                chat_jid: chat,
+                msg_id,
+                sender_jid: sender,
+                from_me,
+                timestamp_ms: ts_ms,
+                kind: KIND_SYSTEM,
+                text: Some(&text),
+                proto: None,
+                status: wa::web_message_info::Status::SERVER_ACK as i32,
+                starred: false,
+                overwrite: false,
+            },
+        )?;
+        if stored == StoredRow::Inserted {
+            cs.message_chats.insert(chat.to_string());
+        }
     }
-
 
     for reaction in &wmi.reactions {
         let Some(text) = reaction.text.as_deref() else {
@@ -2448,6 +2473,87 @@ fn apply_history_message(
             .unwrap_or("");
         let reaction_ts = reaction.sender_timestamp_ms.unwrap_or(ts_ms);
         apply_reaction(conn, device_id, chat, msg_id, reactor, text, reaction_ts)?;
+    }
+    Ok(())
+}
+
+/// Label of rows that are group notices ("X added Y", subject changes...).
+/// Their `text_content` is the notice code, the acting user's JID, then
+/// the code's parameters, joined with [`SYSTEM_SEPARATOR`]. History-sync
+/// notices use `stub<N>` codes with WhatsApp's `StubType` numbers; live
+/// group notifications use the notification's own action names.
+pub const KIND_SYSTEM: &str = "system";
+pub const SYSTEM_SEPARATOR: &str = "\u{1f}";
+
+/// Stores a live group notification as a system row in the group's chat.
+fn apply_group_update(
+    conn: &mut SqliteConnection,
+    device_id: i32,
+    update: &wacore::types::events::GroupUpdate,
+    cs: &mut ChangeSet,
+) -> QueryResult<()> {
+    use wacore::stanza::groups::GroupNotificationAction as A;
+    let jids = |ps: &[wacore::stanza::groups::GroupParticipantInfo]| -> Vec<String> {
+        ps.iter().map(|p| p.jid.to_non_ad_string()).collect()
+    };
+    let (code, params): (&str, Vec<String>) = match update.action.as_ref() {
+        A::Add { participants, .. } => ("add", jids(participants)),
+        A::Remove { participants, .. } => ("remove", jids(participants)),
+        A::Promote { participants } => ("promote", jids(participants)),
+        A::Demote { participants } => ("demote", jids(participants)),
+        A::Subject { subject, .. } => ("subject", vec![subject.clone()]),
+        A::Description { description, .. } => {
+            ("description", vec![description.clone().unwrap_or_default()])
+        }
+        A::Locked { .. } => ("locked", Vec::new()),
+        A::Unlocked => ("unlocked", Vec::new()),
+        A::Announce => ("announcement", Vec::new()),
+        A::NotAnnounce => ("not_announcement", Vec::new()),
+        A::Ephemeral { expiration, .. } => ("ephemeral", vec![expiration.to_string()]),
+        A::MembershipApprovalMode { enabled } => {
+            ("membership_approval_mode", vec![enabled.to_string()])
+        }
+        A::RevokeInvite => ("revoke_invite", Vec::new()),
+        A::Create { .. } => ("create", Vec::new()),
+        A::Delete { .. } => ("delete", Vec::new()),
+        _ => return Ok(()),
+    };
+    let chat = update.group_jid.to_string();
+    let actor = update
+        .participant
+        .as_ref()
+        .map(|j| j.to_non_ad_string())
+        .unwrap_or_default();
+    let mut parts = vec![code.to_string(), actor.clone()];
+    parts.extend(params);
+    let text = parts.join(SYSTEM_SEPARATOR);
+    let msg_id = format!(
+        "system-{}-{}",
+        update
+            .notification_id
+            .clone()
+            .unwrap_or_else(|| update.timestamp.timestamp_millis().to_string()),
+        update.action_index
+    );
+    let stored = insert_message(
+        conn,
+        device_id,
+        NewMessage {
+            chat_jid: &chat,
+            msg_id: &msg_id,
+            sender_jid: &actor,
+            from_me: false,
+            timestamp_ms: update.timestamp.timestamp_millis(),
+            kind: KIND_SYSTEM,
+            text: Some(&text),
+            proto: None,
+            status: wa::web_message_info::Status::SERVER_ACK as i32,
+            starred: false,
+            overwrite: false,
+        },
+    )?;
+    if stored == StoredRow::Inserted {
+        cs.message_chats.insert(chat);
     }
     Ok(())
 }

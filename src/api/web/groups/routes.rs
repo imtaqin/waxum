@@ -44,4 +44,13 @@ pub fn session_routes() -> Router<AppState> {
             "/{session_id}/groups/{group_jid}/settings",
             put(management::set_group_settings),
         )
+        .route(
+            "/{session_id}/groups/{group_jid}/picture",
+            put(management::set_group_picture),
+        )
+        .route("/{session_id}/groups/join", post(management::join_group))
+        .route(
+            "/{session_id}/groups/invite/{code}",
+            get(management::get_invite_info),
+        )
 }

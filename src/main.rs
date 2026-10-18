@@ -343,46 +343,7 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
     };
     tracing::info!("Connecting to {} ({})", backend_name, masked);
 
-    let pool = match backend {
-        db::DbBackend::Postgres => {
-            use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod};
-            use tokio_postgres::NoTls;
-
-            let pg_config: tokio_postgres::Config = database_url.parse()?;
-            let mgr_config = ManagerConfig {
-                recycling_method: RecyclingMethod::Fast,
-            };
-            let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
-            let pg_pool = deadpool_postgres::Pool::builder(mgr).max_size(16).build()?;
-            let _ = pg_pool.get().await?;
-            db::session::DbPool::Postgres(pg_pool)
-        }
-        db::DbBackend::MySQL => {
-            let opts = mysql_async::Opts::from_url(&database_url)?;
-            let max_pool: usize = std::env::var("WA_RS_MYSQL_MAX_POOL")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(64);
-            let constraints = mysql_async::PoolConstraints::new(4, max_pool).unwrap_or_else(|| {
-                mysql_async::PoolConstraints::new(2, 10).expect("safe defaults")
-            });
-            let pool_opts = mysql_async::PoolOpts::default()
-                .with_constraints(constraints)
-                .with_inactive_connection_ttl(Duration::from_secs(300))
-                .with_ttl_check_interval(Duration::from_secs(60));
-            let opts = mysql_async::OptsBuilder::from_opts(opts).pool_opts(pool_opts);
-            let my_pool = mysql_async::Pool::new(opts);
-            let _conn = my_pool.get_conn().await?;
-            db::session::DbPool::MySQL(my_pool)
-        }
-        db::DbBackend::SQLite => {
-            let path = database_url
-                .strip_prefix("sqlite://")
-                .unwrap_or(&database_url);
-            let handle = db::sqlite_raw::open(path)?;
-            db::session::DbPool::SQLite(handle)
-        }
-    };
+    let pool = db::connect(&database_url, backend).await?;
     tracing::info!("Connected to {}", backend_name);
 
     db::schema::init_schema(&pool).await?;
@@ -455,25 +416,7 @@ async fn async_main(worker_threads: usize, blocking_threads: usize) -> Result<()
         }
     };
 
-    let reconnect_state = state.clone();
-    tokio::spawn(async move {
-        waxum::api::shared::sessions::handlers::reconnect_all_on_startup(reconnect_state).await;
-    });
-
-    let watchdog_state = state.clone();
-    tokio::spawn(async move {
-        waxum::api::shared::sessions::handlers::run_reconnect_watchdog(watchdog_state).await;
-    });
-
-    let scheduler_state = state.clone();
-    tokio::spawn(async move {
-        waxum::api::shared::schedule::handlers::run_scheduler(scheduler_state).await;
-    });
-
-    let blast_state = state.clone();
-    tokio::spawn(async move {
-        waxum::api::shared::blast::handlers::run_blast_worker(blast_state).await;
-    });
+    waxum::workers::spawn(&state);
 
     if nats_enabled {
         if let Some(nats) = state.nats() {

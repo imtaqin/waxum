@@ -9,6 +9,7 @@
 //! - [`webhooks`] — per-session webhook targets and their health.
 //! - [`blast`], [`schedule`] — bulk-send jobs and scheduled sends.
 //! - [`search`] — message history ingestion and full-text search.
+//! - [`store`] — the chat store row for row, and its live changes.
 //! - [`new_chats`] — new-chat counter and limit.
 //! - [`bulk`], [`tags`], [`events`], [`tokens`], [`nats`], [`info`] — fleet
 //!   operations, session tags, the event tail, API tokens, NATS inspection,
@@ -28,6 +29,7 @@ pub mod new_chats;
 pub mod schedule;
 pub mod search;
 pub mod sessions;
+pub mod store;
 pub mod tags;
 pub mod tokens;
 pub mod webhooks;
@@ -55,6 +57,7 @@ pub fn session_routes() -> Router<AppState> {
         .merge(blast::routes::session_routes())
         .merge(bulk::routes::session_routes())
         .merge(messages::routes::session_routes())
+        .merge(store::routes::session_routes())
         .merge(new_chats::routes::session_routes())
         .merge(schedule::routes::session_routes())
         .merge(search::routes::session_routes())

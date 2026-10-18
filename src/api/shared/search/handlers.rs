@@ -88,9 +88,10 @@ pub(crate) async fn record_incoming(
     }
 }
 
-/// Index one outgoing message right after the send resolves. Never
-/// fails the caller. `sender_jid` is stored empty — the sender is the
-/// session's own account and its JID is not tracked here.
+/// Index one outgoing message right after the send resolves, in the
+/// history table and in the session's chat store. Never fails the
+/// caller. `sender_jid` is stored empty — the sender is the session's
+/// own account and its JID is not tracked here.
 pub(crate) async fn record_outgoing(
     state: &AppState,
     session_id: &str,
@@ -98,6 +99,14 @@ pub(crate) async fn record_outgoing(
     message: &waproto::whatsapp::Message,
     message_id: &str,
 ) {
+    if let Some(store) = state
+        .get_session(session_id)
+        .and_then(|runtime| runtime.get_chat_store())
+    {
+        if let Err(e) = store.record_outgoing(to_jid, message_id, message, chrono::Utc::now()) {
+            tracing::warn!("chat store insert (outgoing) failed: {}", e);
+        }
+    }
     if !history_enabled() {
         return;
     }

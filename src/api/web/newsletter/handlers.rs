@@ -28,6 +28,31 @@ fn to_debug_json<T: std::fmt::Debug>(v: &T) -> serde_json::Value {
     serde_json::json!(format!("{:?}", v))
 }
 
+/// A channel's metadata as plain JSON fields.
+fn newsletter_json(m: &whatsapp_rust::features::NewsletterMetadata) -> serde_json::Value {
+    use whatsapp_rust::features::{NewsletterRole, NewsletterVerification};
+    let role = m.role.as_ref().map(|r| match r {
+        NewsletterRole::Owner => "owner",
+        NewsletterRole::Admin => "admin",
+        NewsletterRole::Subscriber => "subscriber",
+        NewsletterRole::Guest => "guest",
+        _ => "subscriber",
+    });
+    serde_json::json!({
+        "jid": m.jid.to_string(),
+        "name": m.name,
+        "description": m.description,
+        "subscribers_count": m.subscriber_count,
+        "verified": matches!(m.verification, NewsletterVerification::Verified),
+        "picture_url": m.picture_url,
+        "preview_url": m.preview_url,
+        "invite_code": m.invite_code,
+        "role": role,
+        "muted": m.muted.unwrap_or(false),
+        "created_at": m.creation_time,
+    })
+}
+
 #[utoipa::path(
     get,
     security(("bearer_auth" = [])),
@@ -47,7 +72,7 @@ pub async fn list_subscribed(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(
-        serde_json::json!({ "newsletters": to_debug_json(&list) }),
+        serde_json::json!({ "newsletters": list.iter().map(newsletter_json).collect::<Vec<_>>() }),
     ))
 }
 
@@ -74,7 +99,7 @@ pub async fn get_metadata(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(
-        serde_json::json!({ "metadata": to_debug_json(&meta) }),
+        serde_json::json!({ "metadata": newsletter_json(&meta) }),
     ))
 }
 
@@ -100,7 +125,7 @@ pub async fn create_newsletter(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(
-        serde_json::json!({ "metadata": to_debug_json(&meta) }),
+        serde_json::json!({ "metadata": newsletter_json(&meta) }),
     ))
 }
 
@@ -127,7 +152,7 @@ pub async fn join_newsletter(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(
-        serde_json::json!({ "metadata": to_debug_json(&meta) }),
+        serde_json::json!({ "metadata": newsletter_json(&meta) }),
     ))
 }
 
@@ -325,4 +350,142 @@ pub async fn set_mute(
     Ok(Json(
         serde_json::json!({ "success": true, "muted": req.muted }),
     ))
+}
+
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/newsletters/{jid}/messages",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Newsletter JID"),
+        NewsletterMessagesQuery
+    ),
+    responses(
+        (status = 200, description = "Channel posts, oldest first", body = NewsletterMessagesResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn list_messages(
+    State(state): State<AppState>,
+    Path((session_id, jid)): Path<(String, String)>,
+    axum::extract::Query(query): axum::extract::Query<NewsletterMessagesQuery>,
+) -> Result<Json<NewsletterMessagesResponse>, ApiError> {
+    use base64::Engine as _;
+    use wacore::proto_helpers::MessageExt;
+    let client = get_client(&state, &session_id)?;
+    let jid: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
+    let count = query.count.unwrap_or(50).clamp(1, 100);
+    let messages = client
+        .newsletter()
+        .get_messages(jid, count, query.before)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let messages = messages
+        .into_iter()
+        .map(|m| {
+            let text = m.message.as_ref().and_then(|msg| {
+                let base = msg.get_base_message();
+                base.conversation
+                    .clone()
+                    .or_else(|| {
+                        base.extended_text_message
+                            .as_option()
+                            .and_then(|e| e.text.clone())
+                    })
+                    .or_else(|| {
+                        base.image_message
+                            .as_option()
+                            .and_then(|i| i.caption.clone())
+                    })
+                    .or_else(|| {
+                        base.video_message
+                            .as_option()
+                            .and_then(|v| v.caption.clone())
+                    })
+            });
+            NewsletterMessageItem {
+                message_id: m.message_id,
+                server_id: m.server_id,
+                timestamp: m.timestamp,
+                text,
+                views: m.views_count,
+                reactions: m
+                    .reactions
+                    .into_iter()
+                    .map(|r| NewsletterReaction {
+                        emoji: r.code,
+                        count: r.count,
+                    })
+                    .collect(),
+                message_proto: m.message.as_ref().map(|msg| {
+                    base64::engine::general_purpose::STANDARD
+                        .encode(waproto::codec::message_to_vec(msg))
+                }),
+            }
+        })
+        .collect();
+    Ok(Json(NewsletterMessagesResponse { messages }))
+}
+
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/newsletters/invite/{code}",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("code" = String, Path, description = "Invite code from a whatsapp.com/channel/ link")
+    ),
+    responses((status = 200, description = "Channel the link leads to", body = NewsletterMetadataResponse))
+)]
+pub async fn get_metadata_by_invite(
+    State(state): State<AppState>,
+    Path((session_id, code)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let code = code.rsplit('/').next().unwrap_or(&code).to_string();
+    let meta = client
+        .newsletter()
+        .get_metadata_by_invite(&code)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    Ok(Json(
+        serde_json::json!({ "metadata": newsletter_json(&meta) }),
+    ))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct NewsletterReactRequest {
+    /// Emoji to react with; empty removes the reaction.
+    pub emoji: String,
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/newsletters/{jid}/messages/{server_id}/react",
+    tag = "newsletter",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Newsletter JID"),
+        ("server_id" = u64, Path, description = "Post server id")
+    ),
+    request_body = NewsletterReactRequest,
+    responses((status = 200, description = "Reaction sent", body = crate::api::common::SuccessResponse))
+)]
+pub async fn react_to_post(
+    State(state): State<AppState>,
+    Path((session_id, jid, server_id)): Path<(String, String, u64)>,
+    Json(request): Json<NewsletterReactRequest>,
+) -> Result<Json<crate::api::common::SuccessResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let jid: Jid = jid.parse().map_err(|_| ApiError::InvalidJid(jid.clone()))?;
+    client
+        .newsletter()
+        .send_reaction(&jid, server_id, &request.emoji)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(crate::api::common::SuccessResponse::new()))
 }

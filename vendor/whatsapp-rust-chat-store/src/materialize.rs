@@ -41,7 +41,26 @@ pub(crate) enum MessageOp {
 /// read-model view is [`MessageKind`](crate::types::MessageKind)). Coarser
 /// than the proto (one label per renderable bubble type), finer than WA's
 /// stanza `type` attribute (which collapses everything to text/media).
-pub(crate) fn message_kind(base: &wa::Message) -> &'static str {
+/// The innermost content of a message: [`MessageExt::get_base_message`]
+/// plus the future-proof wrappers it does not peel, notably the
+/// `associatedChildMessage` that carries each photo of an album.
+pub fn base_message(msg: &wa::Message) -> &wa::Message {
+    let mut current = msg.get_base_message();
+    for _ in 0..4 {
+        let inner = current
+            .associated_child_message
+            .as_option()
+            .or(current.group_status_mention_message.as_option())
+            .and_then(|w| w.message.as_option());
+        match inner {
+            Some(inner) => current = inner.get_base_message(),
+            None => break,
+        }
+    }
+    current
+}
+
+pub fn message_kind(base: &wa::Message) -> &'static str {
     if base.conversation.is_some() || base.extended_text_message.is_set() {
         "text"
     } else if base.image_message.is_set() {
@@ -121,7 +140,12 @@ pub(crate) fn unavailable_kind(unavailable_type: UnavailableType) -> Option<&'st
 
 /// Classify one decrypted message into its materialization op.
 pub(crate) fn classify(msg: &wa::Message) -> MessageOp {
-    let base = msg.get_base_message();
+    let base = base_message(msg);
+    // An album's parent only announces how many photos follow; the photos
+    // arrive as their own messages.
+    if base.album_message.is_set() {
+        return MessageOp::Ignore;
+    }
 
     if let Some(reaction) = base.reaction_message.as_option() {
         let Some(target_id) = reaction.key.as_option().and_then(|k| k.id.clone()) else {
@@ -147,7 +171,7 @@ pub(crate) fn classify(msg: &wa::Message) -> MessageOp {
             }
             (Some(ProtocolType::MESSAGE_EDIT), Some(target_id)) => {
                 if let Some(edited) = pm.edited_message.as_option() {
-                    let edited_base = edited.get_base_message();
+                    let edited_base = base_message(edited);
                     return MessageOp::Edit {
                         target_id,
                         new_text: extract_text(edited_base),
@@ -264,6 +288,29 @@ mod tests {
             }
             other => panic!("expected Store, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn classifies_album_photo_by_its_content() {
+        let photo = wa::Message {
+            image_message: MessageField::some(Default::default()),
+            ..Default::default()
+        };
+        let child = wa::Message {
+            associated_child_message: MessageField::some(wa::message::FutureProofMessage {
+                message: MessageField::from_box(Box::new(photo)),
+            }),
+            ..Default::default()
+        };
+        match classify(&child) {
+            MessageOp::Store { kind, .. } => assert_eq!(kind, "image"),
+            other => panic!("expected Store, got {other:?}"),
+        }
+        let parent = wa::Message {
+            album_message: MessageField::some(Default::default()),
+            ..Default::default()
+        };
+        assert!(matches!(classify(&parent), MessageOp::Ignore));
     }
 
     #[test]

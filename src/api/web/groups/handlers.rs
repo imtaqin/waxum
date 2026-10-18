@@ -163,7 +163,9 @@ pub async fn get_group_info(
             .map(|p| GroupParticipant {
                 jid: p.jid.to_string(),
                 phone_number: p.phone_number.as_ref().map(|j| j.to_string()),
-                role: if p.is_admin() {
+                role: if p.is_super_admin() {
+                    ParticipantRole::SuperAdmin
+                } else if p.is_admin() {
                     ParticipantRole::Admin
                 } else {
                     ParticipantRole::Member
@@ -171,6 +173,14 @@ pub async fn get_group_info(
             })
             .collect(),
         addressing_mode: format!("{:?}", info.addressing_mode),
+        subject: info.subject.clone(),
+        description: info.description.clone(),
+        creator: info.creator.as_ref().map(|j| j.to_string()),
+        creation_time: info.creation_time,
+        is_announce: info.is_announcement,
+        is_locked: info.is_locked,
+        ephemeral_expiration: info.ephemeral.as_ref().and_then(|e| e.expiration),
+        membership_approval: info.membership_approval,
     }))
 }
 

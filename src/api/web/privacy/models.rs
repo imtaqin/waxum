@@ -34,3 +34,21 @@ pub enum PrivacyValue {
     ContactBlacklist,
     MatchLastSeen,
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetPrivacyRequest {
+    /// `last`, `online`, `profile`, `status`, `groupadd`, `readreceipts`,
+    /// `calladd` or `messages`.
+    #[schema(example = "last")]
+    pub category: String,
+    /// `all`, `contacts`, `none`, `contact_blacklist`, `match_last_seen`
+    /// or `known`, as the category allows.
+    #[schema(example = "contacts")]
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DefaultDisappearingRequest {
+    /// Timer for new chats in seconds: 0 (off), 86400, 604800 or 7776000.
+    pub seconds: u32,
+}

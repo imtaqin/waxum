@@ -14,7 +14,9 @@ pub mod blocking;
 pub mod bots;
 pub mod business;
 pub mod calls;
+pub mod chats;
 pub mod chatstate;
+pub mod communities;
 pub mod contacts;
 pub mod fake_reply;
 pub mod groups;
@@ -23,6 +25,7 @@ pub mod media;
 pub mod mex;
 pub mod newsletter;
 pub mod operations;
+pub mod polls;
 pub mod presence;
 pub mod privacy;
 pub mod profile;
@@ -40,6 +43,8 @@ pub fn session_routes() -> Router<AppState> {
         .merge(bots::routes::session_routes())
         .merge(business::routes::session_routes())
         .merge(calls::routes::session_routes())
+        .merge(chats::routes::session_routes())
+        .merge(communities::routes::session_routes())
         .merge(chatstate::routes::session_routes())
         .merge(contacts::routes::session_routes())
         .merge(groups::routes::session_routes())
@@ -48,6 +53,7 @@ pub fn session_routes() -> Router<AppState> {
         .merge(mex::routes::session_routes())
         .merge(newsletter::routes::session_routes())
         .merge(operations::routes::session_routes())
+        .merge(polls::routes::session_routes())
         .merge(presence::routes::session_routes())
         .merge(privacy::routes::session_routes())
         .merge(profile::routes::session_routes())

@@ -448,28 +448,49 @@ pub async fn set_group_settings(
         .parse()
         .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
 
-    // The whatsapp-rust library currently only supports setting these modes at group creation time
-    // via GroupCreateOptions. For existing groups, we send the update via the raw group metadata IQ.
-    // For now, we validate the request and return the intended settings.
-    let _ = client
-        .groups()
-        .fetch_metadata(&jid)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    // Log the intended settings change
-    if let Some(mode) = &request.membership_approval_mode {
-        tracing::info!(
-            "Group {} membership_approval_mode set to {:?}",
-            group_jid,
-            mode
-        );
+    let groups = client.groups();
+    let internal = |e: whatsapp_rust::GroupError| ApiError::Internal(e.to_string());
+    if let Some(mode) = request.membership_approval_mode {
+        let mode = match mode {
+            MembershipApprovalMode::On => whatsapp_rust::MembershipApprovalMode::On,
+            MembershipApprovalMode::Off => whatsapp_rust::MembershipApprovalMode::Off,
+        };
+        groups
+            .set_membership_approval(jid.clone(), mode)
+            .await
+            .map_err(internal)?;
     }
-    if let Some(mode) = &request.member_add_mode {
-        tracing::info!("Group {} member_add_mode set to {:?}", group_jid, mode);
+    if let Some(mode) = request.member_add_mode {
+        let mode = match mode {
+            MemberAddMode::AdminAdd => whatsapp_rust::MemberAddMode::AdminAdd,
+            MemberAddMode::AllMemberAdd => whatsapp_rust::MemberAddMode::AllMemberAdd,
+        };
+        groups
+            .set_member_add_mode(jid.clone(), mode)
+            .await
+            .map_err(internal)?;
     }
-    if let Some(mode) = &request.member_link_mode {
-        tracing::info!("Group {} member_link_mode set to {:?}", group_jid, mode);
+    if let Some(mode) = request.member_link_mode {
+        let mode = match mode {
+            MemberLinkMode::AdminLink => whatsapp_rust::MemberLinkMode::AdminLink,
+            MemberLinkMode::AllMemberLink => whatsapp_rust::MemberLinkMode::AllMemberLink,
+        };
+        groups
+            .set_member_link_mode(&jid, mode)
+            .await
+            .map_err(internal)?;
+    }
+    if let Some(announce) = request.announce {
+        groups
+            .set_announce(jid.clone(), announce)
+            .await
+            .map_err(internal)?;
+    }
+    if let Some(locked) = request.locked {
+        groups
+            .set_locked(jid.clone(), locked)
+            .await
+            .map_err(internal)?;
     }
 
     Ok(Json(SuccessResponse { success: true }))
@@ -484,4 +505,101 @@ fn get_client(
         .ok_or(ApiError::NotConnected)?;
 
     runtime.get_live_client().ok_or(ApiError::NotConnected)
+}
+
+#[utoipa::path(
+    put,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/{group_jid}/picture",
+    tag = "groups",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("group_jid" = String, Path, description = "Group JID")
+    ),
+    request_body = SetGroupPictureRequest,
+    responses(
+        (status = 200, description = "Group picture changed", body = crate::api::common::SuccessResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn set_group_picture(
+    State(state): State<AppState>,
+    Path((session_id, group_jid)): Path<(String, String)>,
+    Json(request): Json<SetGroupPictureRequest>,
+) -> Result<Json<crate::api::common::SuccessResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let jid: Jid = group_jid
+        .parse()
+        .map_err(|_| ApiError::InvalidJid(group_jid.clone()))?;
+    let (bytes, _) = crate::api::shared::messages::handlers::get_media_data(&request.image).await?;
+    let jpeg = crate::api::web::profile::handlers::square_jpeg(bytes)?;
+    client
+        .groups()
+        .set_profile_picture(jid, jpeg)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(crate::api::common::SuccessResponse::new()))
+}
+
+#[utoipa::path(
+    post,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/join",
+    tag = "groups",
+    params(("session_id" = String, Path, description = "Session ID")),
+    request_body = JoinGroupRequest,
+    responses(
+        (status = 200, description = "Joined, or join request sent for approval", body = JoinGroupResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn join_group(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<JoinGroupRequest>,
+) -> Result<Json<JoinGroupResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let result = client
+        .groups()
+        .join_with_invite_code(&request.code)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    let pending_approval = matches!(result, whatsapp_rust::JoinGroupResult::PendingApproval(_));
+    Ok(Json(JoinGroupResponse {
+        group_jid: result.group_jid().to_string(),
+        pending_approval,
+    }))
+}
+
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/groups/invite/{code}",
+    tag = "groups",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("code" = String, Path, description = "Invite code")
+    ),
+    responses(
+        (status = 200, description = "What the invite leads to, without joining", body = InviteInfoResponse),
+        (status = 503, description = "Not connected")
+    )
+)]
+pub async fn get_invite_info(
+    State(state): State<AppState>,
+    Path((session_id, code)): Path<(String, String)>,
+) -> Result<Json<InviteInfoResponse>, ApiError> {
+    let client = get_client(&state, &session_id)?;
+    let metadata = client
+        .groups()
+        .get_invite_info(&code)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    Ok(Json(InviteInfoResponse {
+        group_jid: metadata.id.to_string(),
+        subject: metadata.subject,
+        participants: metadata.participants.len(),
+        creator: metadata.creator.map(|j| j.to_string()),
+        created_at: metadata.creation_time,
+    }))
 }

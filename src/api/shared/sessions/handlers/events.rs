@@ -202,19 +202,32 @@ pub(super) async fn handle_event(
             unlink_session(state, session_id).await;
         }
         Event::IncomingCall(call) => {
+            use wacore::types::call::CallAction;
             let call_id = call.action.call_id().to_string();
-            if auto_reject_incoming_calls() {
-                if let Err(e) = client.voip().reject(call).await {
-                    tracing::warn!(
-                        session_id = %session_id,
-                        call_id = %call_id,
-                        "AUTO_REJECT_INCOMING_CALLS: failed to reject: {}",
-                        e
-                    );
+            match &call.action {
+                CallAction::Offer { .. } if auto_reject_incoming_calls() => {
+                    if let Err(e) = client.voip().reject(call).await {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            call_id = %call_id,
+                            "AUTO_REJECT_INCOMING_CALLS: failed to reject: {}",
+                            e
+                        );
+                    }
                 }
-            } else if !call_id.is_empty() {
-                state.incoming_calls().insert(call_id, *call.clone());
+                CallAction::Offer { .. } if !call_id.is_empty() && !call.offline => {
+                    state.incoming_calls().insert(call_id, *call.clone());
+                }
+                CallAction::Accept { .. }
+                | CallAction::Reject { .. }
+                | CallAction::Terminate { .. } => {
+                    state.incoming_calls().remove(&call_id);
+                }
+                _ => {}
             }
+        }
+        Event::MissedCall(missed) => {
+            state.incoming_calls().remove(&missed.call_id);
         }
         _ => {}
     }
