@@ -28,5 +28,16 @@ ignore = [
     "RUSTSEC-2026-0049", # rustls-webpki: CRL distribution-point matching
     "RUSTSEC-2026-0098", # rustls-webpki: URI name constraints
     "RUSTSEC-2026-0099", # rustls-webpki: wildcard name constraints
+    "RUSTSEC-2026-0382", # rustls-webpki: distrusted intermediates, same async-nats 0.38 copy
     "RUSTSEC-2026-0104", # rustls-webpki: reachable panic in CRL parsing
+
+    # zip 3.0.0 is a build dependency of utoipa-swagger-ui 9, which unpacks
+    # the Swagger UI archive that ships inside that crate at compile time.
+    # The three advisories concern reading hostile archives; this one is
+    # never fed outside input and is not part of the runtime binary. waxum's
+    # own zip dependency is on 9.x, where they are fixed. Revisit when
+    # utoipa-swagger-ui moves to a patched zip.
+    "RUSTSEC-2026-0367", # zip: build-time only, bundled archive
+    "RUSTSEC-2026-0368", # zip: build-time only, bundled archive
+    "RUSTSEC-2026-0369", # zip: build-time only, bundled archive
 ]
