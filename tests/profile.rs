@@ -51,6 +51,14 @@ async fn invalid_profile_changes_are_rejected_before_anything_is_sent() {
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
+        put(&h, json!({"about_emoji": "x"})).await,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        put(&h, json!({"about": "hi", "about_emoji": "x".repeat(9)})).await,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
         put(
             &h,
             json!({"picture": {"data": "bm90IGFuIGltYWdl", "mimetype": "image/png"}})

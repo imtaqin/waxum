@@ -13,6 +13,10 @@ pub struct UpdateProfileRequest {
     /// The "About" text, up to 139 characters. An empty string clears it.
     pub about: Option<String>,
 
+    /// Optional emoji shown with the About text. Only used together with
+    /// `about`; ignored when `about` is empty.
+    pub about_emoji: Option<String>,
+
     /// New profile picture, as a URL or base64. Any common image format is
     /// accepted; it is centre-cropped to a square and re-encoded as JPEG.
     pub picture: Option<MediaData>,
