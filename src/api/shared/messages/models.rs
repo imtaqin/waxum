@@ -472,10 +472,12 @@ pub struct SendInteractiveRequest {
     /// native_flow buttons as clickable when wrapped in a quoted context.
     pub fake_reply: Option<FakeReplyConfig>,
 
-    /// Wrap the interactive payload in `viewOnceMessageV2`. Empirically the
-    /// only reliable way to get native_flow quick-reply buttons clickable on
-    /// consumer WhatsApp accounts (unverified business). Defaults to true.
-    #[serde(default = "default_true")]
+    /// Wrap the interactive payload in `viewOnceMessageV2`. Defaults to
+    /// false: the send layer only announces a native-flow message to
+    /// WhatsApp (the `<biz>` node) when the interactive payload is not
+    /// wrapped, so a view-once interactive message is accepted but arrives
+    /// on the phone without its buttons.
+    #[serde(default)]
     pub view_once: bool,
 
     /// Optional ISO-8601 UTC time to defer delivery until. When set in
@@ -485,10 +487,6 @@ pub struct SendInteractiveRequest {
     #[serde(default)]
     #[schema(example = "2026-01-01T12:00:00Z")]
     pub send_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
