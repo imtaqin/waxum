@@ -2,6 +2,8 @@
 //! tests under `tests/` can build the same router and state the binary
 //! uses. The binary in `src/main.rs` also depends on these modules.
 
+#![recursion_limit = "256"]
+
 /// Builds a value of a `#[non_exhaustive]` waproto/whatsapp-rust type from
 /// struct-literal syntax. Those types cannot be written as a struct
 /// expression outside their crate, even with `..Default::default()`, so this
