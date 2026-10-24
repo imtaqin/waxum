@@ -572,6 +572,8 @@ pub async fn disconnect_session(
     client.shutdown().await;
     runtime.set_status(SessionStatus::Disconnected);
     runtime.set_client(None);
+    runtime.set_qr_codes(vec![]);
+    runtime.set_pair_code(None);
     runtime.clear_reconnecting();
 
     let _ = state

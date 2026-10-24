@@ -272,9 +272,16 @@
   window.consoleAction = async function (op) {
     const res = await fetch('/sessions/' + enc + '/' + op, { method: 'POST', credentials: 'same-origin' });
     if (op === 'delete' && res.ok) { location.href = '/'; return; }
-    refreshStatus();
-    if (provider !== 'cloud') refreshQr();
+    await refreshStatus();
+    if (provider !== 'cloud' && op === 'connect') await waitForQr();
   };
+  async function waitForQr() {
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      await refreshStatus();
+      if ($('pair-qr').querySelector('svg') || $('linked-view').hidden === false) return;
+    }
+  }
   window.confirmLogout = function () {
     if (confirm('Log "' + sid + '" out of WhatsApp?\n\nThe phone will no longer list this device. The session, its webhooks, settings and stored messages are kept: connect and scan again to continue.')) {
       consoleAction('logout');
@@ -295,8 +302,6 @@
     waiting_for_pair_code: ['pairing', 'Waiting for pair code'],
     disconnected: ['idle', 'Disconnected'],
   };
-
-  let qrTimer = null;
 
   async function refreshStatus() {
     const r = await call('GET', api + '/status');
@@ -336,6 +341,10 @@
       setText('lv-forwarded', String(d.messages_forwarded == null ? '—' : d.messages_forwarded));
     } else if (s.status === 'disconnected') {
       $('pair-qr').innerHTML = '<div class="hint">Not connected. Press <b>Connect</b> to get a QR.</div>';
+    } else if (pairing) {
+      await refreshQr();
+    } else if (busy && !$('pair-qr').querySelector('svg')) {
+      $('pair-qr').innerHTML = '<div class="hint">Waiting for a QR from WhatsApp…</div>';
     }
 
     const nc = d.new_chats || {};
@@ -763,8 +772,7 @@
   if (provider !== 'cloud') {
     refreshQr();
     refreshLimit();
-    qrTimer = setInterval(refreshQr, 15000);
   }
-  setInterval(refreshStatus, 5000);
+  setInterval(refreshStatus, 3000);
 })();
 </script>

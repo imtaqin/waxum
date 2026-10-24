@@ -20,6 +20,57 @@ use crate::state::AppState;
 const PICTURE_SIDE: u32 = 640;
 const NAME_MAX_CHARS: usize = 25;
 const ABOUT_MAX_CHARS: usize = 139;
+const EMOJI_MAX_CHARS: usize = 8;
+
+const TEXT_STATUS_DOC: wacore::iq::mex::MexDoc = wacore::iq::mex::MexDoc {
+    name: "WAWebMexUpdateTextStatusJobMutation",
+    id: "9152604461510864",
+};
+
+/// Duration WhatsApp Web sends for an About that never expires (`-1`).
+const TEXT_STATUS_NO_EXPIRY: i64 = -1;
+
+/// Sets or clears the About through the text status mutation, which is what
+/// WhatsApp Web uses today.
+///
+/// The older `status` IQ (`set_status_text`) is still accepted and answered
+/// by the server, and the new value even reads back through contact lookups,
+/// but the phone app ignores it, so About edits made only that way never
+/// showed up on the account. Clearing sends a null text with a zero
+/// duration, exactly as WhatsApp Web does.
+async fn set_about(
+    client: &whatsapp_rust::Client,
+    about: &str,
+    emoji: Option<&str>,
+) -> Result<(), ApiError> {
+    let about = about.trim();
+    let input = if about.is_empty() {
+        serde_json::json!({"text": null, "ephemeral_duration_sec": 0})
+    } else {
+        let mut input = serde_json::json!({
+            "text": about,
+            "ephemeral_duration_sec": TEXT_STATUS_NO_EXPIRY,
+        });
+        if let Some(emoji) = emoji.map(str::trim).filter(|e| !e.is_empty()) {
+            input["emoji"] = serde_json::json!({"content": emoji});
+        }
+        input
+    };
+    let request = whatsapp_rust::MexRequest::new_raw(
+        TEXT_STATUS_DOC,
+        &[],
+        serde_json::json!({"input": input}),
+    );
+    let response = client
+        .mex()
+        .execute(request)
+        .await
+        .map_err(|e| ApiError::Internal(format!("about: {e}")))?;
+    if let Some(errors) = response.errors.filter(|e| !e.is_empty()) {
+        return Err(ApiError::Internal(format!("about: {}", errors[0].message)));
+    }
+    Ok(())
+}
 
 fn get_client(
     state: &AppState,
@@ -68,6 +119,18 @@ fn validate(request: &UpdateProfileRequest) -> Result<(), ApiError> {
             )));
         }
     }
+    if let Some(emoji) = &request.about_emoji {
+        if request.about.is_none() {
+            return Err(ApiError::BadRequest(
+                "about_emoji needs about to be set as well".into(),
+            ));
+        }
+        if emoji.trim().chars().count() > EMOJI_MAX_CHARS {
+            return Err(ApiError::BadRequest(format!(
+                "about_emoji must be at most {EMOJI_MAX_CHARS} characters"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -110,10 +173,10 @@ pub async fn update_profile(
     let mut updated = Vec::new();
 
     if let Some(about) = &request.about {
-        profile
-            .set_status_text(about)
-            .await
-            .map_err(|e| ApiError::Internal(format!("about: {e}")))?;
+        set_about(&client, about, request.about_emoji.as_deref()).await?;
+        if let Err(e) = profile.set_status_text(about).await {
+            tracing::warn!(session_id = %session_id, "legacy about update failed: {e}");
+        }
         updated.push("about");
     }
     if let Some(name) = &request.name {
