@@ -1,0 +1,232 @@
+name: Upstream whatsapp-rust
+
+# Watches oxidezap/whatsapp-rust. When its main branch moves past the rev
+# pinned in Cargo.toml, this builds and tests waxum against it and opens a pull
+# request with the result, so a breaking change shows up as a named list of
+# failing features instead of a surprise on the next manual bump.
+#
+# Pull requests opened with the default GITHUB_TOKEN do not start other
+# workflows, so the checks run here and their outcome is written into the pull
+# request body. Set the UPSTREAM_BUMP_TOKEN secret to a personal access token
+# to have CI run on the pull request as well.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: never
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+  UPSTREAM_REPO: oxidezap/whatsapp-rust
+
+concurrency:
+  group: upstream-whatsapp-rust
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.UPSTREAM_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.UPSTREAM_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Find the pinned and the latest upstream rev
+        id: revs
+        run: |
+          current=$(sed -nE 's|^whatsapp-rust = \{ git = "[^"]+", rev = "([0-9a-f]{40})".*|\1|p' Cargo.toml)
+          latest=$(git ls-remote "https://github.com/${UPSTREAM_REPO}" HEAD | cut -f1)
+          if [ -z "$current" ] || [ -z "$latest" ]; then
+            echo "could not read the pinned or the latest rev" >&2
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "short=${latest:0:7}" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when a pull request for this rev already exists
+        id: existing
+        if: steps.revs.outputs.needed == 'true'
+        run: |
+          branch="chore/upstream-whatsapp-rust-${{ steps.revs.outputs.short }}"
+          open=$(gh pr list --head "$branch" --state open --json number --jq 'length')
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if [ "$open" != "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust nightly
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install rustfmt and clippy
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: rustup component add rustfmt clippy
+
+      - name: Install dependencies
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev cmake build-essential
+
+      - name: Cache cargo registry and git
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-upstream-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-upstream-
+
+      - name: Move the pin to the latest rev
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          current='${{ steps.revs.outputs.current }}'
+          latest='${{ steps.revs.outputs.latest }}'
+          sed -i "s/${current}/${latest}/g" Cargo.toml vendor/whatsapp-rust-chat-store/Cargo.toml
+          if ! cargo update -p whatsapp-rust > update.log 2>&1; then
+            echo "targeted update refused, refreshing the whole lockfile" >> update.log
+            cargo update >> update.log 2>&1
+          fi
+          cat update.log
+
+      - name: Build and test against the new rev
+        id: verify
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          set +e
+          cargo check --all-targets > check.log 2>&1
+          check=$?
+          fmt=0
+          clippy=0
+          tests=0
+          if [ "$check" = "0" ]; then
+            cargo fmt --check > fmt.log 2>&1; fmt=$?
+            cargo clippy --all-targets -- -D warnings > clippy.log 2>&1; clippy=$?
+            cargo test --no-fail-fast > test.log 2>&1; tests=$?
+          fi
+          echo "check=$check" >> "$GITHUB_OUTPUT"
+          echo "fmt=$fmt" >> "$GITHUB_OUTPUT"
+          echo "clippy=$clippy" >> "$GITHUB_OUTPUT"
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+          if [ "$check" = "0" ] && [ "$fmt" = "0" ] && [ "$clippy" = "0" ] && [ "$tests" = "0" ]; then
+            echo "green=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "green=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Write the report
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          current='${{ steps.revs.outputs.current }}'
+          latest='${{ steps.revs.outputs.latest }}'
+          {
+            echo "Moves the pinned whatsapp-rust from \`${current:0:7}\` to \`${latest:0:7}\` (current upstream main)."
+            echo
+            echo "| Step | Result |"
+            echo "|------|--------|"
+            row() { if [ "$2" = "0" ]; then echo "| $1 | passed |"; else echo "| $1 | **failed** |"; fi; }
+            row "cargo check (all targets)" "${{ steps.verify.outputs.check }}"
+            if [ "${{ steps.verify.outputs.check }}" = "0" ]; then
+              row "cargo fmt --check" "${{ steps.verify.outputs.fmt }}"
+              row "cargo clippy -D warnings" "${{ steps.verify.outputs.clippy }}"
+              row "cargo test" "${{ steps.verify.outputs.tests }}"
+            else
+              echo "| fmt, clippy, test | not run, the build does not compile |"
+            fi
+            echo
+            if [ "${{ steps.verify.outputs.check }}" != "0" ]; then
+              echo "### Compile errors"
+              echo
+              echo "Files in waxum that no longer compile, by area:"
+              echo
+              echo '```'
+              grep -oE 'src/[a-z_/]+\.rs' check.log | sed -E 's|/[^/]+\.rs$||' | sort | uniq -c | sort -rn | head -15
+              echo '```'
+              echo
+              echo "First errors:"
+              echo
+              echo '```'
+              grep -E '^error' -A6 check.log | head -60
+              echo '```'
+            fi
+            if [ "${{ steps.verify.outputs.tests }}" != "0" ] && [ "${{ steps.verify.outputs.check }}" = "0" ]; then
+              echo "### Failing tests"
+              echo
+              echo "Each test file is one feature."
+              echo
+              echo '```'
+              awk '/Running /{bin=$2} /^test .* FAILED$/{print bin ": " $2}' test.log | sed -E 's|^tests/||' | sort | head -60
+              echo '```'
+            fi
+            if [ "${{ steps.verify.outputs.clippy }}" != "0" ] && [ "${{ steps.verify.outputs.check }}" = "0" ]; then
+              echo "### Clippy"
+              echo
+              echo '```'
+              grep -E '^(error|warning)' -A4 clippy.log | head -40
+              echo '```'
+            fi
+            echo "### Upstream commits"
+            echo
+            gh api "repos/${UPSTREAM_REPO}/compare/${current}...${latest}" \
+              --jq '.commits[] | "- " + (.sha[0:7]) + " " + (.commit.message | split("\n")[0])' 2>/dev/null | head -60 || true
+            echo
+            echo "Opened by the Upstream whatsapp-rust workflow. Update notes from cargo:"
+            echo
+            echo '```'
+            head -40 update.log
+            echo '```'
+          } > report.md
+          cat report.md
+
+      - name: Open the pull request
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          branch='${{ steps.existing.outputs.branch }}'
+          short='${{ steps.revs.outputs.short }}'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add Cargo.toml Cargo.lock vendor/whatsapp-rust-chat-store/Cargo.toml
+          git commit -m "chore(deps): bump whatsapp-rust to ${short}"
+          git push --force-with-lease origin "$branch"
+          gh label create upstream-break --color B60205 --description "whatsapp-rust upstream breaks waxum" 2>/dev/null || true
+          gh label create upstream-bump --color 0E8A16 --description "Automatic whatsapp-rust bump" 2>/dev/null || true
+          if [ "${{ steps.verify.outputs.green }}" = "true" ]; then
+            gh pr create --base main --head "$branch" \
+              --title "chore(deps): bump whatsapp-rust to ${short}" \
+              --body-file report.md --label upstream-bump
+          else
+            gh pr create --base main --head "$branch" --draft \
+              --title "chore(deps): bump whatsapp-rust to ${short} (breaks waxum)" \
+              --body-file report.md --label upstream-bump --label upstream-break
+          fi
+
+      - name: Close superseded bump pull requests
+        if: steps.revs.outputs.needed == 'true' && steps.existing.outputs.skip == 'false'
+        run: |
+          current_branch='${{ steps.existing.outputs.branch }}'
+          gh pr list --state open --label upstream-bump --json number,headRefName \
+            --jq '.[] | select(.headRefName != "'"$current_branch"'") | .number' |
+          while read -r number; do
+            gh pr close "$number" --delete-branch \
+              --comment "Superseded by a newer whatsapp-rust bump."
+          done
