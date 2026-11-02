@@ -111,7 +111,7 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # Pure-Rust Microsoft Edge TTS client. Speaks the Edge readaloud WebSocket
 # directly so `/calls/tts` does not need an external `edge-tts` CLI or
 # Python interpreter installed on the server.
-msedge-tts = "0.4"
+msedge-tts = "0.4.1"
 
 # Optional S3-compatible object storage for call recordings (works
 # against real AWS S3, MinIO, R2, etc.). Pure-Rust + rustls by
