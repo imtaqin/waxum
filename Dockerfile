@@ -33,8 +33,11 @@ RUN cargo build --release
 RUN mkdir -p /out/app/whatsapp_sessions \
     && cp target/release/waxum /out/app/waxum
 
+FROM mwader/static-ffmpeg:7.1 AS ffmpeg
+
 # Runtime: distroless. The binary links only glibc, libm and libgcc (TLS
-# and SQLite are compiled in), so nothing else is needed: no shell, no
+# and SQLite are compiled in), so nothing else is needed besides a static
+# ffmpeg binary: no shell, no
 # package manager, no curl, no gosu. The jobs those did are in the binary
 # (src/bootstrap.rs): dropping root, chowning volumes, the healthcheck.
 FROM gcr.io/distroless/cc-debian13
@@ -42,6 +45,8 @@ FROM gcr.io/distroless/cc-debian13
 WORKDIR /app
 
 COPY --from=rust-builder --chown=1000:1000 /out/app /app
+# Static ffmpeg, needed by /calls/tts and /calls/play (invoked via PATH).
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 
 ENV WHATSAPP_STORAGE_PATH=/app/whatsapp_sessions
 ENV RUST_LOG=waxum=info,tower_http=info
