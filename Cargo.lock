@@ -2580,16 +2580,15 @@ dependencies = [
 
 [[package]]
 name = "msedge-tts"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5ee3d00bfd237fac2dcd03050c073d60769c9d1f2718545854374f1aa4d6d5b"
+checksum = "6c385e6272c1cf2502681eff68b2dd0e7226f9932fb618ed98e00c10082f0a44"
 dependencies = [
  "chrono",
  "rustls",
  "rustls-platform-verifier 0.7.0",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "thiserror 2.0.19",
  "tungstenite",
  "ureq",
