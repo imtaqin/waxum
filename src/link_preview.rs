@@ -413,7 +413,7 @@ fn decode_entities(s: &str) -> String {
     while let Some(amp) = rest.find('&') {
         out.push_str(&rest[..amp]);
         let after = &rest[amp..];
-        let Some(semi) = after[..after.len().min(12)].find(';') else {
+        let Some(semi) = after.as_bytes().iter().take(12).position(|&b| b == b';') else {
             out.push('&');
             rest = &after[1..];
             continue;
@@ -500,6 +500,26 @@ mod tests {
         assert_eq!(m.title.as_deref(), Some("Hello <world>"));
         assert_eq!(m.description.as_deref(), Some("Short"));
         assert_eq!(m.image, None);
+    }
+
+    #[test]
+    fn decode_entities_preserves_unicode_across_the_entity_scan_limit() {
+        for text in ["&aaaaaaaaaaé", "&aaaaaaaaa世界", "&aaaaaaaa𐍈"] {
+            assert_eq!(decode_entities(text), text);
+            assert_eq!(
+                decode_entities(&format!("{text} &amp; &#233;")),
+                format!("{text} & é")
+            );
+        }
+    }
+
+    #[test]
+    fn parse_meta_preserves_unicode_after_a_literal_ampersand() {
+        let html = r#"<meta property="og:title" content="&aaaaaaaaaaé &amp; more">"#;
+        assert_eq!(
+            parse_meta(html).title.as_deref(),
+            Some("&aaaaaaaaaaé & more")
+        );
     }
 
     #[test]
