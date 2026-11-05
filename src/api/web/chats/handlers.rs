@@ -4,6 +4,7 @@ use axum::{
 };
 use wacore_binary::jid::{Jid, Server};
 use whatsapp_rust::features::{message_range, SyncActionMessageRange};
+use whatsapp_rust::{ClearChatOptions, MediaDeletion, StarredMessages};
 use whatsapp_rust::{MessageId, MessageRef};
 
 use crate::api::common::SuccessResponse;
@@ -251,9 +252,17 @@ pub async fn clear_chat(
     let client = get_client(&state, &session_id)?;
     let chat = parse_jid(&jid)?;
     let range = last_message_range(&state, &session_id, &chat).await;
+    let starred = if request.keep_starred {
+        StarredMessages::Keep
+    } else {
+        StarredMessages::Delete
+    };
+    let options = ClearChatOptions::default()
+        .with_starred_messages(starred)
+        .with_media(MediaDeletion::Delete);
     client
         .chat_actions()
-        .clear_chat(&chat, !request.keep_starred, true, range)
+        .clear_chat_with_options(&chat, options, range)
         .await
         .map_err(internal)?;
     Ok(Json(SuccessResponse::new()))
