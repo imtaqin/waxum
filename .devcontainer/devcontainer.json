@@ -1,0 +1,47 @@
+{
+  "name": "Rust Nightly (Ubuntu 24.04)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "nightly-2026-04-05",
+      "profile": "default"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "containerEnv": {
+    // "CARGO_TARGET_DIR": "/workspaces/target-cache",
+    "RUSTFLAGS": "-C link-arg=-fuse-ld=mold"
+  },
+
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev lldb gdb mold clang cmake && sudo rm -rf /var/lib/apt/lists/* && sudo chown -R vscode /usr/local/cargo/registry /workspaces/target-cache && curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash && cargo binstall -y cargo-nextest cargo-watch cargo-edit cargo-deny",
+
+  "runArgs": ["--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined"],
+
+  "mounts": [
+    "source=cargo-registry,target=/usr/local/cargo/registry,type=volume",
+    // "source=${localWorkspaceFolderBasename}-target,target=/workspaces/target-cache,type=volume"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "usernamehw.errorlens",
+        "fill-labs.dependi"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.cargo.targetDir": true,
+        "lldb.executable": "/usr/bin/lldb",
+        "editor.formatOnSave": true,
+        "[rust]": { "editor.defaultFormatter": "rust-lang.rust-analyzer" }
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}
