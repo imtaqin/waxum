@@ -63,6 +63,22 @@ pub struct ChatsQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("archived" = Option<bool>, Query, description = "Include archived chats (default true)"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "List chats", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn chats(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -75,6 +91,21 @@ pub async fn chats(
     Ok(Json(rows.iter().map(WireChat::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID")
+    ),
+    responses(
+        (status = 200, description = "Get one chat (null when unknown)", body = Object),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn chat(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
@@ -93,6 +124,24 @@ pub struct MessagesQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/messages",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("before_ms" = Option<i64>, Query, description = "Cursor timestamp, used together with before_seq"),
+        ("before_seq" = Option<i64>, Query, description = "Cursor sequence, used together with before_ms"),
+        ("limit" = Option<i64>, Query, description = "Page size, 1 to 5000 (default 50)")
+    ),
+    responses(
+        (status = 200, description = "Page of messages, newest first", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn messages(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
@@ -109,6 +158,22 @@ pub async fn messages(
     Ok(Json(rows.iter().map(WireMessage::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/messages/{id}",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("id" = String, Path, description = "Message ID")
+    ),
+    responses(
+        (status = 200, description = "Get one message (null when unknown)", body = Object),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn message(
     State(state): State<AppState>,
     Path((session_id, jid, id)): Path<(String, String, String)>,
@@ -120,6 +185,22 @@ pub async fn message(
     Ok(Json(row.as_ref().map(WireMessage::from)))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/messages/{id}/reactions",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("id" = String, Path, description = "Message ID")
+    ),
+    responses(
+        (status = 200, description = "Reactions on a message", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn reactions(
     State(state): State<AppState>,
     Path((session_id, jid, id)): Path<(String, String, String)>,
@@ -131,6 +212,22 @@ pub async fn reactions(
     Ok(Json(rows.iter().map(WireReaction::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/messages/{id}/receipts",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("id" = String, Path, description = "Message ID")
+    ),
+    responses(
+        (status = 200, description = "Delivery and read receipts of a message", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn receipts(
     State(state): State<AppState>,
     Path((session_id, jid, id)): Path<(String, String, String)>,
@@ -148,6 +245,23 @@ pub struct KindsQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/kinds",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("kinds" = String, Query, description = "Comma separated message kinds, for example image,video"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "Messages of given kinds in one chat", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn kinds(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
@@ -162,6 +276,22 @@ pub async fn kinds(
 }
 
 /// The newest messages of some kinds across all chats.
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/recent",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("kinds" = String, Query, description = "Comma separated message kinds, for example image,video"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "Newest messages of given kinds across all chats", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn recent(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -180,6 +310,22 @@ pub struct LimitQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/chats/{jid}/links",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "Messages containing links in one chat", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn links(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
@@ -192,6 +338,21 @@ pub async fn links(
     Ok(Json(rows.iter().map(WireMessage::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/starred",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "Starred messages", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn starred(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -211,6 +372,23 @@ pub struct SearchQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/search",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("q" = String, Query, description = "Search text"),
+        ("chat" = Option<String>, Query, description = "Limit the search to one chat JID"),
+        ("limit" = Option<i64>, Query, description = "Maximum rows to return")
+    ),
+    responses(
+        (status = 200, description = "Full text search over stored messages", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn search(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -230,6 +408,20 @@ pub async fn search(
     Ok(Json(rows.iter().map(WireMessage::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/contacts",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    responses(
+        (status = 200, description = "List stored contacts", body = Vec<Object>),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn contacts(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -241,6 +433,21 @@ pub async fn contacts(
     Ok(Json(rows.iter().map(WireContact::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/contacts/{jid}",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("jid" = String, Path, description = "Chat or contact JID")
+    ),
+    responses(
+        (status = 200, description = "Get one contact (null when unknown)", body = Object),
+        (status = 404, description = "Session not found"),
+        (status = 503, description = "Session is not connected")
+    )
+)]
 pub async fn contact(
     State(state): State<AppState>,
     Path((session_id, jid)): Path<(String, String)>,
@@ -284,6 +491,18 @@ fn to_sse(event: &WireEvent) -> Event {
 /// Store changes and realtime signals for one session, as they happen.
 /// Survives reconnects: when the session's store or client goes away the
 /// stream waits for the new ones.
+#[utoipa::path(
+    get,
+    security(("bearer_auth" = [])),
+    path = "/api/v1/sessions/{session_id}/store/events",
+    tag = "store",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    responses(
+        (status = 200, description = "Server-sent event stream of store changes, presence, typing and picture updates", content_type = "text/event-stream", body = String)
+    )
+)]
 pub async fn events(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
