@@ -2,6 +2,13 @@
 
 All notable changes to **waxum** will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Link preview metadata containing a literal ampersand followed by Unicode
+  text no longer panics when the entity scan limit splits a UTF-8 character.
+
 ## [0.12.8] - 2026-09-13
 
 ### Added
