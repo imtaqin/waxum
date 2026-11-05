@@ -19,6 +19,20 @@ use utoipa::OpenApi;
     ),
     modifiers(&SecurityAddon),
     paths(
+        crate::api::shared::store::handlers::chats,
+        crate::api::shared::store::handlers::chat,
+        crate::api::shared::store::handlers::messages,
+        crate::api::shared::store::handlers::message,
+        crate::api::shared::store::handlers::reactions,
+        crate::api::shared::store::handlers::receipts,
+        crate::api::shared::store::handlers::kinds,
+        crate::api::shared::store::handlers::recent,
+        crate::api::shared::store::handlers::links,
+        crate::api::shared::store::handlers::starred,
+        crate::api::shared::store::handlers::search,
+        crate::api::shared::store::handlers::contacts,
+        crate::api::shared::store::handlers::contact,
+        crate::api::shared::store::handlers::events,
 
         crate::api::shared::sessions::handlers::create_session,
         crate::api::shared::sessions::handlers::list_sessions,
@@ -566,6 +580,7 @@ use utoipa::OpenApi;
         )
     ),
     tags(
+        (name = "store", description = "Read the chat store of a session: chats, messages, contacts, search and a live event stream"),
         (name = "sessions", description = "Session management and authentication"),
         (name = "messages", description = "Send and manage messages"),
         (name = "contacts", description = "Contact information and lookup"),

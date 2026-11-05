@@ -112,7 +112,7 @@ pub async fn connect_session(
             return Err(ApiError::AlreadyConnected);
         }
         if let Some(old_client) = runtime.get_client() {
-            old_client.shutdown().await;
+            let _ = old_client.shutdown().await;
         }
         runtime.set_client(None);
         runtime.set_status(SessionStatus::Disconnected);
@@ -351,7 +351,7 @@ pub(super) async fn ensure_connecting_for_wait(
     }
 
     if let Some(old_client) = runtime.get_client() {
-        old_client.shutdown().await;
+        let _ = old_client.shutdown().await;
     }
     runtime.set_client(None);
     runtime.set_status(SessionStatus::Connecting);
@@ -569,7 +569,7 @@ pub async fn disconnect_session(
 
     let client = runtime.get_client().ok_or(ApiError::NotConnected)?;
 
-    client.shutdown().await;
+    let _ = client.shutdown().await;
     runtime.set_status(SessionStatus::Disconnected);
     runtime.set_client(None);
     runtime.set_qr_codes(vec![]);

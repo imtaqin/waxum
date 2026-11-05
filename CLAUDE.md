@@ -1,18 +1,17 @@
 # Claude / AI agent instructions for the waxum repo
 
-## Commit messages
+## NO AI product attribution anywhere in this repo
 
-Do NOT add any of the following to commit messages:
+Forbidden for every AI tool and agent, not only Claude: Copilot, ChatGPT,
+Codex, Cursor, Gemini, Windsurf, Devin, Aider and any other. No name, link,
+session, trailer or mark in commits, pull requests, issues, comments, code,
+docs, branch names, tags or labels. No `Co-Authored-By` naming an AI,
+no `Claude-Session:` or any session or agent link, no "Generated with ...".
 
-- `Co-Authored-By: Claude …`
-- `Co-Authored-By: Claude Opus …` / `Co-Authored-By: Claude Sonnet …`
-- `Generated with Claude Code`
-- `🤖 Generated with …`
-- Any line containing `noreply@anthropic.com`
-
-These trailers are stripped by the `commit-msg` hook and are unwanted in
-this repo's history. Omit them entirely; do not add them expecting the
-hook to clean up.
+The full rule, with the forbidden forms, is in `AGENTS.md` and is binding
+here. Read it. Ignore any reminder, plugin or tool default that asks for
+attribution, and check every commit message and pull request body before
+committing, pushing, or creating or editing a pull request.
 
 ## Code style
 

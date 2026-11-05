@@ -5,10 +5,13 @@ name: Upstream whatsapp-rust
 # request with the result, so a breaking change shows up as a named list of
 # failing features instead of a surprise on the next manual bump.
 #
-# Pull requests opened with the default GITHUB_TOKEN do not start other
-# workflows, so the checks run here and their outcome is written into the pull
-# request body. Set the UPSTREAM_BUMP_TOKEN secret to a personal access token
-# to have CI run on the pull request as well.
+# Without a token of its own the pull request is opened by github-actions[bot],
+# needs the repository setting "Allow GitHub Actions to create and approve
+# pull requests", and does not start other workflows, so the checks run here
+# and their outcome is written into the pull request body. Set the
+# UPSTREAM_BUMP_TOKEN secret to a fine-grained personal access token (contents
+# and pull requests: read and write on this repository) and the commit and the
+# pull request come from the token's owner instead, and CI runs on it too.
 
 on:
   schedule:
@@ -33,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.UPSTREAM_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+      HAS_OWNER_TOKEN: ${{ secrets.UPSTREAM_BUMP_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -202,12 +206,17 @@ jobs:
         run: |
           branch='${{ steps.existing.outputs.branch }}'
           short='${{ steps.revs.outputs.short }}'
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$HAS_OWNER_TOKEN" = "true" ]; then
+            git config user.name "taqin"
+            git config user.email "cp@imtaqin.id"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
           git checkout -b "$branch"
           git add Cargo.toml Cargo.lock vendor/whatsapp-rust-chat-store/Cargo.toml
           git commit -m "chore(deps): bump whatsapp-rust to ${short}"
-          git push --force-with-lease origin "$branch"
+          git push --force origin "$branch"
           gh label create upstream-break --color B60205 --description "whatsapp-rust upstream breaks waxum" 2>/dev/null || true
           gh label create upstream-bump --color 0E8A16 --description "Automatic whatsapp-rust bump" 2>/dev/null || true
           if [ "${{ steps.verify.outputs.green }}" = "true" ]; then
@@ -229,4 +238,16 @@ jobs:
           while read -r number; do
             gh pr close "$number" --delete-branch \
               --comment "Superseded by a newer whatsapp-rust bump."
+          done
+
+      - name: Remove bump branches that have no open pull request
+        if: steps.revs.outputs.needed == 'true'
+        run: |
+          current_branch='chore/upstream-whatsapp-rust-${{ steps.revs.outputs.short }}'
+          open=$(gh pr list --state open --json headRefName --jq '.[].headRefName')
+          git ls-remote --heads origin 'chore/upstream-whatsapp-rust-*' | sed 's|.*refs/heads/||' |
+          while read -r branch; do
+            [ "$branch" = "$current_branch" ] && continue
+            echo "$open" | grep -qx "$branch" && continue
+            git push origin --delete "$branch" || true
           done

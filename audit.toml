@@ -40,4 +40,5 @@ ignore = [
     "RUSTSEC-2026-0367", # zip: build-time only, bundled archive
     "RUSTSEC-2026-0368", # zip: build-time only, bundled archive
     "RUSTSEC-2026-0369", # zip: build-time only, bundled archive
+    "RUSTSEC-2026-0429", # zip: build-time only, bundled archive
 ]

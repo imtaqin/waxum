@@ -2499,8 +2499,8 @@ fn apply_group_update(
     let (code, params): (&str, Vec<String>) = match update.action.as_ref() {
         A::Add { participants, .. } => ("add", jids(participants)),
         A::Remove { participants, .. } => ("remove", jids(participants)),
-        A::Promote { participants } => ("promote", jids(participants)),
-        A::Demote { participants } => ("demote", jids(participants)),
+        A::Promote { participants, .. } => ("promote", jids(participants)),
+        A::Demote { participants, .. } => ("demote", jids(participants)),
         A::Subject { subject, .. } => ("subject", vec![subject.clone()]),
         A::Description { description, .. } => {
             ("description", vec![description.clone().unwrap_or_default()])
@@ -2510,7 +2510,7 @@ fn apply_group_update(
         A::Announce => ("announcement", Vec::new()),
         A::NotAnnounce => ("not_announcement", Vec::new()),
         A::Ephemeral { expiration, .. } => ("ephemeral", vec![expiration.to_string()]),
-        A::MembershipApprovalMode { enabled } => {
+        A::MembershipApprovalMode { enabled, .. } => {
             ("membership_approval_mode", vec![enabled.to_string()])
         }
         A::RevokeInvite => ("revoke_invite", Vec::new()),
