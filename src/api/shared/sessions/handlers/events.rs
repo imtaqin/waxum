@@ -140,7 +140,7 @@ pub(super) async fn handle_event(
                 if is_lock {
                     client.set_auto_reconnect(false);
                 }
-                client.shutdown().await;
+                let _ = client.shutdown().await;
             }
             runtime.set_status(SessionStatus::Disconnected);
             runtime.set_client(None);
