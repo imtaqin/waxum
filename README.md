@@ -189,6 +189,12 @@ cargo build --release
 ./target/release/waxum
 ```
 
+### Dev Container
+
+A Dev Container configuration is available in `.devcontainer/devcontainer.json` for VS Code and GitHub Codespaces. It provides a preconfigured environment with the pinned Rust nightly toolchain (`nightly-2026-04-05`), the `mold` linker, debugging tools (`lldb`), and Cargo utilities (`cargo-nextest`, `cargo-watch`, `cargo-deny`).
+
+If you are on Windows, prefer cloning and opening this repository inside WSL 2 (within the Linux filesystem, e.g., `~/waxum`) rather than on the Windows host filesystem (`/mnt/c/...`). Accessing the repository across the Windows filesystem mount significantly slows down compilation and file I/O performance.
+
 ### Toolchain
 
 **waxum builds on a pinned Rust nightly — `nightly-2026-04-05`.** You do
