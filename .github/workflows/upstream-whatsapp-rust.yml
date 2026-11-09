@@ -12,6 +12,12 @@ name: Upstream whatsapp-rust
 # UPSTREAM_BUMP_TOKEN secret to a fine-grained personal access token (contents
 # and pull requests: read and write on this repository) and the commit and the
 # pull request come from the token's owner instead, and CI runs on it too.
+#
+# The nicer option is the Waxum Sensei GitHub App: install it on this
+# repository (contents, pull requests and workflows: read and write), set the
+# repository variable WAXUM_SENSEI_APP_ID and the secret
+# WAXUM_SENSEI_PRIVATE_KEY, and the commit and the pull request come from
+# waxum-sensei[bot] with CI running on them. It takes precedence over the PAT.
 
 on:
   schedule:
@@ -35,12 +41,52 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.UPSTREAM_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
-      HAS_OWNER_TOKEN: ${{ secrets.UPSTREAM_BUMP_TOKEN != '' }}
+      APP_KEY: ${{ secrets.WAXUM_SENSEI_PRIVATE_KEY }}
     steps:
+      - name: Mint a Waxum Sensei token
+        id: app
+        if: env.APP_KEY != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.WAXUM_SENSEI_APP_ID }}
+          private-key: ${{ secrets.WAXUM_SENSEI_PRIVATE_KEY }}
+
+      - name: Pick the token and commit identity
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          PAT: ${{ secrets.UPSTREAM_BUMP_TOKEN }}
+          DEFAULT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          if [ -n "$APP_TOKEN" ]; then
+            token="$APP_TOKEN"
+            uid=$(GH_TOKEN="$APP_TOKEN" gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+            name="${APP_SLUG}[bot]"
+            email="${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+            own=true
+          elif [ -n "$PAT" ]; then
+            token="$PAT"
+            name="taqin"
+            email="cp@imtaqin.id"
+            own=true
+          else
+            token="$DEFAULT_TOKEN"
+            name="github-actions[bot]"
+            email="41898282+github-actions[bot]@users.noreply.github.com"
+            own=false
+          fi
+          echo "::add-mask::$token"
+          {
+            echo "GH_TOKEN=$token"
+            echo "HAS_OWNER_TOKEN=$own"
+            echo "GIT_NAME=$name"
+            echo "GIT_EMAIL=$email"
+          } >> "$GITHUB_ENV"
+          echo "BUMP_TOKEN=$token" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.UPSTREAM_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ env.BUMP_TOKEN }}
 
       - name: Find the pinned and the latest upstream rev
         id: revs
@@ -206,13 +252,8 @@ jobs:
         run: |
           branch='${{ steps.existing.outputs.branch }}'
           short='${{ steps.revs.outputs.short }}'
-          if [ "$HAS_OWNER_TOKEN" = "true" ]; then
-            git config user.name "taqin"
-            git config user.email "cp@imtaqin.id"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          fi
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
           git checkout -b "$branch"
           git add Cargo.toml Cargo.lock vendor/whatsapp-rust-chat-store/Cargo.toml
           git commit -m "chore(deps): bump whatsapp-rust to ${short}"
