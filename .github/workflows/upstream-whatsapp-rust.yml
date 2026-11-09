@@ -16,7 +16,7 @@ name: Upstream whatsapp-rust
 # The nicer option is the Waxum Sensei GitHub App: install it on this
 # repository (contents, pull requests and workflows: read and write), set the
 # repository variable WAXUM_SENSEI_APP_ID and the secret
-# WAXUM_SENSEI_PRIVATE_KEY, and the commit and the pull request come from
+# WAXUM_SENSEI_APP_PRIVATE_KEY, and the commit and the pull request come from
 # waxum-sensei[bot] with CI running on them. It takes precedence over the PAT.
 
 on:
@@ -41,7 +41,7 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     env:
-      APP_KEY: ${{ secrets.WAXUM_SENSEI_PRIVATE_KEY }}
+      APP_KEY: ${{ secrets.WAXUM_SENSEI_APP_PRIVATE_KEY }}
     steps:
       - name: Mint a Waxum Sensei token
         id: app
@@ -49,7 +49,7 @@ jobs:
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ vars.WAXUM_SENSEI_APP_ID }}
-          private-key: ${{ secrets.WAXUM_SENSEI_PRIVATE_KEY }}
+          private-key: ${{ secrets.WAXUM_SENSEI_APP_PRIVATE_KEY }}
 
       - name: Pick the token and commit identity
         env:
