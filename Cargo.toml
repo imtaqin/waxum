@@ -10,13 +10,13 @@ repository = "https://github.com/imtaqin/waxum"
 [dependencies]
 
 rand = "0.8"
-whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f", default-features = true, features = ["voip", "tracing"] }
-wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
-wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
-waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
-whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
-whatsapp-rust-tokio-transport = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
-whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f077a5d4a5dc12d7c51e79e46598740648c3824f" }
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc", default-features = true, features = ["voip", "tracing"] }
+wacore = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
+wacore-binary = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
+waproto = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
+whatsapp-rust-sqlite-storage = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
+whatsapp-rust-tokio-transport = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
+whatsapp-rust-ureq-http-client = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "4ad6d76205c815f65953dfeb5f4bf0c59ce555bc" }
 # Chat store was extracted from the whatsapp-rust monorepo (#1346) without a
 # published replacement yet — vendored here from the last monorepo rev that
 # carried it, with its wacore deps re-pointed at the same rev as the rest.
