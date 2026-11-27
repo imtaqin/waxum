@@ -41,4 +41,12 @@ ignore = [
     "RUSTSEC-2026-0368", # zip: build-time only, bundled archive
     "RUSTSEC-2026-0369", # zip: build-time only, bundled archive
     "RUSTSEC-2026-0429", # zip: build-time only, bundled archive
+    "RUSTSEC-2026-0545", # zip: build-time only, bundled archive
+    "RUSTSEC-2026-0548", # zip: build-time only, bundled archive
+
+    # libsqlite3-sys 0.38.2 is the newest release diesel 2.3 accepts, and
+    # waxum's hand-rolled SQLite wrapper must share that one copy because
+    # the crate links the native library. The fix needs libsqlite3-sys 0.39,
+    # which waits on a diesel release that allows it.
+    "RUSTSEC-2026-0459", # libsqlite3-sys: bundled C SQLite CVE
 ]
